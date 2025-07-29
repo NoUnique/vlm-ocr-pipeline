@@ -93,10 +93,6 @@ GEMINI_API_KEY=your_gemini_api_key_here
 
 # Optional: Google Vision API (if using vision extraction method)
 GOOGLE_APPLICATION_CREDENTIALS=.credentials/vision_service_account.json
-
-# Optional: MathPix API (for formula recognition)
-MATHPIX_APP_ID=your_mathpix_app_id
-MATHPIX_APP_KEY=your_mathpix_app_key
 """
         env_file.write_text(env_template)
         logger.info("Created .env template file. Please update with your API keys.")

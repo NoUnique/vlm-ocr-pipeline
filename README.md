@@ -127,18 +127,7 @@ Navigate to **APIs & Services > Library** and enable:
 6. Rename it to `vision_service_account.json`
 7. Place it in `.credentials/` directory
 
-### 4. Optional: MathPix Setup (for advanced formula recognition)
 
-If you need enhanced formula recognition:
-
-1. Sign up at [MathPix](https://mathpix.com/)
-2. Get your App ID and App Key
-3. Add to environment:
-
-```bash
-export MATHPIX_APP_ID="your_app_id"
-export MATHPIX_APP_KEY="your_app_key"
-```
 
 ## Usage
 
