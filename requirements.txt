@@ -1,0 +1,30 @@
+# Core ML and Computer Vision
+torch==2.0.1
+torchvision==0.15.2
+numpy==1.26.4
+opencv-python==4.7.0.72
+Pillow==9.4.0
+
+# Document Processing
+pdf2image==1.16.3
+ultralytics==8.0.196
+
+# Google Cloud APIs
+google-cloud-vision==3.4.0
+google-genai
+
+# Machine Learning Models
+huggingface_hub==0.19.4
+
+# Document Layout Detection
+doclayout-yolo==0.0.4
+
+# HTTP and Networking
+requests==2.31.0
+
+# Configuration and Utilities
+PyYAML==6.0.1
+protobuf==3.20.3
+
+# Development Dependencies (optional)
+python-dotenv 

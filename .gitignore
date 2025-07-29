@@ -1,0 +1,42 @@
+# Credentials and sensitive files
+.credentials/
+*.json
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Cache and temporary files
+.cache/
+.tmp/
+__pycache__/
+*.pyc
+*.pyo
+
+# Output directories
+output/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python virtual environments
+.venv/
+
+# Logs
+.logs/
+*.log
+
+# Backup files
+*.backup
+
+# Sample files
+samples/

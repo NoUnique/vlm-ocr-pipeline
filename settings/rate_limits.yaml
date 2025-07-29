@@ -1,0 +1,97 @@
+# Gemini API Rate Limits Configuration
+# Based on: https://ai.google.dev/gemini-api/docs/rate-limits
+# Last updated: 2025-01-29
+
+# Rate limits by model and tier
+# RPM: Requests Per Minute
+# TPM: Tokens Per Minute  
+# RPD: Requests Per Day (null means unlimited)
+
+models:
+  # Current Active Models
+  gemini-2.5-flash:
+    free:
+      rpm: 15
+      tpm: 1500000
+      rpd: 1500
+    tier1:
+      rpm: 1000
+      tpm: 4000000
+      rpd: null
+    tier2:
+      rpm: 1000
+      tpm: 4000000
+      rpd: null
+    tier3:
+      rpm: 1000
+      tpm: 4000000
+      rpd: null
+
+  gemini-2.0-flash:
+    free:
+      rpm: 15
+      tpm: 1500000
+      rpd: 1500
+    tier1:
+      rpm: 1000
+      tpm: 4000000
+      rpd: null
+    tier2:
+      rpm: 1000
+      tpm: 4000000
+      rpd: null
+    tier3:
+      rpm: 1000
+      tpm: 4000000
+      rpd: null
+
+  gemini-2.5-pro:
+    free:
+      rpm: 2
+      tpm: 32000
+      rpd: 50
+    tier1:
+      rpm: 1000
+      tpm: 4000000
+      rpd: null
+    tier2:
+      rpm: 1000
+      tpm: 4000000
+      rpd: null
+    tier3:
+      rpm: 1000
+      tpm: 4000000
+      rpd: null
+
+  # Live API Models (different limits)
+  gemini-2.0-flash-live:
+    free:
+      rpm: 60  # sessions per minute
+      tpm: 10000000
+      rpd: null
+    tier1:
+      rpm: 1000
+      tpm: 10000000
+      rpd: null
+    tier2:
+      rpm: 1000
+      tpm: 10000000
+      rpd: null
+    tier3:
+      rpm: 1000
+      tpm: 10000000
+      rpd: null
+
+# Default model to use if requested model is not found
+default_model: gemini-2.5-flash
+
+# Configuration metadata
+config:
+  version: "1.0"
+  last_updated: "2025-01-29"
+  source: "https://ai.google.dev/gemini-api/docs/rate-limits"
+  notes: |
+    - Free tier limits are enforced strictly
+    - Paid tier limits (tier1-3) are generally higher but may vary
+    - Live API models have different session-based limits
+    - Deprecated models (gemini-1.5-*) are removed from this config 
