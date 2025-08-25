@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Setup script for the OCR Pipeline project.
+Setup script for the VLM OCR Pipeline project.
 Handles DocLayout-YOLO compatibility fixes and environment setup.
 """
 
@@ -88,8 +88,13 @@ def setup_environment():
     env_file = Path('.env')
     if not env_file.exists():
         logger.warning(".env file not found. Creating template...")
-        env_template = """# Google Cloud Platform API Keys
+        env_template = """# VLM Backend API Keys
 GEMINI_API_KEY=your_gemini_api_key_here
+OPENAI_API_KEY=your_openai_api_key_here
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+
+# Optional: Custom OpenAI base URL (for OpenRouter or other compatible services)
+# OPENAI_BASE_URL=https://openrouter.ai/api/v1
 
 # Optional: Google Vision API (if using vision extraction method)
 GOOGLE_APPLICATION_CREDENTIALS=.credentials/vision_service_account.json

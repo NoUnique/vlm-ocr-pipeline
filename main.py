@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Main entry point for the OCR Pipeline
-Provides command-line interface for processing images and PDFs locally
+Main entry point for the VLM OCR Pipeline
+Provides command-line interface for processing images and PDFs using Vision Language Models
 """
 
 import argparse
@@ -75,11 +75,14 @@ def parse_specific_pages(pages_str: str) -> Optional[list]:
 def main():
     """Main function with CLI argument parsing"""
     parser = argparse.ArgumentParser(
-        description="OCR Pipeline - Process images and PDFs with layout detection and text correction",
+        description="VLM OCR Pipeline - Process images and PDFs with layout detection and VLM-powered text correction",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   python main.py --input document.pdf
+  python main.py --input document.pdf --backend gemini
+  python main.py --input document.pdf --model openai/gpt-4o
+  python main.py --input document.pdf --backend openai --model gemini-2.5-flash
   python main.py --input /path/to/images/
   python main.py --input document.pdf --output /custom/output/
   python main.py --input document.pdf --text-extraction vision
@@ -144,17 +147,23 @@ Examples:
     )
     
     parser.add_argument(
-        '--prompts-dir',
-        type=str,
-        default='settings/prompts',
-        help='Directory containing prompt templates (default: ./settings/prompts)'
+        '--backend',
+        choices=['openai', 'gemini'],
+        default='openai',
+        help='Backend API to use: "openai" (OpenAI/OpenRouter) or "gemini" (Google Gemini) (default: openai)'
     )
     
     parser.add_argument(
-        '--gemini-model',
+        '--model',
         type=str,
         default='gemini-2.5-flash',
-        help='Gemini model to use for text processing (default: gemini-2.5-flash)'
+        help='Model to use (default: gemini-2.5-flash). For OpenRouter: use format like "openai/gpt-4"'
+    )
+    
+    parser.add_argument(
+        '--prompts-dir',
+        type=str,
+        help='Directory containing prompt templates (auto-detected based on backend/model if not specified)'
     )
     
     parser.add_argument(
@@ -162,7 +171,7 @@ Examples:
         type=str,
         choices=['free', 'tier1', 'tier2', 'tier3'],
         default='free',
-        help='Gemini API tier for rate limiting (default: free)'
+        help='Gemini API tier for rate limiting (only used with --backend gemini) (default: free)'
     )
     
     # Page limiting options
@@ -201,42 +210,72 @@ Examples:
     setup_logging(args.log_level)
     logger = logging.getLogger(__name__)
     
-    # Handle rate limit status request
+    # Handle rate limit status request (only for Gemini backend)
     if args.rate_limit_status:
-        from pipeline.ratelimit import rate_limiter
-        rate_limiter.set_tier_and_model(args.gemini_tier, args.gemini_model)
-        status = rate_limiter.get_status()
-        
-        print(f"\n📊 Gemini API Rate Limit Status")
-        print(f"{'='*50}")
-        print(f"Tier: {status['tier']}")
-        print(f"Current Model: {status['model']}")
-        print(f"\n🔢 Current Model Usage:")
-        print(f"  Requests per minute: {status['current']['rpm']}/{status['limits']['rpm'] or 'unlimited'}")
-        print(f"  Tokens per minute: {status['current']['tpm']:,}/{status['limits']['tpm']:,}" if status['limits']['tpm'] else f"  Tokens per minute: {status['current']['tpm']:,}/unlimited")
-        print(f"  Requests per day: {status['current']['rpd']}/{status['limits']['rpd'] or 'unlimited'}")
-        print(f"\n📈 Current Model Utilization:")
-        print(f"  RPM: {status['utilization']['rpm_percent']:.1f}%")
-        print(f"  TPM: {status['utilization']['tpm_percent']:.1f}%")
-        print(f"  RPD: {status['utilization']['rpd_percent']:.1f}%")
-        
-        # Show all models summary
-        if status.get('all_models') and len(status['all_models']) > 1:
-            print(f"\n📋 All Models Summary:")
-            for model_name, model_usage in status['all_models'].items():
-                is_current = "← CURRENT" if model_name == status['model'] else ""
-                print(f"  {model_name}: RPM:{model_usage['rpm']} TPM:{model_usage['tpm']:,} RPD:{model_usage['rpd']} {is_current}")
+        if args.backend == 'gemini':
+            from pipeline.ratelimit import rate_limiter
+            rate_limiter.set_tier_and_model(args.gemini_tier, args.model)
+            status = rate_limiter.get_status()
+            
+            print(f"\n📊 Gemini API Rate Limit Status")
+            print(f"{'='*50}")
+            print(f"Tier: {status['tier']}")
+            print(f"Current Model: {status['model']}")
+            print(f"\n🔢 Current Model Usage:")
+            print(f"  Requests per minute: {status['current']['rpm']}/{status['limits']['rpm'] or 'unlimited'}")
+            print(f"  Tokens per minute: {status['current']['tpm']:,}/{status['limits']['tpm']:,}" if status['limits']['tpm'] else f"  Tokens per minute: {status['current']['tpm']:,}/unlimited")
+            print(f"  Requests per day: {status['current']['rpd']}/{status['limits']['rpd'] or 'unlimited'}")
+            print(f"\n📈 Current Model Utilization:")
+            print(f"  RPM: {status['utilization']['rpm_percent']:.1f}%")
+            print(f"  TPM: {status['utilization']['tpm_percent']:.1f}%")
+            print(f"  RPD: {status['utilization']['rpd_percent']:.1f}%")
+            
+            # Show all models summary
+            if status.get('all_models') and len(status['all_models']) > 1:
+                print(f"\n📋 All Models Summary:")
+                for model_name, model_usage in status['all_models'].items():
+                    is_current = "← CURRENT" if model_name == status['model'] else ""
+                    print(f"  {model_name}: RPM:{model_usage['rpm']} TPM:{model_usage['tpm']:,} RPD:{model_usage['rpd']} {is_current}")
+        else:
+            print(f"\n⚠️  Rate limit status is only available for Gemini backend")
+            print(f"Current backend: {args.backend}")
         return
     
     # Validate input is provided when not checking rate limit status
     if not args.input:
         parser.error("the following arguments are required: --input/-i")
     
-    logger.info("Starting OCR Pipeline")
+    # Auto-detect prompts directory if not specified
+    if not args.prompts_dir:
+        # Determine model family for prompt selection
+        if args.backend == 'gemini':
+            model_family = 'gemini'
+        else:
+            # For OpenAI backend, try to detect model family
+            model_lower = args.model.lower()
+            if 'gpt' in model_lower or 'openai' in model_lower:
+                model_family = 'openai'
+            elif 'internvl' in model_lower:
+                model_family = 'internvl'
+            elif 'qwen' in model_lower:
+                model_family = 'qwen'
+            elif 'phi' in model_lower:
+                model_family = 'phi4'
+            elif 'gemini' in model_lower:
+                model_family = 'gemini'
+            else:
+                model_family = 'openai'  # Default fallback
+        
+        args.prompts_dir = f'settings/prompts/{model_family}'
+        logger.info(f"Auto-detected prompts directory: {args.prompts_dir}")
+    
+    logger.info("Starting VLM OCR Pipeline")
     logger.info(f"Input: {args.input}")
     logger.info(f"Output: {args.output}")
-    logger.info(f"Gemini Tier: {args.gemini_tier}")
-    logger.info(f"Gemini Model: {args.gemini_model}")
+    logger.info(f"Backend: {args.backend}")
+    logger.info(f"Model: {args.model}")
+    if args.backend == 'gemini':
+        logger.info(f"Gemini Tier: {args.gemini_tier}")
     
     try:
         pipeline = Pipeline(
@@ -248,7 +287,8 @@ Examples:
             temp_dir=args.temp_dir,
             text_extraction_method=args.text_extraction,
             prompts_dir=args.prompts_dir,
-            gemini_model=args.gemini_model,
+            backend=args.backend,
+            model=args.model,
             gemini_tier=args.gemini_tier
         )
         
@@ -324,7 +364,7 @@ Examples:
             logger.error(f"Processing failed: {result['error']}")
             return 1
         
-        logger.info("OCR Pipeline completed successfully")
+        logger.info("VLM OCR Pipeline completed successfully")
         
         if input_path.is_file() and input_path.suffix.lower() == '.pdf':
             logger.info(f"Results saved to: {result.get('output_directory', args.output)}")

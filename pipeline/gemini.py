@@ -1,6 +1,6 @@
 """
-Google Gemini API client for advanced OCR text extraction and processing.
-Handles text extraction, special content analysis, and text correction.
+Google Gemini VLM API client for advanced OCR text extraction and processing.
+Handles text extraction, special content analysis, and text correction using Gemini Vision Language Models.
 """
 
 import difflib
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class GeminiClient:
-    """Google Gemini API client for OCR text processing"""
+    """Google Gemini VLM API client for OCR text processing"""
     
     def __init__(self, gemini_model: str = "gemini-2.5-flash", api_key: Optional[str] = None):
         """

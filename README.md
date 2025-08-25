@@ -1,18 +1,19 @@
-# Gemini API OCR Pipeline
+# VLM OCR Pipeline
 
-A unified OCR processing pipeline that combines document layout detection, text extraction, and AI-powered text correction. This system processes images and PDFs locally using Gemini API with optional Google Vision API fallback.
+A unified OCR processing pipeline that leverages Vision Language Models (VLMs) for document layout detection, text extraction, and AI-powered text correction. This system processes images and PDFs locally using multiple VLM backends (OpenAI/OpenRouter, Gemini) with optional Google Vision API fallback.
 
 > **Based on**: This project is based on and modified from [Versatile-OCR-Program](https://github.com/ses4255/Versatile-OCR-Program)
 
 ## Features
 
 - **Document Layout Detection**: Automatically detects text, tables, figures, and other elements using DocLayout-YOLO
-- **AI-Powered Text Extraction**: Text extraction using Gemini 2.5 Flash model with intelligent context understanding
+- **Multi-VLM Backend Support**: Support for OpenAI, OpenRouter, and Gemini VLM APIs for text extraction and processing
+- **VLM-Powered Text Extraction**: Advanced text extraction using Vision Language Models with intelligent context understanding
 - **Multi-Language Support**: Supports English, Korean, and Japanese text extraction
-- **AI-Powered Correction**: Uses Gemini API for intelligent text correction and content analysis
+- **AI-Powered Correction**: Intelligent text correction and content analysis
 - **Fallback OCR**: Optional Google Vision API fallback for traditional OCR when needed
 - **Special Content Processing**: Enhanced analysis of tables and figures with structured output
-- **Centralized Prompt Management**: YAML-based prompt templates for easy customization
+- **Model-Specific Prompts**: YAML-based prompt templates organized by model family for optimal results
 - **Local Processing**: All processing runs locally with results stored on your filesystem
 - **Caching System**: Intelligent caching to avoid reprocessing identical content
 - **Flexible Input**: Supports single images, PDFs, or batch processing of directories
@@ -20,13 +21,14 @@ A unified OCR processing pipeline that combines document layout detection, text 
 ## Project Structure
 
 ```
-gemini_ocr/
+vlm-ocr-pipeline/
 ├── main.py                     # CLI entry point
-├── pipeline/                  # Modular OCR Pipeline package
+├── pipeline/                  # Modular VLM OCR Pipeline package
 │   ├── __init__.py            # Main Pipeline class
 │   ├── prompt.py              # PromptManager for YAML prompts
 │   ├── vision.py              # VisionClient for Google Cloud Vision
-│   ├── gemini.py              # GeminiClient for Gemini API
+│   ├── gemini.py              # GeminiClient for Gemini VLM API
+│   ├── openai.py              # OpenAIClient for OpenAI/OpenRouter VLM APIs
 │   └── ratelimit.py           # Rate limit management
 ├── models/
 │   └── doclayout_yolo.py      # Document layout detection model
@@ -47,7 +49,7 @@ gemini_ocr/
 
 ```bash
 # Clone or download the project
-cd gemini_ocr
+cd vlm-ocr-pipeline
 
 # Create virtual environment (recommended with Python 3.10 for best compatibility)
 uv venv --python 3.10 .venv
@@ -74,10 +76,54 @@ python setup.py
 export GEMINI_API_KEY="your_api_key_here"
 ```
 
-Or create a `.env` file:
+### What are Vision Language Models (VLMs)?
+
+Vision Language Models are advanced AI systems that can understand both visual and textual information simultaneously. Unlike traditional OCR that simply extracts text, VLMs can:
+
+- **Understand context**: Analyze the relationship between text and visual elements
+- **Intelligent text correction**: Fix OCR errors based on contextual understanding  
+- **Content analysis**: Describe images, analyze tables, and extract meaningful insights
+- **Multi-modal reasoning**: Combine visual and textual information for better results
+
+Popular VLMs supported by this pipeline include:
+- **GPT-4 Vision (OpenAI)**: Industry-leading multimodal capabilities
+- **Gemini Vision (Google)**: Advanced visual understanding and reasoning
+- **Claude Vision (Anthropic)**: Strong analytical and reasoning capabilities
+
+### 3. OpenAI/OpenRouter API Setup
+
+For OpenAI backend:
+
+1. Visit [OpenAI API](https://platform.openai.com/api-keys)
+2. Create an API key
+3. Set environment variable:
+
+```bash
+export OPENAI_API_KEY="your_openai_api_key_here"
+```
+
+For OpenRouter backend (supports multiple models including Gemini):
+
+1. Visit [OpenRouter](https://openrouter.ai/keys)
+2. Create an API key
+3. Set environment variable:
+
+```bash
+export OPENROUTER_API_KEY="your_openrouter_api_key_here"
+```
+
+### 4. Environment Configuration
+
+Create a `.env` file in the project root:
 
 ```env
-GEMINI_API_KEY=your_api_key_here
+# Choose your preferred backend (openai is default)
+GEMINI_API_KEY=your_gemini_api_key_here
+OPENAI_API_KEY=your_openai_api_key_here
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+
+# Optional: Custom OpenAI base URL (for OpenRouter or other compatible services)
+# OPENAI_BASE_URL=https://openrouter.ai/api/v1
 ```
 
 ### 3. Optional: Google Vision API Setup (Fallback Only)
@@ -136,8 +182,17 @@ Navigate to **APIs & Services > Library** and enable:
 #### Basic Usage
 
 ```bash
-# Process a single PDF
+# Process a single PDF (uses OpenAI backend by default)
 python main.py --input document.pdf
+
+# Use Gemini backend specifically
+python main.py --input document.pdf --backend gemini
+
+# Use specific OpenAI model
+python main.py --input document.pdf --model gpt-4o
+
+# Use OpenRouter with Gemini model
+python main.py --input document.pdf --model google/gemini-2.5-flash
 
 # Process a directory of PDFs
 python main.py --input /path/to/pdfs/
@@ -155,11 +210,15 @@ python main.py --input document.pdf --output /custom/output/
 # Disable caching for fresh processing
 python main.py --input document.pdf --no-cache
 
-# Use Google Vision API instead of Gemini for text extraction
+# Use Google Vision API instead of AI backend for text extraction
 python main.py --input document.pdf --text-extraction vision
 
-# Use custom prompts directory
+# Use custom prompts directory (overrides auto-detection)
 python main.py --input document.pdf --prompts-dir custom_prompts/
+
+# Backend and model combinations
+python main.py --input document.pdf --backend openai --model gpt-4o-mini
+python main.py --input document.pdf --backend gemini --model gemini-2.5-flash
 
 # Page limiting options (mutually exclusive)
 python main.py --input document.pdf --max-pages 5
@@ -326,20 +385,37 @@ python main.py --input document.pdf --pages 3,7,12
 
 ## Prompt Management
 
-### Centralized Prompt System
+### Model-Specific Prompt System
 
-All prompts are stored in YAML files in the `settings/prompts/` directory:
+Prompts are organized by model family for optimal results. The system automatically selects the appropriate prompt directory based on the backend and model:
 
 ```
 settings/prompts/
-├── text_extraction.yaml      # Text extraction prompts
-├── content_analysis.yaml     # Table and figure analysis
-└── text_correction.yaml      # Text correction prompts
+├── gemini/                   # Gemini-specific prompts
+│   ├── text_extraction.yaml
+│   ├── content_analysis.yaml
+│   └── text_correction.yaml
+├── openai/                   # OpenAI/GPT-specific prompts
+│   ├── text_extraction.yaml
+│   ├── content_analysis.yaml
+│   └── text_correction.yaml
+├── internvl/                 # InternVL-specific prompts
+├── qwen/                     # Qwen-specific prompts
+└── phi4/                     # Phi-4-specific prompts
 ```
+
+### Automatic Prompt Selection
+
+The system automatically detects the appropriate prompt directory:
+
+- `--backend gemini` → `settings/prompts/gemini/`
+- `--backend openai --model gpt-4o` → `settings/prompts/openai/`
+- `--backend openai --model google/gemini-2.5-flash` → `settings/prompts/gemini/`
+- `--model internvl/internvl2-5` → `settings/prompts/internvl/`
 
 ### Customizing Prompts
 
-1. **Copy existing prompts**: `cp -r settings/prompts custom_prompts`
+1. **Copy existing prompts**: `cp -r settings/prompts/gemini custom_prompts`
 2. **Edit YAML files**: Modify prompts according to your needs
 3. **Use custom prompts**: `python main.py --input doc.pdf --prompts-dir custom_prompts/`
 

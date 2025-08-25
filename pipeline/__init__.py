@@ -1,6 +1,6 @@
 """
-Unified OCR Pipeline for document processing and text extraction.
-Integrates layout detection, OCR, and AI-powered text correction.
+Unified VLM OCR Pipeline for document processing and text extraction.
+Integrates layout detection, OCR, and Vision Language Model-powered text correction.
 """
 
 import hashlib
@@ -26,13 +26,14 @@ from models import DocLayoutYOLO
 from .prompt import PromptManager
 from .vision import VisionClient
 from .gemini import GeminiClient
+from .openai import OpenAIClient
 from .ratelimit import rate_limiter
 
 logger = logging.getLogger(__name__)
 
 
 class Pipeline:
-    """Unified OCR processing pipeline with integrated text correction"""
+    """Unified VLM OCR processing pipeline with integrated text correction"""
 
     def __init__(
         self,
@@ -44,11 +45,12 @@ class Pipeline:
         temp_dir: Union[str, Path] = ".tmp",
         text_extraction_method: str = "gemini",
         prompts_dir: Union[str, Path] = "settings/prompts",
-        gemini_model: str = "gemini-2.5-flash",
+        backend: str = "openai",
+        model: str = "gemini-2.5-flash",
         gemini_tier: str = "free"
     ):
         """
-        Initialize OCR processing pipeline
+        Initialize VLM OCR processing pipeline
         
         Args:
             model_path: DocLayout-YOLO model path
@@ -59,18 +61,21 @@ class Pipeline:
             temp_dir: Temporary files directory path
             text_extraction_method: Method for text extraction ("gemini" or "vision")
             prompts_dir: Directory containing prompt templates
-            gemini_model: Gemini model to use for text processing
-            gemini_tier: Gemini API tier for rate limiting ("free", "tier1", "tier2", "tier3")
+            backend: Backend API to use ("openai" or "gemini")
+            model: Model to use for text processing
+            gemini_tier: Gemini API tier for rate limiting (only used with gemini backend)
         """
         self.model_path = Path(model_path) if model_path else None
         self.confidence_threshold = confidence_threshold
         self.use_cache = use_cache
         self.text_extraction_method = text_extraction_method.lower()
-        self.gemini_model = gemini_model
+        self.backend = backend.lower()
+        self.model = model
         self.gemini_tier = gemini_tier
         
-        # Initialize rate limiter
-        rate_limiter.set_tier_and_model(gemini_tier, gemini_model)
+        # Initialize rate limiter (only for Gemini backend)
+        if self.backend == "gemini":
+            rate_limiter.set_tier_and_model(gemini_tier, model)
         
         # Convert paths to Path objects
         self.cache_dir = Path(cache_dir)
@@ -85,7 +90,16 @@ class Pipeline:
         self.prompt_manager = PromptManager(self.prompts_dir)
         self.doc_layout_model = self._setup_layout_model()
         self.vision_client = VisionClient()
-        self.gemini_client = GeminiClient(gemini_model=gemini_model)
+        
+        # Initialize backend clients
+        if self.backend == "gemini":
+            self.gemini_client = GeminiClient(gemini_model=model)
+            self.ai_client = self.gemini_client
+        else:  # OpenAI backend
+            self.openai_client = OpenAIClient(model=model)
+            self.ai_client = self.openai_client
+            # Still initialize Gemini client for fallback if needed
+            self.gemini_client = GeminiClient(gemini_model="gemini-2.5-flash")
 
     def _setup_directories(self) -> None:
         """Create necessary directories"""
@@ -169,25 +183,47 @@ class Pipeline:
         
         # Use Gemini API by default or if specified
         if self.text_extraction_method == "gemini":
-            logger.debug("Using Gemini API for text extraction")
-            return self._extract_text_with_gemini(region_img, region_info)
+            logger.debug(f"Using {self.backend.upper()} API for text extraction")
+            return self._extract_text_with_ai(region_img, region_info)
         
         # Use Vision API if specified
         elif self.text_extraction_method == "vision":
             logger.debug("Using Google Vision API for text extraction")
             result = self._extract_text_with_vision(region_img, region_info)
             
-            # Fallback to Gemini if Vision API fails
-            if result.get('error') and self.gemini_client.is_available():
-                logger.warning("Vision API failed, falling back to Gemini API")
-                return self._extract_text_with_gemini(region_img, region_info)
+            # Fallback to AI client if Vision API fails
+            if result.get('error') and self.ai_client.is_available():
+                logger.warning(f"Vision API failed, falling back to {self.backend.upper()} API")
+                return self._extract_text_with_ai(region_img, region_info)
             
             return result
         
-        # Invalid method, default to Gemini
+        # Invalid method, default to AI client
         else:
-            logger.warning(f"Invalid text extraction method: {self.text_extraction_method}, using Gemini")
-            return self._extract_text_with_gemini(region_img, region_info)
+            logger.warning(f"Invalid text extraction method: {self.text_extraction_method}, using {self.backend.upper()}")
+            return self._extract_text_with_ai(region_img, region_info)
+
+    def _extract_text_with_ai(self, region_img: np.ndarray, region_info: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract text from region using the configured AI backend"""
+        image_hash = self._calculate_image_hash(region_img)
+        cache_type = f'{self.backend}_ocr'
+        
+        cached_result = self._get_cached_result(image_hash, cache_type)
+        if cached_result is not None:
+            cached_result['coords'] = region_info['coords']
+            return cached_result
+        
+        # Get prompt from PromptManager
+        prompt = self.prompt_manager.get_prompt('text_extraction', 'user')
+        
+        # Use AI client to extract text
+        result = self.ai_client.extract_text(region_img, region_info, prompt)
+        
+        # Save to cache if successful
+        if 'error' not in result:
+            self._save_to_cache(image_hash, cache_type, result)
+        
+        return result
 
     def _extract_text_with_gemini(self, region_img: np.ndarray, region_info: Dict[str, Any]) -> Dict[str, Any]:
         """Extract text from region using Gemini API"""
@@ -228,6 +264,35 @@ class Pipeline:
         
         return result
 
+    def _process_special_region_with_ai(self, region_img: np.ndarray, region_info: Dict[str, Any]) -> Dict[str, Any]:
+        """Process special regions (tables, figures) with configured AI backend"""
+        image_hash = self._calculate_image_hash(region_img)
+        cache_type = f"{region_info['type']}_{self.backend}"
+        
+        cached_result = self._get_cached_result(image_hash, cache_type)
+        if cached_result is not None:
+            cached_result['coords'] = region_info['coords']
+            return cached_result
+        
+        if not self.ai_client.is_available():
+            logger.warning(f"{self.backend.upper()} API client not initialized, falling back to text extraction")
+            return self._extract_text_from_region(region_img, region_info)
+        
+        # Get prompt from PromptManager
+        if self.backend == "gemini":
+            prompt = self.prompt_manager.get_gemini_prompt_for_region_type(region_info['type'])
+        else:
+            prompt = self.prompt_manager.get_prompt_for_region_type(region_info['type'])
+        
+        # Use AI client to process special region
+        result = self.ai_client.process_special_region(region_img, region_info, prompt)
+        
+        # Save to cache if successful
+        if 'error' not in result:
+            self._save_to_cache(image_hash, cache_type, result)
+        
+        return result
+
     def _process_special_region_with_gemini(self, region_img: np.ndarray, region_info: Dict[str, Any]) -> Dict[str, Any]:
         """Process special regions (tables, figures) with Gemini API"""
         image_hash = self._calculate_image_hash(region_img)
@@ -255,16 +320,16 @@ class Pipeline:
         return result
 
     def correct_text(self, text: str) -> str:
-        """Correct OCR text using Gemini API"""
-        if not self.gemini_client.is_available() or not text:
+        """Correct OCR text using configured AI backend"""
+        if not self.ai_client.is_available() or not text:
             return text
         
         # Get prompts from PromptManager
         system_prompt = self.prompt_manager.get_prompt('text_correction', 'system')
         user_prompt = self.prompt_manager.get_prompt('text_correction', 'user', text=text)
         
-        # Use GeminiClient to correct text
-        result = self.gemini_client.correct_text(text, system_prompt, user_prompt)
+        # Use AI client to correct text
+        result = self.ai_client.correct_text(text, system_prompt, user_prompt)
         
         # Handle different return types
         if isinstance(result, dict):
@@ -286,7 +351,7 @@ class Pipeline:
             region_img = self._crop_region(image_np, region)
             
             if region['type'] in ['table', 'figure']:
-                processed_region = self._process_special_region_with_gemini(region_img, region)
+                processed_region = self._process_special_region_with_ai(region_img, region)
             else:
                 processed_region = self._extract_text_from_region(region_img, region)
             
@@ -535,4 +600,81 @@ class Pipeline:
         except (AttributeError, TypeError, KeyError) as e:
             logger.debug(f"Error checking for processing errors: {e}")
             
-        return False 
+        return False
+
+    def process_directory(self, input_dir: Path, output_dir: str, max_pages: Optional[int] = None, page_range: Optional[Tuple[int, int]] = None, specific_pages: Optional[List[int]] = None) -> Dict[str, Any]:
+        """Process all PDFs in a directory"""
+        input_dir = Path(input_dir)
+        output_base = Path(output_dir)
+        
+        if not input_dir.exists() or not input_dir.is_dir():
+            return {"error": f"Directory not found: {input_dir}"}
+        
+        # Find all PDF files in directory
+        pdf_files = list(input_dir.glob("*.pdf"))
+        if not pdf_files:
+            return {"error": f"No PDF files found in directory: {input_dir}"}
+        
+        logger.info(f"Found {len(pdf_files)} PDF files to process")
+        
+        results = {}
+        total_files = len(pdf_files)
+        processed_files = 0
+        
+        for pdf_file in pdf_files:
+            logger.info(f"Processing PDF {processed_files + 1}/{total_files}: {pdf_file.name}")
+            
+            try:
+                # Set output directory for this PDF
+                self.output_dir = output_base / pdf_file.stem
+                
+                # Process the PDF
+                result = self.process_pdf(
+                    pdf_file, 
+                    max_pages=max_pages,
+                    page_range=page_range,
+                    pages=specific_pages
+                )
+                
+                results[str(pdf_file)] = result
+                processed_files += 1
+                
+                # Check for processing errors that should stop batch processing
+                if result.get('processing_stopped', False):
+                    logger.warning(f"Processing stopped for {pdf_file.name} due to rate limits. Continuing with next file.")
+                
+            except Exception as e:
+                logger.error(f"Error processing {pdf_file}: {e}")
+                results[str(pdf_file)] = {
+                    "error": str(e),
+                    "processed_at": datetime.now().isoformat()
+                }
+        
+        summary = {
+            "input_directory": str(input_dir),
+            "output_directory": str(output_base),
+            "total_files": total_files,
+            "processed_files": processed_files,
+            "results": results,
+            "processed_at": datetime.now().isoformat()
+        }
+        
+        # Save directory summary
+        summary_file = output_base / "directory_summary.json"
+        summary_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        with summary_file.open('w', encoding='utf-8') as f:
+            json.dump(summary, f, ensure_ascii=False, indent=2)
+        
+        logger.info(f"Directory processing complete. Summary saved to: {summary_file}")
+        
+        return summary
+
+    def _save_results(self, result: Dict[str, Any], output_path: Path) -> None:
+        """Save processing results to JSON file"""
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        with output_path.open('w', encoding='utf-8') as f:
+            json.dump(result, f, ensure_ascii=False, indent=2)
+        
+        logger.info(f"Results saved to: {output_path}") 
