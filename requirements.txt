@@ -17,7 +17,7 @@ google-genai
 openai>=1.0.0
 
 # Machine Learning Models
-huggingface_hub==0.19.4
+huggingface_hub==0.34.4
 
 # Document Layout Detection
 doclayout-yolo==0.0.4
