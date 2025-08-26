@@ -336,7 +336,8 @@ Examples:
                 logger.info(f"Processing image file: {input_path}")
                 result = pipeline.process_image(input_path)
                 
-                output_path = Path(args.output) / f"{input_path.stem}.json"
+                model_output_dir = Path(args.output) / pipeline.model
+                output_path = model_output_dir / f"{input_path.stem}.json"
                 pipeline._save_results(result, output_path)
             else:
                 logger.error(f"Unsupported file format: {file_ext}")
@@ -366,8 +367,11 @@ Examples:
         
         logger.info("VLM OCR Pipeline completed successfully")
         
-        if input_path.is_file() and input_path.suffix.lower() == '.pdf':
-            logger.info(f"Results saved to: {result.get('output_directory', args.output)}")
+        if input_path.is_file():
+            if input_path.suffix.lower() == '.pdf':
+                logger.info(f"Results saved to: {result.get('output_directory', args.output)}")
+            else:
+                logger.info(f"Results saved to: {Path(args.output) / pipeline.model}")
         elif input_path.is_dir():
             logger.info(f"Results saved to: {result.get('output_directory', args.output)}")
         else:

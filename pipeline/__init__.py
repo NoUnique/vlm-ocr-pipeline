@@ -106,6 +106,10 @@ class Pipeline:
         for directory in [self.cache_dir, self.output_dir, self.temp_dir]:
             directory.mkdir(parents=True, exist_ok=True)
 
+    def _get_pdf_output_dir(self, pdf_path: Path) -> Path:
+        """Return the output directory for a given PDF as <output>/<model>/<file_stem>"""
+        return self.output_dir / self.model / pdf_path.stem
+
     def _setup_layout_model(self) -> DocLayoutYOLO:
         """Setup DocLayout-YOLO model"""
         model = DocLayoutYOLO(model_path=self.model_path)
@@ -468,7 +472,7 @@ class Pipeline:
                 processed_pages.append(page_result)
                 
                 # Save individual page result
-                page_output_dir = self.output_dir / pdf_path.stem
+                page_output_dir = self._get_pdf_output_dir(pdf_path)
                 page_output_dir.mkdir(parents=True, exist_ok=True)
                 
                 page_output_file = page_output_dir / f"page_{page_num}.json"
@@ -488,6 +492,10 @@ class Pipeline:
                 }
                 processed_pages.append(error_page_result)
         
+        # Prepare output directory for summary
+        summary_output_dir = self._get_pdf_output_dir(pdf_path)
+        summary_output_dir.mkdir(parents=True, exist_ok=True)
+        
         # Create summary
         summary = {
             'pdf_path': str(pdf_path),
@@ -495,13 +503,11 @@ class Pipeline:
             'processed_pages': len(processed_pages),
             'pages_data': processed_pages,
             'processing_stopped': processing_stopped,
-            'processed_at': datetime.now().isoformat()
+            'processed_at': datetime.now().isoformat(),
+            'output_directory': str(summary_output_dir)
         }
         
         # Save summary
-        summary_output_dir = self.output_dir / pdf_path.stem
-        summary_output_dir.mkdir(parents=True, exist_ok=True)
-        
         # Determine output filename based on completion status
         if processing_stopped:
             summary_filename = 'summary_incomplete.json'
@@ -606,6 +612,7 @@ class Pipeline:
         """Process all PDFs in a directory"""
         input_dir = Path(input_dir)
         output_base = Path(output_dir)
+        model_base_dir = output_base / self.model
         
         if not input_dir.exists() or not input_dir.is_dir():
             return {"error": f"Directory not found: {input_dir}"}
@@ -625,10 +632,7 @@ class Pipeline:
             logger.info(f"Processing PDF {processed_files + 1}/{total_files}: {pdf_file.name}")
             
             try:
-                # Set output directory for this PDF
-                self.output_dir = output_base / pdf_file.stem
-                
-                # Process the PDF
+                # Process the PDF (outputs will be placed under <output>/<model>/<file>)
                 result = self.process_pdf(
                     pdf_file, 
                     max_pages=max_pages,
@@ -650,17 +654,20 @@ class Pipeline:
                     "processed_at": datetime.now().isoformat()
                 }
         
+        # Ensure model base directory exists
+        model_base_dir.mkdir(parents=True, exist_ok=True)
+        
         summary = {
             "input_directory": str(input_dir),
-            "output_directory": str(output_base),
+            "output_directory": str(model_base_dir),
             "total_files": total_files,
             "processed_files": processed_files,
             "results": results,
             "processed_at": datetime.now().isoformat()
         }
         
-        # Save directory summary
-        summary_file = output_base / "directory_summary.json"
+        # Save directory summary under model-specific directory
+        summary_file = model_base_dir / "directory_summary.json"
         summary_file.parent.mkdir(parents=True, exist_ok=True)
         
         with summary_file.open('w', encoding='utf-8') as f:
