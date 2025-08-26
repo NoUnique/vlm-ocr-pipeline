@@ -44,7 +44,6 @@ class Pipeline:
         output_dir: Union[str, Path] = "output",
         temp_dir: Union[str, Path] = ".tmp",
         text_extraction_method: str = "gemini",
-        prompts_dir: Union[str, Path] = "settings/prompts",
         backend: str = "openai",
         model: str = "gemini-2.5-flash",
         gemini_tier: str = "free"
@@ -60,7 +59,6 @@ class Pipeline:
             output_dir: Output directory path
             temp_dir: Temporary files directory path
             text_extraction_method: Method for text extraction ("gemini" or "vision")
-            prompts_dir: Directory containing prompt templates
             backend: Backend API to use ("openai" or "gemini")
             model: Model to use for text processing
             gemini_tier: Gemini API tier for rate limiting (only used with gemini backend)
@@ -81,13 +79,12 @@ class Pipeline:
         self.cache_dir = Path(cache_dir)
         self.output_dir = Path(output_dir)
         self.temp_dir = Path(temp_dir)
-        self.prompts_dir = Path(prompts_dir)
         
         # Create directories
         self._setup_directories()
         
         # Initialize components
-        self.prompt_manager = PromptManager(self.prompts_dir)
+        self.prompt_manager = PromptManager(model=self.model, backend=self.backend)
         self.doc_layout_model = self._setup_layout_model()
         self.vision_client = VisionClient()
         
@@ -100,6 +97,8 @@ class Pipeline:
             self.ai_client = self.openai_client
             # Still initialize Gemini client for fallback if needed
             self.gemini_client = GeminiClient(gemini_model="gemini-2.5-flash")
+
+        logger.info(f"AI backend initialized: {self.backend.upper()} (model={self.model})")
 
     def _setup_directories(self) -> None:
         """Create necessary directories"""

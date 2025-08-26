@@ -161,12 +161,6 @@ Examples:
     )
     
     parser.add_argument(
-        '--prompts-dir',
-        type=str,
-        help='Directory containing prompt templates (auto-detected based on backend/model if not specified)'
-    )
-    
-    parser.add_argument(
         '--gemini-tier',
         type=str,
         choices=['free', 'tier1', 'tier2', 'tier3'],
@@ -245,30 +239,6 @@ Examples:
     if not args.input:
         parser.error("the following arguments are required: --input/-i")
     
-    # Auto-detect prompts directory if not specified
-    if not args.prompts_dir:
-        # Determine model family for prompt selection
-        if args.backend == 'gemini':
-            model_family = 'gemini'
-        else:
-            # For OpenAI backend, try to detect model family
-            model_lower = args.model.lower()
-            if 'gpt' in model_lower or 'openai' in model_lower:
-                model_family = 'openai'
-            elif 'internvl' in model_lower:
-                model_family = 'internvl'
-            elif 'qwen' in model_lower:
-                model_family = 'qwen'
-            elif 'phi' in model_lower:
-                model_family = 'phi4'
-            elif 'gemini' in model_lower:
-                model_family = 'gemini'
-            else:
-                model_family = 'openai'  # Default fallback
-        
-        args.prompts_dir = f'settings/prompts/{model_family}'
-        logger.info(f"Auto-detected prompts directory: {args.prompts_dir}")
-    
     logger.info("Starting VLM OCR Pipeline")
     logger.info(f"Input: {args.input}")
     logger.info(f"Output: {args.output}")
@@ -286,7 +256,6 @@ Examples:
             output_dir=args.output,
             temp_dir=args.temp_dir,
             text_extraction_method=args.text_extraction,
-            prompts_dir=args.prompts_dir,
             backend=args.backend,
             model=args.model,
             gemini_tier=args.gemini_tier

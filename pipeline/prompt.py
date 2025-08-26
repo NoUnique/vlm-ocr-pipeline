@@ -4,6 +4,7 @@ Handles loading, caching, and retrieving prompts from YAML files with VLM-specif
 """
 
 import logging
+import glob
 from pathlib import Path
 from typing import Any, Dict
 
@@ -15,15 +16,93 @@ logger = logging.getLogger(__name__)
 class PromptManager:
     """Manages prompt loading and retrieval with YAML-based configuration and fallbacks"""
     
-    def __init__(self, prompts_dir: Path):
+    def __init__(self, model: str, backend: str = "openai"):
         """
         Initialize PromptManager
         
         Args:
-            prompts_dir: Directory containing prompt YAML files
+            model: Model name (e.g., "google/gemini-2.5-flash", "openai/gpt-4o")
+            backend: Backend type ("openai" or "gemini")
         """
-        self.prompts_dir = Path(prompts_dir)
+        self.model = model
+        self.backend = backend
+        self.prompts_dir = Path(self._find_best_prompts_dir(model, backend))
         self.prompts = self._load_prompts()
+    
+    def _find_best_prompts_dir(self, model: str, backend: str = "openai") -> str:
+        """Find the best matching prompts directory using hierarchical matching.
+        
+        Priority:
+        1. Exact model match: prompts/{org}/{full_model_name}/
+        2. Wildcard prefix match: prompts/{org}/{model_prefix}*/
+        3. Organization match: prompts/{org}/
+        4. Default fallback: prompts/default/
+        
+        Args:
+            model: Model name (e.g., "google/gemini-2.5-flash", "openai/gpt-4o")
+            backend: Backend type (for legacy compatibility)
+            
+        Returns:
+            Path to the best matching prompts directory
+        """
+        base_prompts_dir = Path("settings/prompts")
+        
+        # Parse model name
+        if "/" in model:
+            org, model_name = model.split("/", 1)
+        else:
+            # Handle models without org prefix
+            org = None
+            model_name = model
+        
+        candidates = []
+        
+        if org:
+            # 1. Exact match: prompts/org/full_model_name/
+            exact_path = base_prompts_dir / org / model_name
+            if exact_path.is_dir():
+                candidates.append((1, str(exact_path)))
+            
+            # 2. Wildcard prefix match: prompts/org/prefix*/
+            org_dir = base_prompts_dir / org
+            if org_dir.is_dir():
+                for prefix_len in range(len(model_name), 0, -1):
+                    prefix = model_name[:prefix_len]
+                    pattern = str(org_dir / f"{prefix}*")
+                    matches = glob.glob(pattern)
+                    for match in matches:
+                        match_path = Path(match)
+                        if match_path.is_dir() and match_path.name != model_name:
+                            # Calculate specificity by prefix length
+                            specificity = len(prefix)
+                            candidates.append((2, str(match_path), specificity))
+            
+            # 3. Organization match: prompts/org/
+            org_path = base_prompts_dir / org
+            if org_path.is_dir():
+                candidates.append((3, str(org_path)))
+        
+        # 4. Default fallback
+        default_path = base_prompts_dir / "default"
+        if default_path.is_dir():
+            candidates.append((4, str(default_path)))
+        
+        # Sort by priority (lower number = higher priority)
+        # For wildcards, also sort by specificity (higher = better)
+        if candidates:
+            def sort_key(item):
+                if len(item) == 3:  # Wildcard match with specificity
+                    priority, path, specificity = item
+                    return (priority, -specificity)  # Negative for descending order
+                else:
+                    priority, path = item
+                    return (priority,)
+            
+            candidates.sort(key=sort_key)
+            return candidates[0][1] if len(candidates[0]) == 2 else candidates[0][1]
+        
+        # Ultimate fallback if nothing found
+        return str(base_prompts_dir / "default")
     
     def _load_prompts(self) -> Dict[str, Any]:
         """Load prompts from YAML files"""
@@ -46,12 +125,13 @@ class PromptManager:
                 try:
                     with prompt_file.open('r', encoding='utf-8') as f:
                         prompts[prompt_type] = yaml.safe_load(f)
-                    logger.info(f"Loaded prompts from {prompt_file}")
+                    logger.debug(f"Loaded prompts from {prompt_file}")
                 except Exception as e:
                     logger.warning(f"Failed to load prompts from {prompt_file}: {e}")
             else:
                 logger.warning(f"Prompt file not found: {prompt_file}")
         
+        logger.info(f"PromptManager initialized (model={self.model}, backend={self.backend}, dir={self.prompts_dir})")
         return prompts
 
     def get_prompt(self, category: str, prompt_type: str, prompt_key: str = None, **kwargs) -> str:
