@@ -119,6 +119,7 @@ class GeminiClient:
                     'error_message': 'Daily rate limit exceeded'
                 }
 
+            logger.info(f"Requesting Gemini extract_text (model={self.gemini_model})")
             response = self.client.models.generate_content(
                 model=self.gemini_model,
                 contents=contents,
@@ -237,6 +238,7 @@ class GeminiClient:
                     'error_message': 'Daily rate limit exceeded'
                 }
 
+            logger.info(f"Requesting Gemini process_special_region (model={self.gemini_model})")
             response = self.client.models.generate_content(
                 model=self.gemini_model,
                 contents=contents,
@@ -313,6 +315,7 @@ class GeminiClient:
             if not rate_limiter.wait_if_needed(estimated_tokens):
                 return "[TEXT_CORRECTION_DAILY_LIMIT_EXCEEDED]"
 
+            logger.info(f"Requesting Gemini correct_text (model={self.gemini_model})")
             response = self.client.models.generate_content(
                 model=self.gemini_model,
                 contents=contents,

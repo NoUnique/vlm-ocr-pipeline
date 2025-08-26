@@ -102,7 +102,7 @@ class OpenAIClient:
             Dictionary containing extracted text and metadata
         """
         if not self.is_available():
-            logger.warning("OpenAI API client not initialized")
+            logger.warning(f"OpenAI API client not initialized (model={self.model}, base_url={self.base_url or 'default'})")
             return {
                 'type': region_info['type'],
                 'coords': region_info['coords'],
@@ -131,6 +131,7 @@ class OpenAIClient:
                 }
             ]
             
+            logger.info(f"Requesting OpenAI extract_text (model={self.model}, base_url={self.base_url or 'default'})")
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
@@ -192,7 +193,7 @@ class OpenAIClient:
             Dictionary containing processed content and metadata
         """
         if not self.is_available():
-            logger.warning("OpenAI API client not initialized")
+            logger.warning(f"OpenAI API client not initialized (model={self.model}, base_url={self.base_url or 'default'})")
             return {
                 'type': region_info['type'],
                 'coords': region_info['coords'],
@@ -222,6 +223,7 @@ class OpenAIClient:
                 }
             ]
             
+            logger.info(f"Requesting OpenAI process_special_region (model={self.model}, base_url={self.base_url or 'default'})")
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
@@ -291,6 +293,7 @@ class OpenAIClient:
                 }
             ]
             
+            logger.info(f"Requesting OpenAI correct_text (model={self.model}, base_url={self.base_url or 'default'})")
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
