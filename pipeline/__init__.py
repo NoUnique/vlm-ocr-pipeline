@@ -116,6 +116,36 @@ class Pipeline:
         logger.info("DocLayout-YOLO model loaded successfully")
         return model
 
+    def _compose_page_raw_text(self, processed_regions: List[Dict[str, Any]]) -> str:
+        """Compose page-level raw text from processed regions in reading order.
+
+        Reading order: top-to-bottom (y), then left-to-right (x). Includes text-like
+        regions only and preserves internal newlines within each region's text.
+        """
+        if not isinstance(processed_regions, list):
+            return ""
+        text_like_types = {"plain text", "title", "list"}
+        sortable_regions: List[Tuple[int, int, str]] = []
+        for region in processed_regions:
+            if not isinstance(region, dict):
+                continue
+            region_type = region.get("type")
+            if region_type not in text_like_types:
+                continue
+            coords = region.get("coords") or [0, 0, 0, 0]
+            try:
+                x, y = int(coords[0]), int(coords[1])
+            except Exception:
+                x, y = 0, 0
+            text_value = region.get("text")
+            if isinstance(text_value, str) and text_value.strip():
+                # Keep internal newlines; trim outer whitespace only
+                sortable_regions.append((y, x, text_value.strip()))
+        # Sort by y then x
+        sortable_regions.sort(key=lambda t: (t[0], t[1]))
+        # Join with a blank line between regions to separate blocks
+        return "\n\n".join(t[2] for t in sortable_regions)
+
     def _calculate_image_hash(self, image: np.ndarray) -> str:
         """Calculate hash for image caching"""
         small_img = cv2.resize(image, (32, 32))
@@ -448,38 +478,49 @@ class Pipeline:
                     processing_stopped = True
                     break
                 
-                # Correct text for text regions
-                for region in processed_regions:
-                    if region['type'] in ['plain text', 'title', 'list'] and 'text' in region:
-                        corrected_result = self.correct_text(region['text'])
-                        region['corrected_text'] = corrected_result
-                        
-                        # Check for rate limit in text correction
-                        if isinstance(corrected_result, str) and any(error in corrected_result for error in ['RATE_LIMIT_EXCEEDED', 'DAILY_LIMIT_EXCEEDED']):
-                            logger.warning(f"Rate limit detected during text correction on page {page_num}. Stopping processing.")
-                            processing_stopped = True
-                            break
+                # Page-level text aggregation and single correction
+                raw_text = self._compose_page_raw_text(processed_regions)
                 
-                if processing_stopped:
+                correction_result = self.correct_text(raw_text)
+                if isinstance(correction_result, dict):
+                    corrected_text = correction_result.get('corrected_text', raw_text)
+                    correction_confidence = float(correction_result.get('confidence', 1.0))
+                else:
+                    corrected_text = str(correction_result)
+                    correction_confidence = 1.0
+                
+                # Check for rate limit signals in page-level correction
+                if isinstance(correction_result, str) and any(error in correction_result for error in ['RATE_LIMIT_EXCEEDED', 'DAILY_LIMIT_EXCEEDED']):
+                    logger.warning(f"Rate limit detected during page text correction on page {page_num}. Stopping processing.")
+                    processing_stopped = True
                     break
-                
+                 
+                # Compose legacy-style page result
+                page_height, page_width = page_image.shape[0], page_image.shape[1]
                 page_result = {
-                    'page_number': page_num,
-                    'regions': processed_regions,
-                    'processed_at': datetime.now().isoformat()
+                    'image_path': str(self.temp_dir / f"{pdf_path.stem}_page_{page_num}.jpg"),
+                    'width': int(page_width),
+                    'height': int(page_height),
+                    'regions': regions,  # detection results
+                    'processed_regions': processed_regions,  # extracted/processed content
+                    'raw_text': raw_text,
+                    'corrected_text': corrected_text,
+                    'correction_confidence': correction_confidence,
+                    'processed_at': datetime.now().isoformat(),
+                    'page_number': page_num
                 }
-                
+                 
                 processed_pages.append(page_result)
-                
+                 
                 # Save individual page result
                 page_output_dir = self._get_pdf_output_dir(pdf_path)
                 page_output_dir.mkdir(parents=True, exist_ok=True)
-                
+                 
                 page_output_file = page_output_dir / f"page_{page_num}.json"
                 with page_output_file.open('w', encoding='utf-8') as f:
                     json.dump(page_result, f, ensure_ascii=False, indent=2)
                 logger.info(f"Results saved to {page_output_file}")
-                
+                 
                 del images, page_image
                 gc.collect()
                 
@@ -496,22 +537,46 @@ class Pipeline:
         summary_output_dir = self._get_pdf_output_dir(pdf_path)
         summary_output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Create summary
-        summary = {
-            'pdf_path': str(pdf_path),
-            'total_pages': total_pages,
-            'processed_pages': len(processed_pages),
+        # Determine page statuses for legacy-style summary
+        pages_summary = []
+        status_counts = {"complete": 0, "partial": 0, "incomplete": 0}
+        for pr in processed_pages:
+            page_no = int(pr.get('page_number', 0))
+            if pr.get('error'):
+                status = 'partial'
+            else:
+                status = 'complete'
+            status_counts[status] += 1
+            pages_summary.append({
+                'page': page_no,
+                'status': status,
+                'file_suffix': '' if status == 'complete' else status
+            })
+
+        # Temp summary to reuse existing error check logic for filename decision
+        temp_summary_for_errors = {
             'pages_data': processed_pages,
-            'processing_stopped': processing_stopped,
-            'processed_at': datetime.now().isoformat(),
-            'output_directory': str(summary_output_dir)
+            'processing_stopped': processing_stopped
         }
-        
+        has_errors = self._check_for_any_errors(temp_summary_for_errors)
+
+        # Create legacy-style summary
+        summary = {
+            'pdf_name': pdf_path.stem,
+            'pdf_path': str(pdf_path),
+            'num_pages': total_pages,
+            'processed_pages': len(processed_pages),
+            'output_directory': str(summary_output_dir),
+            'processed_at': datetime.now().isoformat(),
+            'status_summary': {k: v for k, v in status_counts.items() if v > 0},
+            'pages': pages_summary
+        }
+         
         # Save summary
         # Determine output filename based on completion status
         if processing_stopped:
             summary_filename = 'summary_incomplete.json'
-        elif self._check_for_any_errors(summary):
+        elif has_errors:
             summary_filename = 'summary_partial.json'
         else:
             summary_filename = 'summary.json'

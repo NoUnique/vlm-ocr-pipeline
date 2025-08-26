@@ -58,7 +58,7 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 # Install dependencies
 uv pip install -r requirements.txt
 
-# Run setup script to fix DocLayout-YOLO compatibility issues
+ Run setup script to fix DocLayout-YOLO compatibility issues
 python setup.py
 ```
 
