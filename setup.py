@@ -4,9 +4,9 @@ Setup script for the VLM OCR Pipeline project.
 Handles DocLayout-YOLO compatibility fixes and environment setup.
 """
 
-import sys
-import site
 import logging
+import site
+import sys
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
@@ -15,25 +15,25 @@ logger = logging.getLogger(__name__)
 
 def find_doclayout_yolo_model_file() -> Path:
     """Find the DocLayout-YOLO model.py file that needs patching"""
-    
+
     # Get all site-packages directories
     site_packages_dirs = site.getsitepackages()
-    if hasattr(site, 'getusersitepackages'):
+    if hasattr(site, "getusersitepackages"):
         site_packages_dirs.append(site.getusersitepackages())
-    
+
     # Add virtual environment site-packages if exists
-    venv_path = Path('.venv')
+    venv_path = Path(".venv")
     if venv_path.exists():
         python_version = f"python{sys.version_info.major}.{sys.version_info.minor}"
         venv_site_packages = venv_path / "lib" / python_version / "site-packages"
         if venv_site_packages.exists():
             site_packages_dirs.insert(0, str(venv_site_packages))
-    
+
     for site_dir in site_packages_dirs:
         model_file = Path(site_dir) / "doclayout_yolo" / "models" / "yolov10" / "model.py"
         if model_file.exists():
             return model_file
-    
+
     raise FileNotFoundError("DocLayout-YOLO model.py file not found in any site-packages directory")
 
 
@@ -42,19 +42,19 @@ def fix_doclayout_yolo_compatibility():
     try:
         model_file = find_doclayout_yolo_model_file()
         logger.info("Found DocLayout-YOLO model file: %s", model_file)
-        
+
         # Read the current content
         content = model_file.read_text()
-        
+
         # Check if already patched
         if "class YOLOv10(Model, PyTorchModelHubMixin):" in content:
             logger.info("DocLayout-YOLO already patched")
             return True
-        
+
         # Apply the fix
         original_line = 'class YOLOv10(Model, PyTorchModelHubMixin, repo_url="https://github.com/opendatalab/DocLayout-YOLO", pipeline_tag="object-detection", license="agpl-3.0"):'
-        fixed_line = 'class YOLOv10(Model, PyTorchModelHubMixin):'
-        
+        fixed_line = "class YOLOv10(Model, PyTorchModelHubMixin):"
+
         if original_line in content:
             new_content = content.replace(original_line, fixed_line)
             model_file.write_text(new_content)
@@ -63,7 +63,7 @@ def fix_doclayout_yolo_compatibility():
         else:
             logger.warning("Could not find the expected line to patch in DocLayout-YOLO")
             return False
-            
+
     except Exception as e:
         logger.error("Failed to fix DocLayout-YOLO compatibility: %s", e)
         return False
@@ -73,6 +73,7 @@ def verify_doclayout_yolo():
     """Verify that DocLayout-YOLO can be imported successfully"""
     try:
         import doclayout_yolo
+
         logger.info("DocLayout-YOLO import verification successful")
         return True
     except Exception as e:
@@ -83,9 +84,9 @@ def verify_doclayout_yolo():
 def setup_environment():
     """Setup the environment and fix compatibility issues"""
     logger.info("Starting environment setup...")
-    
+
     # Check if .env file exists
-    env_file = Path('.env')
+    env_file = Path(".env")
     if not env_file.exists():
         logger.warning(".env file not found. Creating template...")
         env_template = """# VLM Backend API Keys
@@ -98,7 +99,7 @@ OPENROUTER_API_KEY=your_openrouter_api_key_here
 """
         env_file.write_text(env_template)
         logger.info("Created .env template file. Please update with your API keys.")
-    
+
     # Fix DocLayout-YOLO compatibility
     logger.info("Fixing DocLayout-YOLO compatibility...")
     if fix_doclayout_yolo_compatibility():
@@ -110,11 +111,11 @@ OPENROUTER_API_KEY=your_openrouter_api_key_here
     else:
         logger.error("❌ DocLayout-YOLO compatibility fix failed")
         return False
-    
+
     logger.info("✅ Environment setup completed successfully")
     return True
 
 
 if __name__ == "__main__":
     success = setup_environment()
-    sys.exit(0 if success else 1) 
+    sys.exit(0 if success else 1)
