@@ -8,12 +8,12 @@ import argparse
 import logging
 import sys
 import textwrap
-from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 from pipeline import Pipeline
+from pipeline.misc import tz_now
 from pipeline.ratelimit import rate_limiter
 
 # Load environment variables from .env file
@@ -27,7 +27,7 @@ def setup_logging(level: str = "INFO") -> None:
     logs_dir.mkdir(exist_ok=True)
 
     # Generate timestamp-based filename
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    timestamp = tz_now().strftime("%Y-%m-%d_%H-%M-%S")
     log_filename = logs_dir / f"{timestamp}_ocr_pipeline.log"
 
     logging.basicConfig(

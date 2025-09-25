@@ -8,11 +8,13 @@ import logging
 import threading
 import time
 from collections import deque
-from datetime import datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+from .misc import tz_now
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +66,7 @@ class RateLimitManager:
                 "request_times": deque(),
                 "token_usage": deque(),
                 "daily_requests": 0,
-                "last_reset_date": datetime.now().date(),
+                "last_reset_date": tz_now().date(),
             }
         return self.model_states[model]
 
@@ -153,17 +155,17 @@ class RateLimitManager:
                     # Load dates
                     saved_date = model_data.get("last_reset_date")
                     if saved_date:
-                        saved_date = datetime.strptime(saved_date, "%Y-%m-%d").date()
-                        if saved_date != datetime.now().date():
+                        saved_date = date.fromisoformat(saved_date)
+                        if saved_date != tz_now().date():
                             # Reset daily counter if date changed
                             daily_requests = 0
-                            last_reset_date = datetime.now().date()
+                            last_reset_date = tz_now().date()
                         else:
                             daily_requests = model_data.get("daily_requests", 0)
                             last_reset_date = saved_date
                     else:
                         daily_requests = model_data.get("daily_requests", 0)
-                        last_reset_date = datetime.now().date()
+                        last_reset_date = tz_now().date()
 
                     # Load request times (only keep recent ones)
                     request_times = model_data.get("request_times", [])
@@ -171,7 +173,7 @@ class RateLimitManager:
 
                     # Load token usage (only keep recent ones)
                     token_usage = model_data.get("token_usage", [])
-                    valid_token_usage = deque([t, tokens] for t, tokens in token_usage if now - t <= 60)
+                    valid_token_usage = deque((t, tokens) for t, tokens in token_usage if now - t <= 60)
 
                     self.model_states[model_name] = {
                         "request_times": valid_request_times,
@@ -190,14 +192,14 @@ class RateLimitManager:
                 # Load dates
                 saved_date = data.get("last_reset_date")
                 if saved_date:
-                    saved_date = datetime.strptime(saved_date, "%Y-%m-%d").date()
-                    if saved_date != datetime.now().date():
+                    saved_date = date.fromisoformat(saved_date)
+                    if saved_date != tz_now().date():
                         daily_requests = 0
-                        last_reset_date = datetime.now().date()
+                        last_reset_date = tz_now().date()
                     else:
                         last_reset_date = saved_date
                 else:
-                    last_reset_date = datetime.now().date()
+                    last_reset_date = tz_now().date()
 
                 # Load request times (only keep recent ones)
                 request_times = data.get("request_times", [])
@@ -205,7 +207,7 @@ class RateLimitManager:
 
                 # Load token usage (only keep recent ones)
                 token_usage = data.get("token_usage", [])
-                valid_token_usage = deque([t, tokens] for t, tokens in token_usage if now - t <= 60)
+                valid_token_usage = deque((t, tokens) for t, tokens in token_usage if now - t <= 60)
 
                 self.model_states[model_name] = {
                     "request_times": valid_request_times,
@@ -238,7 +240,7 @@ class RateLimitManager:
                 "tier": self.tier,
                 "current_model": self.current_model,
                 "models": models_data,
-                "saved_at": datetime.now().isoformat(),
+                "saved_at": tz_now().isoformat(),
             }
 
             with open(self.state_file, "w") as f:
@@ -261,7 +263,7 @@ class RateLimitManager:
             state["token_usage"].popleft()
 
         # Reset daily counter if date changed
-        current_date = datetime.now().date()
+        current_date = tz_now().date()
         if current_date != state["last_reset_date"]:
             state["daily_requests"] = 0
             state["last_reset_date"] = current_date
@@ -299,10 +301,10 @@ class RateLimitManager:
 
         # RPD check
         if limits.get("rpd") and state["daily_requests"] >= limits["rpd"]:
-            # Wait until next day (PST midnight)
-            # For simplicity, using local midnight
-            tomorrow = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-            wait_time = (tomorrow - datetime.now()).total_seconds()
+            # Wait until next day using configured timezone
+            now_dt = tz_now()
+            tomorrow = now_dt.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            wait_time = (tomorrow - now_dt).total_seconds()
             wait_times.append(wait_time)
 
         return max(wait_times) if wait_times else 0

@@ -7,7 +7,6 @@ import gc
 import hashlib
 import json
 import logging
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -29,6 +28,7 @@ from .gemini import GeminiClient
 from .openai import OpenAIClient
 from .prompt import PromptManager
 from .ratelimit import rate_limiter
+from .misc import tz_now
 
 logger = logging.getLogger(__name__)
 
@@ -348,7 +348,7 @@ class Pipeline:
         result = {
             "image_path": str(image_path),
             "regions": processed_regions,
-            "processed_at": datetime.now().isoformat(),
+            "processed_at": tz_now().isoformat(),
         }
 
         return result
@@ -432,7 +432,7 @@ class Pipeline:
                     "raw_text": raw_text,
                     "corrected_text": corrected_text,
                     "correction_confidence": correction_confidence,
-                    "processed_at": datetime.now().isoformat(),
+                    "processed_at": tz_now().isoformat(),
                     "page_number": page_num,
                 }
 
@@ -455,7 +455,7 @@ class Pipeline:
                 error_page_result = {
                     "page_number": page_num,
                     "error": str(e),
-                    "processed_at": datetime.now().isoformat(),
+                    "processed_at": tz_now().isoformat(),
                 }
                 processed_pages.append(error_page_result)
 
@@ -488,7 +488,7 @@ class Pipeline:
             "num_pages": total_pages,
             "processed_pages": len(processed_pages),
             "output_directory": str(summary_output_dir),
-            "processed_at": datetime.now().isoformat(),
+            "processed_at": tz_now().isoformat(),
             "status_summary": {k: v for k, v in status_counts.items() if v > 0},
             "pages": pages_summary,
         }
@@ -663,7 +663,7 @@ class Pipeline:
 
             except Exception as e:
                 logger.error("Error processing %s: %s", pdf_file, e)
-                results[str(pdf_file)] = {"error": str(e), "processed_at": datetime.now().isoformat()}
+                results[str(pdf_file)] = {"error": str(e), "processed_at": tz_now().isoformat()}
 
         # Ensure model base directory exists
         model_base_dir.mkdir(parents=True, exist_ok=True)
@@ -674,7 +674,7 @@ class Pipeline:
             "total_files": total_files,
             "processed_files": processed_files,
             "results": results,
-            "processed_at": datetime.now().isoformat(),
+            "processed_at": tz_now().isoformat(),
         }
 
         # Save directory summary under model-specific directory
