@@ -10,7 +10,7 @@ import time
 from collections import deque
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 import yaml
 

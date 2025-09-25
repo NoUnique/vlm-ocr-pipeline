@@ -172,15 +172,28 @@ class PromptManager:
         """Fallback prompts when YAML files are not available"""
         fallback_prompts = {
             "text_extraction": {
-                "system": "You are an expert OCR system. Extract all visible text accurately, maintaining original language and formatting.",
-                "user": "Extract all text from this image accurately. Maintain original language and formatting. Return only the extracted text.",
+                "system": (
+                    "You are an expert OCR system. Extract all visible text accurately, "
+                    "maintaining original language and formatting."
+                ),
+                "user": (
+                    "Extract all text from this image accurately. Maintain original language "
+                    "and formatting. Return only the extracted text."
+                ),
                 "fallback": "Extract all visible text from this image accurately.",
             },
             "content_analysis": {
-                "table_analysis": """Analyze this table and respond in JSON format:
-                {"markdown_table": "| Col1 | Col2 |\\n|------|------|\\n| Data1 | Data2 |", "summary": "Description", "educational_value": "Significance", "related_topics": ["Topic1", "Topic2"]}""",
-                "figure_analysis": """Analyze this image and respond in JSON format:
-                {"description": "Detailed description", "educational_value": "Significance", "related_topics": ["Topic1"], "exam_relevance": "Exam usage"}""",
+                "table_analysis": (
+                    "Analyze this table and respond in JSON format:\n"
+                    "{\"markdown_table\": \"| Col1 | Col2 |\\\\n|------|------|\\\\n| Data1 | Data2 |\","
+                    " \"summary\": \"Description\", \"educational_value\": \"Significance\","
+                    " \"related_topics\": [\"Topic1\", \"Topic2\"]}"
+                ),
+                "figure_analysis": (
+                    "Analyze this image and respond in JSON format:\n"
+                    "{\"description\": \"Detailed description\", \"educational_value\": \"Significance\","
+                    " \"related_topics\": [\"Topic1\"], \"exam_relevance\": \"Exam usage\"}"
+                ),
             },
             "text_correction": {
                 "user": "Correct OCR errors in this text while preserving original language and special tags:\n{text}"

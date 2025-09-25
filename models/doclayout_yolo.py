@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 from typing import List, Optional, Union
 
+import numpy as np
 import torch
 from doclayout_yolo import YOLOv10
 from huggingface_hub import hf_hub_download
@@ -60,7 +61,7 @@ class DocLayoutYOLO:
 
     def predict(
         self,
-        image_input: Union[str, Path, "np.ndarray"],
+        image_input: Union[str, Path, np.ndarray],
         imgsz: int = 1024,
         conf: float = 0.25,
         device: Optional[str] = None,

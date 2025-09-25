@@ -13,10 +13,10 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
+from pipeline import Pipeline
+
 # Load environment variables from .env file
 load_dotenv()
-
-from pipeline import Pipeline
 
 
 def setup_logging(level: str = "INFO") -> None:
@@ -166,11 +166,11 @@ Examples:
             rate_limiter.set_tier_and_model(args.gemini_tier, args.model)
             status = rate_limiter.get_status()
 
-            print(f"\n📊 Gemini API Rate Limit Status")
+            print("\n📊 Gemini API Rate Limit Status")
             print(f"{'=' * 50}")
             print(f"Tier: {status['tier']}")
             print(f"Current Model: {status['model']}")
-            print(f"\n🔢 Current Model Usage:")
+            print("\n🔢 Current Model Usage:")
             print(f"  Requests per minute: {status['current']['rpm']}/{status['limits']['rpm'] or 'unlimited'}")
             print(
                 f"  Tokens per minute: {status['current']['tpm']:,}/{status['limits']['tpm']:,}"
@@ -178,21 +178,22 @@ Examples:
                 else f"  Tokens per minute: {status['current']['tpm']:,}/unlimited"
             )
             print(f"  Requests per day: {status['current']['rpd']}/{status['limits']['rpd'] or 'unlimited'}")
-            print(f"\n📈 Current Model Utilization:")
+            print("\n📈 Current Model Utilization:")
             print(f"  RPM: {status['utilization']['rpm_percent']:.1f}%")
             print(f"  TPM: {status['utilization']['tpm_percent']:.1f}%")
             print(f"  RPD: {status['utilization']['rpd_percent']:.1f}%")
 
             # Show all models summary
             if status.get("all_models") and len(status["all_models"]) > 1:
-                print(f"\n📋 All Models Summary:")
+                print("\n📋 All Models Summary:")
                 for model_name, model_usage in status["all_models"].items():
                     is_current = "← CURRENT" if model_name == status["model"] else ""
                     print(
-                        f"  {model_name}: RPM:{model_usage['rpm']} TPM:{model_usage['tpm']:,} RPD:{model_usage['rpd']} {is_current}"
+                        f"  {model_name}: RPM:{model_usage['rpm']} "
+                        f"TPM:{model_usage['tpm']:,} RPD:{model_usage['rpd']} {is_current}"
                     )
         else:
-            print(f"\n⚠️  Rate limit status is only available for Gemini backend")
+            print("\n⚠️  Rate limit status is only available for Gemini backend")
             print(f"Current backend: {args.backend}")
         return
 

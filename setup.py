@@ -4,6 +4,7 @@ Setup script for the VLM OCR Pipeline project.
 Handles DocLayout-YOLO compatibility fixes and environment setup.
 """
 
+import importlib
 import logging
 import site
 import sys
@@ -52,7 +53,10 @@ def fix_doclayout_yolo_compatibility():
             return True
 
         # Apply the fix
-        original_line = 'class YOLOv10(Model, PyTorchModelHubMixin, repo_url="https://github.com/opendatalab/DocLayout-YOLO", pipeline_tag="object-detection", license="agpl-3.0"):'
+        original_line = (
+            'class YOLOv10(Model, PyTorchModelHubMixin, repo_url="https://github.com/opendatalab/DocLayout-YOLO", '
+            'pipeline_tag="object-detection", license="agpl-3.0"):'
+        )
         fixed_line = "class YOLOv10(Model, PyTorchModelHubMixin):"
 
         if original_line in content:
@@ -72,7 +76,7 @@ def fix_doclayout_yolo_compatibility():
 def verify_doclayout_yolo():
     """Verify that DocLayout-YOLO can be imported successfully"""
     try:
-        import doclayout_yolo
+        importlib.import_module("doclayout_yolo")
 
         logger.info("DocLayout-YOLO import verification successful")
         return True
