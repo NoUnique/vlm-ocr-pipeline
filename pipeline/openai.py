@@ -10,7 +10,7 @@ import gc
 import io
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 
 import cv2
 import numpy as np
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class OpenAIClient:
     """OpenAI VLM API client for OCR text processing"""
 
-    def __init__(self, model: str = "gemini-2.5-flash", api_key: Optional[str] = None, base_url: Optional[str] = None):
+    def __init__(self, model: str = "gemini-2.5-flash", api_key: str | None = None, base_url: str | None = None):
         """
         Initialize OpenAI API client
 
@@ -47,7 +47,7 @@ class OpenAIClient:
 
         self.client = self._setup_openai_client()
 
-    def _setup_openai_client(self) -> Optional[OpenAI]:
+    def _setup_openai_client(self) -> OpenAI | None:
         """Setup OpenAI API client"""
         try:
             if not self.api_key:
@@ -91,7 +91,7 @@ class OpenAIClient:
 
         return base64.b64encode(img_bytes).decode("utf-8")
 
-    def extract_text(self, region_img: np.ndarray, region_info: Dict[str, Any], prompt: str) -> Dict[str, Any]:
+    def extract_text(self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str) -> dict[str, Any]:
         """
         Extract text from region using OpenAI API
 
@@ -171,8 +171,8 @@ class OpenAIClient:
             }
 
     def process_special_region(
-        self, region_img: np.ndarray, region_info: Dict[str, Any], prompt: str
-    ) -> Dict[str, Any]:
+        self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str
+    ) -> dict[str, Any]:
         """
         Process special regions (tables, figures) with OpenAI API
 
@@ -253,7 +253,7 @@ class OpenAIClient:
                 "error_message": str(e),
             }
 
-    def correct_text(self, text: str, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
+    def correct_text(self, text: str, system_prompt: str, user_prompt: str) -> dict[str, Any]:
         """
         Correct OCR text using OpenAI API
 
@@ -307,7 +307,7 @@ class OpenAIClient:
                 logger.error("Text correction failed with other error")
                 return f"[TEXT_CORRECTION_FAILED]: {text}"
 
-    def _parse_openai_response(self, response_text: str, region_info: Dict[str, Any]) -> Dict[str, Any]:
+    def _parse_openai_response(self, response_text: str, region_info: dict[str, Any]) -> dict[str, Any]:
         """Parse OpenAI response for special regions"""
         try:
             import json
@@ -343,7 +343,7 @@ class OpenAIClient:
                 "confidence": region_info.get("confidence", 1.0),
             }
 
-    def reload_client(self, api_key: Optional[str] = None, base_url: Optional[str] = None) -> bool:
+    def reload_client(self, api_key: str | None = None, base_url: str | None = None) -> bool:
         """
         Reload the OpenAI API client (useful after API key updates)
 

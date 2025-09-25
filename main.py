@@ -9,7 +9,6 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -36,7 +35,7 @@ def setup_logging(level: str = "INFO") -> None:
     )
 
 
-def parse_page_range(page_range_str: str) -> Optional[tuple]:
+def parse_page_range(page_range_str: str) -> tuple | None:
     """Parse page range string like '1-10' into tuple (1, 10)"""
     try:
         if "-" not in page_range_str:
@@ -55,7 +54,7 @@ def parse_page_range(page_range_str: str) -> Optional[tuple]:
         return None
 
 
-def parse_specific_pages(pages_str: str) -> Optional[list]:
+def parse_specific_pages(pages_str: str) -> list | None:
     """Parse comma-separated pages like '1,3,5,10' into list [1, 3, 5, 10]"""
     try:
         pages = []

@@ -10,7 +10,7 @@ import time
 from collections import deque
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import yaml
 
@@ -87,7 +87,7 @@ class RateLimitManager:
         self._save_state()
         logger.info("Rate limit manager set to %s tier with model %s", tier, model)
 
-    def get_current_limits(self) -> Dict[str, Optional[int]]:
+    def get_current_limits(self) -> dict[str, int | None]:
         """Get current rate limits for the configured tier and model"""
         models = self.rate_limits.get("models", {})
         if self.model not in models:
@@ -98,24 +98,24 @@ class RateLimitManager:
 
         return model_config.get(self.tier, {})
 
-    def _load_rate_limits_config(self) -> Dict[str, Any]:
+    def _load_rate_limits_config(self) -> dict[str, Any]:
         """Load rate limits configuration from YAML file"""
         if not self.config_file.exists():
             logger.error("Rate limits config file not found: %s", self.config_file)
             return self._get_fallback_config()
 
         try:
-            with open(self.config_file, "r", encoding="utf-8") as f:
+            with open(self.config_file, encoding="utf-8") as f:
                 config = yaml.safe_load(f)
 
             logger.info("Loaded rate limits config from %s", self.config_file)
             return config
 
-        except (yaml.YAMLError, IOError, UnicodeDecodeError) as e:
+        except (OSError, yaml.YAMLError, UnicodeDecodeError) as e:
             logger.error("Failed to load rate limits config: %s", e)
             return self._get_fallback_config()
 
-    def _get_fallback_config(self) -> Dict[str, Any]:
+    def _get_fallback_config(self) -> dict[str, Any]:
         """Get fallback configuration when YAML file is not available"""
         logger.warning("Using fallback rate limits configuration")
         return {
@@ -136,7 +136,7 @@ class RateLimitManager:
             return
 
         try:
-            with open(self.state_file, "r") as f:
+            with open(self.state_file) as f:
                 data = json.load(f)
 
             # Load basic settings
@@ -346,7 +346,7 @@ class RateLimitManager:
 
             return True
 
-    def get_status(self) -> Dict:
+    def get_status(self) -> dict:
         """Get current rate limit status for current model"""
         with self.request_lock:
             self._cleanup_old_records()

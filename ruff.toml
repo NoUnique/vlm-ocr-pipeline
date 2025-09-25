@@ -6,9 +6,29 @@ target-version = "py311"
 quote-style = "double"
 
 [lint]
-select = ["E", "F", "I"]
-ignore = ["E203"]
+select = [
+  "E",   # pycodestyle errors
+  "F",   # pyflakes
+  "I",   # import sorting
+  "B",   # flake8-bugbear
+  "UP",  # pyupgrade
+  "N",   # pep8-naming
+  "A",   # flake8-builtins
+  "C4",  # flake8-comprehensions
+  "DTZ", # datetime-timezone
+  "PL",  # pylint-inspired checks
+  "PIE"  # flake8-pie
+]
+ignore = [
+  "E203",      # keep black compatibility
+  "PLR0913"    # allow functions with many args (adjust as needed)
+]
+fixable = ["ALL"]
 
 [lint.isort]
 combine-as-imports = true
 known-first-party = ["pipeline", "models"]
+
+[lint.per-file-ignores]
+# Example: allow complex function bodies in a specific module
+# "pipeline/__init__.py" = ["PLR0912"]

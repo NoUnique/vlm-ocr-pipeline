@@ -38,12 +38,12 @@ class Pipeline:
 
     def __init__(
         self,
-        model_path: Optional[Union[str, Path]] = None,
+        model_path: str | Path | None = None,
         confidence_threshold: float = 0.5,
         use_cache: bool = True,
-        cache_dir: Union[str, Path] = ".cache",
-        output_dir: Union[str, Path] = "output",
-        temp_dir: Union[str, Path] = ".tmp",
+        cache_dir: str | Path = ".cache",
+        output_dir: str | Path = "output",
+        temp_dir: str | Path = ".tmp",
         backend: str = "openai",
         model: str = "gemini-2.5-flash",
         gemini_tier: str = "free",
@@ -111,7 +111,7 @@ class Pipeline:
         logger.info("DocLayout-YOLO model loaded successfully")
         return model
 
-    def _compose_page_raw_text(self, processed_regions: List[Dict[str, Any]]) -> str:
+    def _compose_page_raw_text(self, processed_regions: list[dict[str, Any]]) -> str:
         """Compose page-level raw text from processed regions in reading order.
 
         Reading order: top-to-bottom (y), then left-to-right (x). Includes text-like
@@ -120,7 +120,7 @@ class Pipeline:
         if not isinstance(processed_regions, list):
             return ""
         text_like_types = {"plain text", "title", "list"}
-        sortable_regions: List[Tuple[int, int, str]] = []
+        sortable_regions: list[tuple[int, int, str]] = []
         for region in processed_regions:
             if not isinstance(region, dict):
                 continue
@@ -149,7 +149,7 @@ class Pipeline:
         del small_img, buffer
         return image_hash
 
-    def _get_cached_result(self, image_hash: str, cache_type: str) -> Optional[Dict[str, Any]]:
+    def _get_cached_result(self, image_hash: str, cache_type: str) -> dict[str, Any] | None:
         """Get cached result if exists"""
         if not self.use_cache:
             return None
@@ -167,7 +167,7 @@ class Pipeline:
 
         return None
 
-    def _save_to_cache(self, image_hash: str, cache_type: str, result: Dict[str, Any]) -> None:
+    def _save_to_cache(self, image_hash: str, cache_type: str, result: dict[str, Any]) -> None:
         """Save result to cache"""
         if not self.use_cache:
             return
@@ -184,7 +184,7 @@ class Pipeline:
         except Exception as e:
             logger.warning("Failed to save cache file %s: %s", cache_file, e)
 
-    def _crop_region(self, image: np.ndarray, region: Dict[str, Any]) -> np.ndarray:
+    def _crop_region(self, image: np.ndarray, region: dict[str, Any]) -> np.ndarray:
         """Crop region from image"""
         coords = region["coords"]
         x, y, w, h = coords  # coords format is [x, y, width, height]
@@ -207,12 +207,12 @@ class Pipeline:
 
         return image[y1:y2, x1:x2]
 
-    def _extract_text_from_region(self, region_img: np.ndarray, region_info: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_text_from_region(self, region_img: np.ndarray, region_info: dict[str, Any]) -> dict[str, Any]:
         """Extract text from region using the configured AI backend"""
         logger.debug("Using %s API for text extraction", self.backend.upper())
         return self._extract_text_with_ai(region_img, region_info)
 
-    def _extract_text_with_ai(self, region_img: np.ndarray, region_info: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_text_with_ai(self, region_img: np.ndarray, region_info: dict[str, Any]) -> dict[str, Any]:
         """Extract text from region using the configured AI backend"""
         image_hash = self._calculate_image_hash(region_img)
         cache_type = f"{self.backend}_ocr"
@@ -234,7 +234,7 @@ class Pipeline:
 
         return result
 
-    def _process_special_region_with_ai(self, region_img: np.ndarray, region_info: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_special_region_with_ai(self, region_img: np.ndarray, region_info: dict[str, Any]) -> dict[str, Any]:
         """Process special regions (tables, figures) with configured AI backend"""
         image_hash = self._calculate_image_hash(region_img)
         cache_type = f"{region_info['type']}_{self.backend}"
@@ -281,7 +281,7 @@ class Pipeline:
         else:
             return str(result)
 
-    def _process_regions(self, image_np: np.ndarray, regions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _process_regions(self, image_np: np.ndarray, regions: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Process all detected regions"""
         processed_regions = []
         processed_coords = set()
@@ -309,11 +309,11 @@ class Pipeline:
 
     def process_image(
         self,
-        image_path: Union[str, Path],
-        max_pages: Optional[int] = None,
-        page_range: Optional[Tuple[int, int]] = None,
-        pages: Optional[List[int]] = None,
-    ) -> Dict[str, Any]:
+        image_path: str | Path,
+        max_pages: int | None = None,
+        page_range: tuple[int, int] | None = None,
+        pages: list[int] | None = None,
+    ) -> dict[str, Any]:
         """Process single image or PDF"""
         image_path = Path(image_path)
 
@@ -325,7 +325,7 @@ class Pipeline:
         else:
             return self.process_single_image(image_path)
 
-    def process_single_image(self, image_path: Path) -> Dict[str, Any]:
+    def process_single_image(self, image_path: Path) -> dict[str, Any]:
         """Process a single image file"""
         logger.info("Processing image: %s", image_path)
 
@@ -356,10 +356,10 @@ class Pipeline:
     def process_pdf(
         self,
         pdf_path: Path,
-        max_pages: Optional[int] = None,
-        page_range: Optional[Tuple[int, int]] = None,
-        pages: Optional[List[int]] = None,
-    ) -> Dict[str, Any]:
+        max_pages: int | None = None,
+        page_range: tuple[int, int] | None = None,
+        pages: list[int] | None = None,
+    ) -> dict[str, Any]:
         """Process PDF file with page limiting options"""
         logger.info("Processing PDF: %s", pdf_path)
 
@@ -514,10 +514,10 @@ class Pipeline:
     def _determine_pages_to_process(
         self,
         total_pages: int,
-        max_pages: Optional[int] = None,
-        page_range: Optional[Tuple[int, int]] = None,
-        pages: Optional[List[int]] = None,
-    ) -> List[int]:
+        max_pages: int | None = None,
+        page_range: tuple[int, int] | None = None,
+        pages: list[int] | None = None,
+    ) -> list[int]:
         """Determine which pages to process based on limiting options"""
         if pages is not None:
             # Specific pages specified
@@ -542,7 +542,7 @@ class Pipeline:
             # Process all pages
             return list(range(1, total_pages + 1))
 
-    def _check_for_rate_limit_errors(self, page_result: Dict[str, Any]) -> bool:
+    def _check_for_rate_limit_errors(self, page_result: dict[str, Any]) -> bool:
         """Check if page result contains rate limit errors"""
         try:
             # Check in regions
@@ -574,7 +574,7 @@ class Pipeline:
 
         return False
 
-    def _check_for_any_errors(self, summary: Dict[str, Any]) -> bool:
+    def _check_for_any_errors(self, summary: dict[str, Any]) -> bool:
         """Check if summary contains any processing errors"""
         try:
             pages_data = summary.get("pages_data", [])
@@ -622,10 +622,10 @@ class Pipeline:
         self,
         input_dir: Path,
         output_dir: str,
-        max_pages: Optional[int] = None,
-        page_range: Optional[Tuple[int, int]] = None,
-        specific_pages: Optional[List[int]] = None,
-    ) -> Dict[str, Any]:
+        max_pages: int | None = None,
+        page_range: tuple[int, int] | None = None,
+        specific_pages: list[int] | None = None,
+    ) -> dict[str, Any]:
         """Process all PDFs in a directory"""
         input_dir = Path(input_dir)
         output_base = Path(output_dir)
@@ -688,7 +688,7 @@ class Pipeline:
 
         return summary
 
-    def _save_results(self, result: Dict[str, Any], output_path: Path) -> None:
+    def _save_results(self, result: dict[str, Any], output_path: Path) -> None:
         """Save processing results to JSON file"""
         output_path.parent.mkdir(parents=True, exist_ok=True)
 

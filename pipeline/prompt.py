@@ -6,7 +6,7 @@ Handles loading, caching, and retrieving prompts from YAML files with VLM-specif
 import glob
 import logging
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 
@@ -105,7 +105,7 @@ class PromptManager:
         # Ultimate fallback if nothing found
         return str(base_prompts_dir / "default")
 
-    def _load_prompts(self) -> Dict[str, Any]:
+    def _load_prompts(self) -> dict[str, Any]:
         """Load prompts from YAML files"""
         prompts = {}
 

@@ -1,6 +1,5 @@
 import logging
 from pathlib import Path
-from typing import List, Optional, Union
 
 import numpy as np
 import torch
@@ -13,7 +12,7 @@ logger = logging.getLogger(__name__)
 class DocLayoutYOLO:
     """DocLayout-YOLO model wrapper class with pathlib support"""
 
-    def __init__(self, model_path: Optional[Union[str, Path]] = None) -> None:
+    def __init__(self, model_path: str | Path | None = None) -> None:
         """
         Initialize the DocLayout-YOLO model
 
@@ -61,11 +60,11 @@ class DocLayoutYOLO:
 
     def predict(
         self,
-        image_input: Union[str, Path, np.ndarray],
+        image_input: str | Path | np.ndarray,
         imgsz: int = 1024,
         conf: float = 0.25,
-        device: Optional[str] = None,
-    ) -> List:
+        device: str | None = None,
+    ) -> list:
         """
         Perform layout prediction on the image.
 
@@ -81,9 +80,6 @@ class DocLayoutYOLO:
         if self.model is None:
             logger.error("The model is not initialized")
             return []
-
-        # Handle different input types
-        import numpy as np
 
         if isinstance(image_input, np.ndarray):
             # Input is numpy array, use directly
@@ -112,7 +108,7 @@ class DocLayoutYOLO:
                     confs = result.boxes.conf.cpu().numpy()
                     class_names = result.names
 
-                    for box, cls_id, confidence in zip(boxes, classes, confs):
+                    for box, cls_id, confidence in zip(boxes, classes, confs, strict=False):
                         if confidence >= conf:
                             x1, y1, x2, y2 = map(int, box)
                             cls_name = class_names[int(cls_id)]
