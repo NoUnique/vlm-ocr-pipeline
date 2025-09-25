@@ -24,7 +24,6 @@ from pdf2image import convert_from_path, pdfinfo_from_path
 
 from models import DocLayoutYOLO
 from .prompt import PromptManager
-from .vision import VisionClient
 from .gemini import GeminiClient
 from .openai import OpenAIClient
 from .ratelimit import rate_limiter
@@ -43,7 +42,6 @@ class Pipeline:
         cache_dir: Union[str, Path] = ".cache",
         output_dir: Union[str, Path] = "output",
         temp_dir: Union[str, Path] = ".tmp",
-        text_extraction_method: str = "gemini",
         backend: str = "openai",
         model: str = "gemini-2.5-flash",
         gemini_tier: str = "free"
@@ -58,7 +56,6 @@ class Pipeline:
             cache_dir: Cache directory path
             output_dir: Output directory path
             temp_dir: Temporary files directory path
-            text_extraction_method: Method for text extraction ("gemini" or "vision")
             backend: Backend API to use ("openai" or "gemini")
             model: Model to use for text processing
             gemini_tier: Gemini API tier for rate limiting (only used with gemini backend)
@@ -66,11 +63,10 @@ class Pipeline:
         self.model_path = Path(model_path) if model_path else None
         self.confidence_threshold = confidence_threshold
         self.use_cache = use_cache
-        self.text_extraction_method = text_extraction_method.lower()
         self.backend = backend.lower()
         self.model = model
         self.gemini_tier = gemini_tier
-        
+
         # Initialize rate limiter (only for Gemini backend)
         if self.backend == "gemini":
             rate_limiter.set_tier_and_model(gemini_tier, model)
@@ -86,8 +82,6 @@ class Pipeline:
         # Initialize components
         self.prompt_manager = PromptManager(model=self.model, backend=self.backend)
         self.doc_layout_model = self._setup_layout_model()
-        self.vision_client = VisionClient()
-        
         # Initialize backend clients
         if self.backend == "gemini":
             self.gemini_client = GeminiClient(gemini_model=model)
@@ -212,29 +206,9 @@ class Pipeline:
         return image[y1:y2, x1:x2]
 
     def _extract_text_from_region(self, region_img: np.ndarray, region_info: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract text from region using selected method with fallback"""
-        
-        # Use Gemini API by default or if specified
-        if self.text_extraction_method == "gemini":
-            logger.debug(f"Using {self.backend.upper()} API for text extraction")
-            return self._extract_text_with_ai(region_img, region_info)
-        
-        # Use Vision API if specified
-        elif self.text_extraction_method == "vision":
-            logger.debug("Using Google Vision API for text extraction")
-            result = self._extract_text_with_vision(region_img, region_info)
-            
-            # Fallback to AI client if Vision API fails
-            if result.get('error') and self.ai_client.is_available():
-                logger.warning(f"Vision API failed, falling back to {self.backend.upper()} API")
-                return self._extract_text_with_ai(region_img, region_info)
-            
-            return result
-        
-        # Invalid method, default to AI client
-        else:
-            logger.warning(f"Invalid text extraction method: {self.text_extraction_method}, using {self.backend.upper()}")
-            return self._extract_text_with_ai(region_img, region_info)
+        """Extract text from region using the configured AI backend"""
+        logger.debug(f"Using {self.backend.upper()} API for text extraction")
+        return self._extract_text_with_ai(region_img, region_info)
 
     def _extract_text_with_ai(self, region_img: np.ndarray, region_info: Dict[str, Any]) -> Dict[str, Any]:
         """Extract text from region using the configured AI backend"""
@@ -255,45 +229,6 @@ class Pipeline:
         # Save to cache if successful
         if 'error' not in result:
             self._save_to_cache(image_hash, cache_type, result)
-        
-        return result
-
-    def _extract_text_with_gemini(self, region_img: np.ndarray, region_info: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract text from region using Gemini API"""
-        image_hash = self._calculate_image_hash(region_img)
-        
-        cached_result = self._get_cached_result(image_hash, 'gemini_ocr')
-        if cached_result is not None:
-            cached_result['coords'] = region_info['coords']
-            return cached_result
-        
-        # Get prompt from PromptManager
-        prompt = self.prompt_manager.get_prompt('text_extraction', 'user')
-        
-        # Use GeminiClient to extract text
-        result = self.gemini_client.extract_text(region_img, region_info, prompt)
-        
-        # Save to cache if successful
-        if 'error' not in result:
-            self._save_to_cache(image_hash, 'gemini_ocr', result)
-        
-        return result
-
-    def _extract_text_with_vision(self, region_img: np.ndarray, region_info: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract text from region using Google Vision API"""
-        image_hash = self._calculate_image_hash(region_img)
-        
-        cached_result = self._get_cached_result(image_hash, 'vision_ocr')
-        if cached_result is not None:
-            cached_result['coords'] = region_info['coords']
-            return cached_result
-        
-        # Use VisionClient to extract text
-        result = self.vision_client.extract_text(region_img, region_info)
-        
-        # Save to cache if successful
-        if 'error' not in result:
-            self._save_to_cache(image_hash, 'vision_ocr', result)
         
         return result
 
@@ -319,32 +254,6 @@ class Pipeline:
         
         # Use AI client to process special region
         result = self.ai_client.process_special_region(region_img, region_info, prompt)
-        
-        # Save to cache if successful
-        if 'error' not in result:
-            self._save_to_cache(image_hash, cache_type, result)
-        
-        return result
-
-    def _process_special_region_with_gemini(self, region_img: np.ndarray, region_info: Dict[str, Any]) -> Dict[str, Any]:
-        """Process special regions (tables, figures) with Gemini API"""
-        image_hash = self._calculate_image_hash(region_img)
-        cache_type = f"{region_info['type']}_gemini"
-        
-        cached_result = self._get_cached_result(image_hash, cache_type)
-        if cached_result is not None:
-            cached_result['coords'] = region_info['coords']
-            return cached_result
-        
-        if not self.gemini_client.is_available():
-            logger.warning("Gemini API client not initialized, falling back to text extraction")
-            return self._extract_text_from_region(region_img, region_info)
-        
-        # Get prompt from PromptManager
-        prompt = self.prompt_manager.get_gemini_prompt_for_region_type(region_info['type'])
-        
-        # Use GeminiClient to process special region
-        result = self.gemini_client.process_special_region(region_img, region_info, prompt)
         
         # Save to cache if successful
         if 'error' not in result:

@@ -95,9 +95,6 @@ OPENROUTER_API_KEY=your_openrouter_api_key_here
 
 # Optional: Custom OpenAI base URL (for OpenRouter or other compatible services)
 # OPENAI_BASE_URL=https://openrouter.ai/api/v1
-
-# Optional: Google Vision API (if using vision extraction method)
-GOOGLE_APPLICATION_CREDENTIALS=.credentials/vision_service_account.json
 """
         env_file.write_text(env_template)
         logger.info("Created .env template file. Please update with your API keys.")

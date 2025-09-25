@@ -1,5 +1,5 @@
 # Text Extraction Prompts for Gemini API
-# Used when Gemini API is selected for text extraction instead of Google Vision API
+# Used by the Gemini backend for direct VLM-based OCR
 
 text_extraction:
   system: |

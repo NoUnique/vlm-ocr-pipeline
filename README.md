@@ -1,6 +1,6 @@
 # VLM OCR Pipeline
 
-A unified OCR processing pipeline that leverages Vision Language Models (VLMs) for document layout detection, text extraction, and AI-powered text correction. This system processes images and PDFs locally using multiple VLM backends (OpenAI/OpenRouter, Gemini) with optional Google Vision API fallback.
+A unified OCR processing pipeline that leverages Vision Language Models (VLMs) for document layout detection, text extraction, and AI-powered text correction. This system processes images and PDFs locally using multiple VLM backends (OpenAI/OpenRouter, Gemini).
 
 > **Based on**: This project is based on and modified from [Versatile-OCR-Program](https://github.com/ses4255/Versatile-OCR-Program)
 
@@ -11,7 +11,6 @@ A unified OCR processing pipeline that leverages Vision Language Models (VLMs) f
 - **VLM-Powered Text Extraction**: Advanced text extraction using Vision Language Models with intelligent context understanding
 - **Multi-Language Support**: Supports English, Korean, and Japanese text extraction
 - **AI-Powered Correction**: Intelligent text correction and content analysis
-- **Fallback OCR**: Optional Google Vision API fallback for traditional OCR when needed
 - **Special Content Processing**: Enhanced analysis of tables and figures with structured output
 - **Model-Specific Prompts**: YAML-based prompt templates organized by model family for optimal results
 - **Local Processing**: All processing runs locally with results stored on your filesystem
@@ -26,7 +25,6 @@ vlm-ocr-pipeline/
 ├── pipeline/                  # Modular VLM OCR Pipeline package
 │   ├── __init__.py            # Main Pipeline class
 │   ├── prompt.py              # PromptManager for YAML prompts
-│   ├── vision.py              # VisionClient for Google Cloud Vision
 │   ├── gemini.py              # GeminiClient for Gemini VLM API
 │   ├── openai.py              # OpenAIClient for OpenAI/OpenRouter VLM APIs
 │   └── ratelimit.py           # Rate limit management
@@ -39,8 +37,6 @@ vlm-ocr-pipeline/
 ├── .cache/                    # Processing cache (auto-created)
 ├── .logs/                     # Log files with timestamps (auto-created)
 ├── output/                    # Processing results (auto-created)
-└── .credentials/              # GCP service account keys
-    └── vision_service_account.json
 ```
 
 ## Installation
@@ -126,54 +122,6 @@ OPENROUTER_API_KEY=your_openrouter_api_key_here
 # OPENAI_BASE_URL=https://openrouter.ai/api/v1
 ```
 
-### 3. Optional: Google Vision API Setup (Fallback Only)
-
-> **Note**: Google Vision API is only used as a fallback method when Gemini API text extraction fails. You can use the pipeline without this setup.
-
-#### Step 1: Create Google Cloud Account (Optional)
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Sign up for a free account (includes $300 credit valid for 90 days)
-3. Create a new project or select an existing one
-
-#### Step 2: Enable Required APIs (Optional)
-
-Navigate to **APIs & Services > Library** and enable:
-
-1. **Cloud Vision API**
-   - Search for "Cloud Vision API"
-   - Click "Enable"
-   - Free tier: 1,000 requests/month
-
-2. **Vertex AI API** (for Gemini - if you prefer cloud-based Gemini)
-   - Search for "Vertex AI API" 
-   - Click "Enable"
-   - Free tier: Generous limits for Gemini 2.0 Flash
-
-#### Step 3: Create Service Account (Optional)
-
-1. Go to **IAM & Admin > Service Accounts**
-2. Click **"Create Service Account"**
-3. Fill in details:
-   - **Name**: `ocr-pipeline-service`
-   - **Description**: `Service account for OCR pipeline`
-4. Click **"Create and Continue"**
-5. Assign roles:
-   - `Cloud Vision API > Vision API User`
-   - `AI Platform > AI Platform User` (for Gemini)
-6. Click **"Continue"** then **"Done"**
-
-#### Step 4: Generate Service Account Key (Optional)
-
-1. Find your service account in the list
-2. Click the **three dots** menu > **"Manage Keys"**
-3. Click **"Add Key"** > **"Create New Key"**
-4. Choose **JSON** format
-5. Download the key file
-6. Rename it to `vision_service_account.json`
-7. Place it in `.credentials/` directory
-
-
 
 ## Usage
 
@@ -210,9 +158,6 @@ python main.py --input document.pdf --output /custom/output/
 # Disable caching for fresh processing
 python main.py --input document.pdf --no-cache
 
-# Use Google Vision API instead of AI backend for text extraction
-python main.py --input document.pdf --text-extraction vision
-
 # Use custom prompts directory (overrides auto-detection)
 python main.py --input document.pdf --prompts-dir custom_prompts/
 
@@ -235,7 +180,7 @@ python main.py --input document.pdf --model-path /path/to/custom/model.pt
 python main.py --input document.pdf --log-level DEBUG
 
 # Combined advanced usage
-python main.py --input /docs/ --text-extraction vision --max-pages 3 --confidence 0.8
+python main.py --input /docs/ --max-pages 3 --confidence 0.8
 ```
 
 ### Python API Usage
@@ -248,14 +193,7 @@ pipeline = Pipeline(
     confidence_threshold=0.5,
     use_cache=True,
     cache_dir=".cache",
-    output_dir="output",
-    text_extraction_method="gemini"  # or "vision"
-)
-
-# Initialize with custom prompts
-pipeline_custom = Pipeline(
-    text_extraction_method="vision",
-    prompts_dir="custom_prompts/"
+    output_dir="output"
 )
 
 # Process a single image
@@ -348,27 +286,9 @@ PDF runs emit a summary file alongside the page outputs: `summary.json` (all pag
 }
 ```
 
-## Text Extraction Methods
+## Text Extraction
 
-The pipeline supports two text extraction methods:
-
-### 1. Gemini API (Default - Recommended)
-- **Advantages**: Better multilingual support, intelligent context understanding, free tier with generous limits
-- **Usage**: `--text-extraction gemini` (default)
-- **API**: Uses Gemini 2.5 Flash model for text extraction
-- **Rate Limits**: 15 requests/minute, 1,500 requests/day
-- **Cost**: Free for most use cases
-
-### 2. Google Vision API (Fallback Only)
-- **Advantages**: Traditional OCR accuracy, specialized for text recognition
-- **Usage**: `--text-extraction vision`
-- **Automatic Fallback**: Gemini API automatically falls back to Vision API if extraction fails
-- **API**: Uses Google Cloud Vision API
-- **Requires**: Google Cloud setup (see optional installation steps above)
-
-### Recommendation
-- **Default (Gemini)**: Best for mixed content, multilingual documents, and most use cases
-- **Vision**: Only needed as explicit choice for traditional OCR accuracy or when Gemini API is unavailable
+All text extraction is performed by the configured VLM backend (Gemini by default, or OpenAI/OpenRouter if selected). The model receives both rendered page images and prompt instructions tailored to the backend. Rate limiting and caching ensure the pipeline stays within API quotas while avoiding repeated work on identical regions.
 
 ## Page Limiting Options
 
@@ -518,17 +438,12 @@ How this could be used in exams
 - **Cost**: Free for most use cases
 - **Optimization**: Enable caching to reduce API calls
 
-### Google Cloud Vision API (Optional Fallback)
-- **Free Tier**: 1,000 requests/month
-- **Cost**: $1.50 per 1,000 requests after free tier
-- **Usage**: Only when explicitly using `--text-extraction vision` or as automatic fallback
-
 ### Best Practices for Cost Control
 
 1. **Enable Caching**: Use `--cache` option (default) to avoid reprocessing
 2. **Batch Processing**: Process multiple files in one session
-3. **Monitor Usage**: Check [Google Cloud Console](https://console.cloud.google.com/) regularly
-4. **Set Billing Alerts**: Configure alerts at 50%, 75%, 90% of budget
+3. **Monitor Usage**: Review rate-limit logs and provider dashboards regularly
+4. **Set Billing Alerts**: Configure alerts with your API provider to avoid surprises
 
 ## Logging
 
@@ -596,13 +511,6 @@ cd gemini_ocr
 python main.py --input document.pdf
 ```
 
-#### "Vision API credentials not found"
-```bash
-# Check file path and permissions
-ls -la .credentials/vision_service_account.json
-chmod 600 .credentials/vision_service_account.json
-```
-
 #### "Gemini API client not initialized"
 ```bash
 # Verify environment variable
@@ -634,9 +542,9 @@ python -c "import torch; print(torch.cuda.is_available())"
 The pipeline follows a modular design:
 
 1. **Document Layout Detection**: Uses DocLayout-YOLO to identify regions
-2. **Text Extraction**: Gemini API for OCR (with optional Google Vision API fallback)
-3. **Content Analysis**: Gemini API for tables and figures
-4. **Text Correction**: AI-powered post-processing with Gemini API
+2. **Text Extraction**: Gemini or OpenAI/OpenRouter VLM APIs for OCR
+3. **Content Analysis**: Gemini/OpenAI APIs for tables and figures
+4. **Text Correction**: AI-powered post-processing with the configured VLM
 5. **Local Storage**: All results saved locally
 
 ### Extending the Pipeline
@@ -663,17 +571,17 @@ class CustomPipeline(Pipeline):
 
 ## License
 
-This project is for educational and research purposes. Please ensure compliance with Google Cloud API terms of service and usage limits.
+This project is for educational and research purposes. Please ensure compliance with the respective API provider's terms of service and usage limits.
 
 ## Support
 
 For issues and questions:
 
 1. Check the troubleshooting section above
-2. Review Google Cloud Console for API status
-3. Verify all credentials and environment variables
-4. Check the logs in `ocr_pipeline.log`
+2. Verify API credentials and environment variables (e.g., `GEMINI_API_KEY`, `OPENAI_API_KEY`)
+3. Review terminal/log output for detailed error messages
+4. Inspect the latest file in `.logs/`
 
 ---
 
-**Note**: This system requires internet connectivity for API calls to Google Cloud services. All processing results are stored locally for privacy and offline access. 
+**Note**: This system requires internet connectivity for API calls to the selected VLM provider. All processing results are stored locally for privacy and offline access. 

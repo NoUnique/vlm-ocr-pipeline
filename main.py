@@ -85,7 +85,6 @@ Examples:
   python main.py --input document.pdf --backend openai --model gemini-2.5-flash
   python main.py --input /path/to/images/
   python main.py --input document.pdf --output /custom/output/
-  python main.py --input document.pdf --text-extraction vision
   python main.py --input document.pdf --max-pages 5
   python main.py --input document.pdf --page-range 10-20
   python main.py --input document.pdf --pages 1,5,10,15
@@ -137,13 +136,6 @@ Examples:
         type=str,
         default='.tmp',
         help='Temporary files directory path (default: ./.tmp)'
-    )
-    
-    parser.add_argument(
-        '--text-extraction',
-        choices=['gemini', 'vision'],
-        default='gemini',
-        help='Text extraction method: "gemini" (Gemini API) or "vision" (Google Vision API) (default: gemini)'
     )
     
     parser.add_argument(
@@ -255,7 +247,6 @@ Examples:
             cache_dir=args.cache_dir,
             output_dir=args.output,
             temp_dir=args.temp_dir,
-            text_extraction_method=args.text_extraction,
             backend=args.backend,
             model=args.model,
             gemini_tier=args.gemini_tier
