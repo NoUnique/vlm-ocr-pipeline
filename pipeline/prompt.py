@@ -92,15 +92,15 @@ class PromptManager:
         if candidates:
 
             def sort_key(item):
-                if len(item) == 3:  # Wildcard match with specificity
-                    priority, path, specificity = item
+                priority, path, *rest = item
+                if rest:  # Wildcard match with specificity
+                    specificity = rest[0]
                     return (priority, -specificity)  # Negative for descending order
-                else:
-                    priority, path = item
-                    return (priority,)
+                return (priority,)
 
             candidates.sort(key=sort_key)
-            return candidates[0][1] if len(candidates[0]) == 2 else candidates[0][1]
+            head = candidates[0]
+            return head[1]
 
         # Ultimate fallback if nothing found
         return str(base_prompts_dir / "default")

@@ -8,6 +8,7 @@ import base64
 import difflib
 import gc
 import io
+import json
 import logging
 import os
 from typing import Any
@@ -310,8 +311,6 @@ class OpenAIClient:
     def _parse_openai_response(self, response_text: str, region_info: dict[str, Any]) -> dict[str, Any]:
         """Parse OpenAI response for special regions"""
         try:
-            import json
-
             parsed = json.loads(response_text)
 
             result = {

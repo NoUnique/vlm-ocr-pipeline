@@ -6,6 +6,7 @@ Handles text extraction, special content analysis, and text correction using Gem
 import difflib
 import gc
 import io
+import json
 import logging
 import os
 from typing import Any
@@ -15,6 +16,8 @@ import numpy as np
 from google import genai
 from google.genai import types
 from PIL import Image
+
+from pipeline.ratelimit import rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -102,8 +105,6 @@ class GeminiClient:
             )
 
             # Apply rate limiting
-            from pipeline.ratelimit import rate_limiter
-
             estimated_tokens = 2000  # Estimated tokens for image + text
             if not rate_limiter.wait_if_needed(estimated_tokens):
                 return {
@@ -223,8 +224,6 @@ class GeminiClient:
             )
 
             # Apply rate limiting
-            from pipeline.ratelimit import rate_limiter
-
             estimated_tokens = 2500  # Estimated tokens for special content analysis
             if not rate_limiter.wait_if_needed(estimated_tokens):
                 return {
@@ -309,8 +308,6 @@ class GeminiClient:
             )
 
             # Apply rate limiting
-            from pipeline.ratelimit import rate_limiter
-
             estimated_tokens = len(text.split()) * 2  # Rough estimate based on input text
             if not rate_limiter.wait_if_needed(estimated_tokens):
                 return "[TEXT_CORRECTION_DAILY_LIMIT_EXCEEDED]"
@@ -351,8 +348,6 @@ class GeminiClient:
     def _parse_gemini_response(self, response_text: str, region_info: dict[str, Any]) -> dict[str, Any]:
         """Parse Gemini response for special regions"""
         try:
-            import json
-
             parsed = json.loads(response_text)
 
             result = {
