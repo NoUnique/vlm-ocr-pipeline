@@ -92,7 +92,7 @@ class Pipeline:
             # Still initialize Gemini client for fallback if needed
             self.gemini_client = GeminiClient(gemini_model="gemini-2.5-flash")
 
-        logger.info(f"AI backend initialized: {self.backend.upper()} (model={self.model})")
+        logger.info("AI backend initialized: %s (model=%s)", self.backend.upper(), self.model)
 
     def _setup_directories(self) -> None:
         """Create necessary directories"""
@@ -158,10 +158,10 @@ class Pipeline:
             try:
                 with cache_file.open('r', encoding='utf-8') as f:
                     cached_data = json.load(f)
-                logger.debug(f"Cache hit for {cache_type}: {image_hash}")
+                logger.debug("Cache hit for %s: %s", cache_type, image_hash)
                 return cached_data
             except Exception as e:
-                logger.warning(f"Failed to load cache file {cache_file}: {e}")
+                logger.warning("Failed to load cache file %s: %s", cache_file, e)
         
         return None
 
@@ -178,9 +178,9 @@ class Pipeline:
             
             with cache_file.open('w', encoding='utf-8') as f:
                 json.dump(cache_data, f, ensure_ascii=False, indent=2)
-            logger.debug(f"Cached result for {cache_type}: {image_hash}")
+            logger.debug("Cached result for %s: %s", cache_type, image_hash)
         except Exception as e:
-            logger.warning(f"Failed to save cache file {cache_file}: {e}")
+            logger.warning("Failed to save cache file %s: %s", cache_file, e)
 
     def _crop_region(self, image: np.ndarray, region: Dict[str, Any]) -> np.ndarray:
         """Crop region from image"""
@@ -200,14 +200,14 @@ class Pipeline:
         
         # Ensure valid dimensions
         if x2 <= x1 or y2 <= y1:
-            logger.warning(f"Invalid region coordinates: x1={x1}, y1={y1}, x2={x2}, y2={y2}")
+            logger.warning("Invalid region coordinates: x1=%s, y1=%s, x2=%s, y2=%s", x1, y1, x2, y2)
             return np.zeros((1, 1, 3), dtype=np.uint8)  # Return minimal image
         
         return image[y1:y2, x1:x2]
 
     def _extract_text_from_region(self, region_img: np.ndarray, region_info: Dict[str, Any]) -> Dict[str, Any]:
         """Extract text from region using the configured AI backend"""
-        logger.debug(f"Using {self.backend.upper()} API for text extraction")
+        logger.debug("Using %s API for text extraction", self.backend.upper())
         return self._extract_text_with_ai(region_img, region_info)
 
     def _extract_text_with_ai(self, region_img: np.ndarray, region_info: Dict[str, Any]) -> Dict[str, Any]:
@@ -243,7 +243,7 @@ class Pipeline:
             return cached_result
         
         if not self.ai_client.is_available():
-            logger.warning(f"{self.backend.upper()} API client not initialized, falling back to text extraction")
+            logger.warning("%s API client not initialized, falling back to text extraction", self.backend.upper())
             return self._extract_text_from_region(region_img, region_info)
         
         # Get prompt from PromptManager
@@ -319,7 +319,7 @@ class Pipeline:
 
     def process_single_image(self, image_path: Path) -> Dict[str, Any]:
         """Process a single image file"""
-        logger.info(f"Processing image: {image_path}")
+        logger.info("Processing image: %s", image_path)
         
         # Load image
         image_np = cv2.imread(str(image_path))
@@ -347,7 +347,7 @@ class Pipeline:
 
     def process_pdf(self, pdf_path: Path, max_pages: Optional[int] = None, page_range: Optional[Tuple[int, int]] = None, pages: Optional[List[int]] = None) -> Dict[str, Any]:
         """Process PDF file with page limiting options"""
-        logger.info(f"Processing PDF: {pdf_path}")
+        logger.info("Processing PDF: %s", pdf_path)
         
         # Get PDF info
         pdf_info = pdfinfo_from_path(pdf_path)
@@ -356,13 +356,13 @@ class Pipeline:
         # Determine which pages to process
         pages_to_process = self._determine_pages_to_process(total_pages, max_pages, page_range, pages)
         
-        logger.info(f"Processing {len(pages_to_process)} pages: {pages_to_process}")
+        logger.info("Processing %d pages: %s", len(pages_to_process), pages_to_process)
         
         processed_pages = []
         processing_stopped = False
         
         for page_num in pages_to_process:
-            logger.info(f"Processing page {page_num}/{total_pages}")
+            logger.info("Processing page %d/%d", page_num, total_pages)
             
             try:
                 # Convert PDF page to image
@@ -372,7 +372,7 @@ class Pipeline:
                 # Save temporary image
                 temp_image_path = self.temp_dir / f"{pdf_path.stem}_page_{page_num}.jpg"
                 cv2.imwrite(str(temp_image_path), cv2.cvtColor(page_image, cv2.COLOR_RGB2BGR))
-                logger.info(f"Processing image: {temp_image_path}")
+                logger.info("Processing image: %s", temp_image_path)
                 
                 # Detect layout
                 regions = self.doc_layout_model.predict(page_image, conf=self.confidence_threshold)
@@ -382,7 +382,7 @@ class Pipeline:
                 
                 # Check for rate limit errors
                 if self._check_for_rate_limit_errors({'regions': processed_regions}):
-                    logger.warning(f"Rate limit detected on page {page_num}. Stopping processing.")
+                    logger.warning("Rate limit detected on page %d. Stopping processing.", page_num)
                     processing_stopped = True
                     break
                 
@@ -399,7 +399,7 @@ class Pipeline:
                 
                 # Check for rate limit signals in page-level correction
                 if isinstance(correction_result, str) and any(error in correction_result for error in ['RATE_LIMIT_EXCEEDED', 'DAILY_LIMIT_EXCEEDED']):
-                    logger.warning(f"Rate limit detected during page text correction on page {page_num}. Stopping processing.")
+                    logger.warning("Rate limit detected during page text correction on page %d. Stopping processing.", page_num)
                     processing_stopped = True
                     break
                  
@@ -427,13 +427,13 @@ class Pipeline:
                 page_output_file = page_output_dir / f"page_{page_num}.json"
                 with page_output_file.open('w', encoding='utf-8') as f:
                     json.dump(page_result, f, ensure_ascii=False, indent=2)
-                logger.info(f"Results saved to {page_output_file}")
+                logger.info("Results saved to %s", page_output_file)
                  
                 del images, page_image
                 gc.collect()
                 
             except Exception as e:
-                logger.error(f"Error processing page {page_num}: {e}")
+                logger.error("Error processing page %d: %s", page_num, e)
                 error_page_result = {
                     'page_number': page_num,
                     'error': str(e),
@@ -492,9 +492,9 @@ class Pipeline:
         summary_output_file = summary_output_dir / summary_filename
         with summary_output_file.open('w', encoding='utf-8') as f:
             json.dump(summary, f, ensure_ascii=False, indent=2)
-        logger.info(f"Results saved to {summary_output_file}")
-        
-        logger.info(f"PDF processing complete: {pdf_path} -> {summary_output_dir}")
+        logger.info("Results saved to %s", summary_output_file)
+
+        logger.info("PDF processing complete: %s -> %s", pdf_path, summary_output_dir)
         
         return summary
 
@@ -505,7 +505,7 @@ class Pipeline:
             valid_pages = [p for p in pages if 1 <= p <= total_pages]
             if len(valid_pages) != len(pages):
                 invalid_pages = [p for p in pages if p not in valid_pages]
-                logger.warning(f"Invalid page numbers (outside 1-{total_pages}): {invalid_pages}")
+                logger.warning("Invalid page numbers (outside 1-%d): %s", total_pages, invalid_pages)
             return sorted(valid_pages)
         
         elif page_range is not None:
@@ -542,7 +542,7 @@ class Pipeline:
             ]):
                 return True
         except (AttributeError, TypeError) as e:
-            logger.debug(f"Error checking rate limit errors: {e}")
+            logger.debug("Error checking rate limit errors: %s", e)
         
         return False
 
@@ -577,7 +577,7 @@ class Pipeline:
                     return True
                     
         except (AttributeError, TypeError, KeyError) as e:
-            logger.debug(f"Error checking for processing errors: {e}")
+            logger.debug("Error checking for processing errors: %s", e)
             
         return False
 
@@ -595,14 +595,14 @@ class Pipeline:
         if not pdf_files:
             return {"error": f"No PDF files found in directory: {input_dir}"}
         
-        logger.info(f"Found {len(pdf_files)} PDF files to process")
+        logger.info("Found %d PDF files to process", len(pdf_files))
         
         results = {}
         total_files = len(pdf_files)
         processed_files = 0
         
         for pdf_file in pdf_files:
-            logger.info(f"Processing PDF {processed_files + 1}/{total_files}: {pdf_file.name}")
+            logger.info("Processing PDF %d/%d: %s", processed_files + 1, total_files, pdf_file.name)
             
             try:
                 # Process the PDF (outputs will be placed under <output>/<model>/<file>)
@@ -618,10 +618,10 @@ class Pipeline:
                 
                 # Check for processing errors that should stop batch processing
                 if result.get('processing_stopped', False):
-                    logger.warning(f"Processing stopped for {pdf_file.name} due to rate limits. Continuing with next file.")
+                    logger.warning("Processing stopped for %s due to rate limits. Continuing with next file.", pdf_file.name)
                 
             except Exception as e:
-                logger.error(f"Error processing {pdf_file}: {e}")
+                logger.error("Error processing %s: %s", pdf_file, e)
                 results[str(pdf_file)] = {
                     "error": str(e),
                     "processed_at": datetime.now().isoformat()
@@ -646,7 +646,7 @@ class Pipeline:
         with summary_file.open('w', encoding='utf-8') as f:
             json.dump(summary, f, ensure_ascii=False, indent=2)
         
-        logger.info(f"Directory processing complete. Summary saved to: {summary_file}")
+        logger.info("Directory processing complete. Summary saved to: %s", summary_file)
         
         return summary
 
@@ -656,5 +656,5 @@ class Pipeline:
         
         with output_path.open('w', encoding='utf-8') as f:
             json.dump(result, f, ensure_ascii=False, indent=2)
-        
-        logger.info(f"Results saved to: {output_path}") 
+
+        logger.info("Results saved to: %s", output_path)

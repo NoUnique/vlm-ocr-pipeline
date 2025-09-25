@@ -29,7 +29,7 @@ class DocLayoutYOLO:
         """Initialize the model"""
         try:
             if self.model_path and self.model_path.exists():
-                logger.info(f"Loading local model file: {self.model_path}")
+                logger.info("Loading local model file: %s", self.model_path)
                 self.model = YOLOv10(str(self.model_path))
             else:
                 logger.info("Loading pre-trained model from Hugging Face")
@@ -43,7 +43,7 @@ class DocLayoutYOLO:
             return True
             
         except Exception as e:
-            logger.error(f"Failed to initialize DocLayout-YOLO model: {e}")
+            logger.error("Failed to initialize DocLayout-YOLO model: %s", e)
             try:
                 from ultralytics import YOLO
                 if self.model_path and self.model_path.exists():
@@ -53,7 +53,7 @@ class DocLayoutYOLO:
                 logger.info("Successfully loaded ultralytics YOLO model as alternative")
                 return True
             except Exception as e2:
-                logger.error(f"Alternative initialization failed: {e2}")
+                logger.error("Alternative initialization failed: %s", e2)
                 self.model = None
                 return False
 
@@ -89,7 +89,7 @@ class DocLayoutYOLO:
             # Input is path, validate it exists
             image_path = Path(image_input)
             if not image_path.exists():
-                logger.error(f"Image file does not exist: {image_path}")
+                logger.error("Image file does not exist: %s", image_path)
                 return []
             source = str(image_path)
         
@@ -127,5 +127,5 @@ class DocLayoutYOLO:
             
             return regions
         except Exception as e:
-            logger.error(f"Prediction failed: {e}")
+            logger.error("Prediction failed: %s", e)
             return [] 

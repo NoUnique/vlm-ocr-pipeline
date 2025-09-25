@@ -57,10 +57,10 @@ class OpenAIClient:
                 client_kwargs["base_url"] = self.base_url
             
             client = OpenAI(**client_kwargs)
-            logger.info(f"OpenAI API client initialized successfully (base_url: {self.base_url or 'default'})")
+            logger.info("OpenAI API client initialized successfully (base_url: %s)", self.base_url or 'default')
             return client
         except Exception as e:
-            logger.error(f"Failed to initialize OpenAI API client: {e}")
+            logger.error("Failed to initialize OpenAI API client: %s", e)
             return None
     
     def is_available(self) -> bool:
@@ -102,7 +102,7 @@ class OpenAIClient:
             Dictionary containing extracted text and metadata
         """
         if not self.is_available():
-            logger.warning(f"OpenAI API client not initialized (model={self.model}, base_url={self.base_url or 'default'})")
+            logger.warning("OpenAI API client not initialized (model=%s, base_url=%s)", self.model, self.base_url or 'default')
             return {
                 'type': region_info['type'],
                 'coords': region_info['coords'],
@@ -131,7 +131,7 @@ class OpenAIClient:
                 }
             ]
             
-            logger.info(f"Requesting OpenAI extract_text (model={self.model}, base_url={self.base_url or 'default'})")
+            logger.info("Requesting OpenAI extract_text (model=%s, base_url=%s)", self.model, self.base_url or 'default')
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
@@ -156,7 +156,7 @@ class OpenAIClient:
             
         except Exception as e:
             error_str = str(e)
-            logger.error(f"OpenAI text extraction error: {e}")
+            logger.error("OpenAI text extraction error: %s", e)
             
             # Handle rate limit errors specifically
             if "429" in error_str or "rate_limit" in error_str.lower():
@@ -193,7 +193,7 @@ class OpenAIClient:
             Dictionary containing processed content and metadata
         """
         if not self.is_available():
-            logger.warning(f"OpenAI API client not initialized (model={self.model}, base_url={self.base_url or 'default'})")
+            logger.warning("OpenAI API client not initialized (model=%s, base_url=%s)", self.model, self.base_url or 'default')
             return {
                 'type': region_info['type'],
                 'coords': region_info['coords'],
@@ -223,7 +223,7 @@ class OpenAIClient:
                 }
             ]
             
-            logger.info(f"Requesting OpenAI process_special_region (model={self.model}, base_url={self.base_url or 'default'})")
+            logger.info("Requesting OpenAI process_special_region (model=%s, base_url=%s)", self.model, self.base_url or 'default')
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
@@ -242,7 +242,7 @@ class OpenAIClient:
             
         except Exception as e:
             error_str = str(e)
-            logger.error(f"OpenAI special region processing error: {e}")
+            logger.error("OpenAI special region processing error: %s", e)
             
             # Handle rate limit errors
             if "429" in error_str or "rate_limit" in error_str.lower():
@@ -293,7 +293,7 @@ class OpenAIClient:
                 }
             ]
             
-            logger.info(f"Requesting OpenAI correct_text (model={self.model}, base_url={self.base_url or 'default'})")
+            logger.info("Requesting OpenAI correct_text (model=%s, base_url=%s)", self.model, self.base_url or 'default')
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
@@ -313,7 +313,7 @@ class OpenAIClient:
             
         except Exception as e:
             error_str = str(e)
-            logger.error(f"Text correction error: {e}")
+            logger.error("Text correction error: %s", e)
             
             # Handle rate limit errors specifically
             if "429" in error_str or "rate_limit" in error_str.lower():

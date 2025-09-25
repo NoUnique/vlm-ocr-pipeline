@@ -45,7 +45,7 @@ class GeminiClient:
             logger.info("Gemini API client initialized successfully")
             return client
         except Exception as e:
-            logger.error(f"Failed to initialize Gemini API client: {e}")
+            logger.error("Failed to initialize Gemini API client: %s", e)
             return None
     
     def is_available(self) -> bool:
@@ -119,7 +119,7 @@ class GeminiClient:
                     'error_message': 'Daily rate limit exceeded'
                 }
 
-            logger.info(f"Requesting Gemini extract_text (model={self.gemini_model})")
+            logger.info("Requesting Gemini extract_text (model=%s)", self.gemini_model)
             response = self.client.models.generate_content(
                 model=self.gemini_model,
                 contents=contents,
@@ -145,7 +145,7 @@ class GeminiClient:
             
         except Exception as e:
             error_str = str(e)
-            logger.error(f"Gemini text extraction error: {e}")
+            logger.error("Gemini text extraction error: %s", e)
             
             # Handle rate limit errors specifically
             if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
@@ -238,7 +238,7 @@ class GeminiClient:
                     'error_message': 'Daily rate limit exceeded'
                 }
 
-            logger.info(f"Requesting Gemini process_special_region (model={self.gemini_model})")
+            logger.info("Requesting Gemini process_special_region (model=%s)", self.gemini_model)
             response = self.client.models.generate_content(
                 model=self.gemini_model,
                 contents=contents,
@@ -258,7 +258,7 @@ class GeminiClient:
             
         except Exception as e:
             error_str = str(e)
-            logger.error(f"Gemini special region processing error: {e}")
+            logger.error("Gemini special region processing error: %s", e)
             
             # Handle rate limit errors
             if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
@@ -315,7 +315,7 @@ class GeminiClient:
             if not rate_limiter.wait_if_needed(estimated_tokens):
                 return "[TEXT_CORRECTION_DAILY_LIMIT_EXCEEDED]"
 
-            logger.info(f"Requesting Gemini correct_text (model={self.gemini_model})")
+            logger.info("Requesting Gemini correct_text (model=%s)", self.gemini_model)
             response = self.client.models.generate_content(
                 model=self.gemini_model,
                 contents=contents,
@@ -334,7 +334,7 @@ class GeminiClient:
 
         except Exception as e:
             error_str = str(e)
-            logger.error(f"Text correction error: {e}")
+            logger.error("Text correction error: %s", e)
             
             # Handle rate limit errors specifically
             if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:

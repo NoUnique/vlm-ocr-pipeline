@@ -109,7 +109,7 @@ class PromptManager:
         prompts = {}
         
         if not self.prompts_dir.exists():
-            logger.warning(f"Prompts directory not found: {self.prompts_dir}")
+            logger.warning("Prompts directory not found: %s", self.prompts_dir)
             return prompts
         
         prompt_files = {
@@ -125,13 +125,13 @@ class PromptManager:
                 try:
                     with prompt_file.open('r', encoding='utf-8') as f:
                         prompts[prompt_type] = yaml.safe_load(f)
-                    logger.debug(f"Loaded prompts from {prompt_file}")
+                    logger.debug("Loaded prompts from %s", prompt_file)
                 except Exception as e:
-                    logger.warning(f"Failed to load prompts from {prompt_file}: {e}")
+                    logger.warning("Failed to load prompts from %s: %s", prompt_file, e)
             else:
-                logger.warning(f"Prompt file not found: {prompt_file}")
+                logger.warning("Prompt file not found: %s", prompt_file)
         
-        logger.info(f"PromptManager initialized (model={self.model}, backend={self.backend}, dir={self.prompts_dir})")
+        logger.info("PromptManager initialized (model=%s, backend=%s, dir=%s)", self.model, self.backend, self.prompts_dir)
         return prompts
 
     def get_prompt(self, category: str, prompt_type: str, prompt_key: str = None, **kwargs) -> str:
@@ -160,7 +160,7 @@ class PromptManager:
                 return str(prompt_template)
                 
         except Exception as e:
-            logger.warning(f"Error getting prompt {category}.{prompt_type}: {e}")
+            logger.warning("Error getting prompt %s.%s: %s", category, prompt_type, e)
         
         # Fallback to hardcoded prompts
         return self._get_fallback_prompt(category, prompt_type, **kwargs)
@@ -190,7 +190,7 @@ class PromptManager:
                     prompt = fallback_prompts[category][prompt_type]
                     return prompt.format(**kwargs) if kwargs else prompt
         except Exception as e:
-            logger.error(f"Error in fallback prompt: {e}")
+            logger.error("Error in fallback prompt: %s", e)
         
         return f"Process this content according to {category} guidelines."
 

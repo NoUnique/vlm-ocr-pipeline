@@ -232,12 +232,12 @@ Examples:
         parser.error("the following arguments are required: --input/-i")
     
     logger.info("Starting VLM OCR Pipeline")
-    logger.info(f"Input: {args.input}")
-    logger.info(f"Output: {args.output}")
-    logger.info(f"Backend: {args.backend}")
-    logger.info(f"Model: {args.model}")
+    logger.info("Input: %s", args.input)
+    logger.info("Output: %s", args.output)
+    logger.info("Backend: %s", args.backend)
+    logger.info("Model: %s", args.model)
     if args.backend == 'gemini':
-        logger.info(f"Gemini Tier: {args.gemini_tier}")
+        logger.info("Gemini Tier: %s", args.gemini_tier)
     
     try:
         pipeline = Pipeline(
@@ -255,7 +255,7 @@ Examples:
         input_path = Path(args.input)
         
         if not input_path.exists():
-            logger.error(f"Input path does not exist: {input_path}")
+            logger.error("Input path does not exist: %s", input_path)
             return 1
         
         # Parse page limiting options
@@ -275,17 +275,17 @@ Examples:
         
         # Log page limiting options if set
         if max_pages:
-            logger.info(f"Limiting to maximum {max_pages} pages")
+            logger.info("Limiting to maximum %d pages", max_pages)
         elif page_range:
-            logger.info(f"Processing page range: {page_range[0]}-{page_range[1]}")
+            logger.info("Processing page range: %d-%d", page_range[0], page_range[1])
         elif specific_pages:
-            logger.info(f"Processing specific pages: {specific_pages}")
+            logger.info("Processing specific pages: %s", specific_pages)
         
         if input_path.is_file():
             file_ext = input_path.suffix.lower()
             
             if file_ext == '.pdf':
-                logger.info(f"Processing PDF file: {input_path}")
+                logger.info("Processing PDF file: %s", input_path)
                 result = pipeline.process_pdf(
                     input_path, 
                     max_pages=max_pages,
@@ -293,18 +293,18 @@ Examples:
                     pages=specific_pages
                 )
             elif file_ext in ['.jpg', '.jpeg', '.png', '.tiff', '.bmp']:
-                logger.info(f"Processing image file: {input_path}")
+                logger.info("Processing image file: %s", input_path)
                 result = pipeline.process_image(input_path)
                 
                 model_output_dir = Path(args.output) / pipeline.model
                 output_path = model_output_dir / f"{input_path.stem}.json"
                 pipeline._save_results(result, output_path)
             else:
-                logger.error(f"Unsupported file format: {file_ext}")
+                logger.error("Unsupported file format: %s", file_ext)
                 return 1
                 
         elif input_path.is_dir():
-            logger.info(f"Processing directory: {input_path}")
+            logger.info("Processing directory: %s", input_path)
             
             # Note: Page limiting options only apply to individual PDFs
             if max_pages or page_range or specific_pages:
@@ -318,24 +318,24 @@ Examples:
                 specific_pages=specific_pages
             )
         else:
-            logger.error(f"Invalid input path: {input_path}")
+            logger.error("Invalid input path: %s", input_path)
             return 1
         
         if 'error' in result:
-            logger.error(f"Processing failed: {result['error']}")
+            logger.error("Processing failed: %s", result['error'])
             return 1
         
         logger.info("VLM OCR Pipeline completed successfully")
         
         if input_path.is_file():
             if input_path.suffix.lower() == '.pdf':
-                logger.info(f"Results saved to: {result.get('output_directory', args.output)}")
+                logger.info("Results saved to: %s", result.get('output_directory', args.output))
             else:
-                logger.info(f"Results saved to: {Path(args.output) / pipeline.model}")
+                logger.info("Results saved to: %s", Path(args.output) / pipeline.model)
         elif input_path.is_dir():
-            logger.info(f"Results saved to: {result.get('output_directory', args.output)}")
+            logger.info("Results saved to: %s", result.get('output_directory', args.output))
         else:
-            logger.info(f"Results saved to: {args.output}")
+            logger.info("Results saved to: %s", args.output)
         
         return 0
         
@@ -343,7 +343,7 @@ Examples:
         logger.info("Process interrupted by user")
         return 1
     except Exception as e:
-        logger.error(f"Unexpected error: {e}", exc_info=True)
+        logger.error("Unexpected error: %s", e, exc_info=True)
         return 1
 
 if __name__ == "__main__":

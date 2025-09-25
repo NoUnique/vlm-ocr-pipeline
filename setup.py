@@ -41,7 +41,7 @@ def fix_doclayout_yolo_compatibility():
     """Fix DocLayout-YOLO compatibility issues"""
     try:
         model_file = find_doclayout_yolo_model_file()
-        logger.info(f"Found DocLayout-YOLO model file: {model_file}")
+        logger.info("Found DocLayout-YOLO model file: %s", model_file)
         
         # Read the current content
         content = model_file.read_text()
@@ -65,7 +65,7 @@ def fix_doclayout_yolo_compatibility():
             return False
             
     except Exception as e:
-        logger.error(f"Failed to fix DocLayout-YOLO compatibility: {e}")
+        logger.error("Failed to fix DocLayout-YOLO compatibility: %s", e)
         return False
 
 
@@ -76,7 +76,7 @@ def verify_doclayout_yolo():
         logger.info("DocLayout-YOLO import verification successful")
         return True
     except Exception as e:
-        logger.error(f"DocLayout-YOLO import verification failed: {e}")
+        logger.error("DocLayout-YOLO import verification failed: %s", e)
         return False
 
 

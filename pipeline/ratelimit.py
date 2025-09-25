@@ -72,7 +72,7 @@ class RateLimitManager:
             raise ValueError(f"Invalid tier: {tier}. Must be one of: free, tier1, tier2, tier3")
         
         if model not in self.rate_limits.get('models', {}):
-            logger.warning(f"Model {model} not found in rate limits. Using default model {self.default_model}.")
+            logger.warning("Model %s not found in rate limits. Using default model %s.", model, self.default_model)
             model = self.default_model
         
         self.tier = tier
@@ -83,14 +83,14 @@ class RateLimitManager:
         self._get_model_state(model)
         
         self._save_state()
-        logger.info(f"Rate limit manager set to {tier} tier with model {model}")
+        logger.info("Rate limit manager set to %s tier with model %s", tier, model)
     
 
     def get_current_limits(self) -> Dict[str, Optional[int]]:
         """Get current rate limits for the configured tier and model"""
         models = self.rate_limits.get('models', {})
         if self.model not in models:
-            logger.warning(f"Model {self.model} not found, using default {self.default_model}")
+            logger.warning("Model %s not found, using default %s", self.model, self.default_model)
             model_config = models.get(self.default_model, {})
         else:
             model_config = models[self.model]
@@ -100,18 +100,18 @@ class RateLimitManager:
     def _load_rate_limits_config(self) -> Dict[str, Any]:
         """Load rate limits configuration from YAML file"""
         if not self.config_file.exists():
-            logger.error(f"Rate limits config file not found: {self.config_file}")
+            logger.error("Rate limits config file not found: %s", self.config_file)
             return self._get_fallback_config()
         
         try:
             with open(self.config_file, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
             
-            logger.info(f"Loaded rate limits config from {self.config_file}")
+            logger.info("Loaded rate limits config from %s", self.config_file)
             return config
             
         except (yaml.YAMLError, IOError, UnicodeDecodeError) as e:
-            logger.error(f"Failed to load rate limits config: {e}")
+            logger.error("Failed to load rate limits config: %s", e)
             return self._get_fallback_config()
     
     def _get_fallback_config(self) -> Dict[str, Any]:
@@ -179,7 +179,7 @@ class RateLimitManager:
                         'last_reset_date': last_reset_date
                     }
                 
-                logger.debug(f"Loaded model-specific rate limit state for {len(self.model_states)} models")
+                logger.debug("Loaded model-specific rate limit state for %d models", len(self.model_states))
             
             else:
                 # Old format: single model state - migrate to new format
@@ -213,10 +213,10 @@ class RateLimitManager:
                     'last_reset_date': last_reset_date
                 }
                 
-                logger.info(f"Migrated old format rate limit state for model {model_name}")
+                logger.info("Migrated old format rate limit state for model %s", model_name)
             
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            logger.warning(f"Failed to load rate limit state: {e}")
+            logger.warning("Failed to load rate limit state: %s", e)
             # Reset to defaults if file is corrupted
             self.model_states.clear()
     
@@ -244,7 +244,7 @@ class RateLimitManager:
                 json.dump(data, f, indent=2)
                 
         except Exception as e:
-            logger.warning(f"Failed to save rate limit state: {e}")
+            logger.warning("Failed to save rate limit state: %s", e)
     
     def _cleanup_old_records(self):
         """Remove old request records outside the time windows for current model"""
@@ -265,7 +265,7 @@ class RateLimitManager:
             state['daily_requests'] = 0
             state['last_reset_date'] = current_date
             self._save_state()  # Save state after daily reset
-            logger.info(f"Daily request counter reset for {self.current_model} on {current_date}")
+            logger.info("Daily request counter reset for %s on %s", self.current_model, current_date)
     
     def _calculate_wait_time(self, estimated_tokens: int = 1000) -> float:
         """Calculate how long to wait before making the next request for current model"""
@@ -324,13 +324,13 @@ class RateLimitManager:
             
             # Check daily limit
             if limits.get('rpd') and state['daily_requests'] >= limits['rpd']:
-                logger.error(f"Daily request limit ({limits['rpd']}) exceeded for model {self.current_model}")
+                logger.error("Daily request limit (%s) exceeded for model %s", limits['rpd'], self.current_model)
                 return False
             
             wait_time = self._calculate_wait_time(estimated_tokens)
             
             if wait_time > 0:
-                logger.info(f"Rate limit reached for {self.current_model}. Waiting {wait_time:.2f} seconds...")
+                logger.info("Rate limit reached for %s. Waiting %.2f seconds...", self.current_model, wait_time)
                 time.sleep(wait_time)
                 self._cleanup_old_records()
             
