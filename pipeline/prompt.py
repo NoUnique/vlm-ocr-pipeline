@@ -137,7 +137,7 @@ class PromptManager:
         )
         return prompts
 
-    def get_prompt(self, category: str, prompt_type: str, prompt_key: str = None, **kwargs) -> str:
+    def get_prompt(self, category: str, prompt_type: str, prompt_key: str | None = None, **kwargs) -> str:
         """Get prompt from loaded prompts with fallback"""
         try:
             prompt_data = self.prompts.get(category, {})
@@ -185,14 +185,14 @@ class PromptManager:
             "content_analysis": {
                 "table_analysis": (
                     "Analyze this table and respond in JSON format:\n"
-                    "{\"markdown_table\": \"| Col1 | Col2 |\\\\n|------|------|\\\\n| Data1 | Data2 |\","
-                    " \"summary\": \"Description\", \"educational_value\": \"Significance\","
-                    " \"related_topics\": [\"Topic1\", \"Topic2\"]}"
+                    '{"markdown_table": "| Col1 | Col2 |\\\\n|------|------|\\\\n| Data1 | Data2 |",'
+                    ' "summary": "Description", "educational_value": "Significance",'
+                    ' "related_topics": ["Topic1", "Topic2"]}'
                 ),
                 "figure_analysis": (
                     "Analyze this image and respond in JSON format:\n"
-                    "{\"description\": \"Detailed description\", \"educational_value\": \"Significance\","
-                    " \"related_topics\": [\"Topic1\"], \"exam_relevance\": \"Exam usage\"}"
+                    '{"description": "Detailed description", "educational_value": "Significance",'
+                    ' "related_topics": ["Topic1"], "exam_relevance": "Exam usage"}'
                 ),
             },
             "text_correction": {
