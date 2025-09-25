@@ -291,9 +291,21 @@ print(f"Processed {result['total_pdfs']} PDF files")
 
 ### Single Image/Page Output
 
+Each single image (or individual PDF page) is written as `page_<number>.json` under `<output>/<model>/<document_stem>/`. The payload includes:
+
+- `image_path`: Path to the rendered page image (or original image if supplied)
+- `width` / `height`: Pixel dimensions of the rendered page
+- `regions`: Raw DocLayout-YOLO detections (bounding boxes and labels)
+- `processed_regions`: Post-processed regions with extracted text, table summaries, etc.
+- `raw_text`: Natural reading-order text composed from text-like regions
+- `corrected_text`: Text after VLM correction (falls back to `raw_text` on failure)
+- `correction_confidence`: Similarity score between raw and corrected text (0–1)
+- `processing_time_seconds`: Total latency spent on the page
+- `processed_at`: ISO-8601 timestamp for when processing completed
+
 ```json
 {
-  "image_path": "document.jpg",
+  "image_path": "output/tmp/document_page_1.jpg",
   "width": 1920,
   "height": 1080,
   "regions": [...],
@@ -308,18 +320,31 @@ print(f"Processed {result['total_pdfs']} PDF files")
 
 ### PDF Summary Output
 
+PDF runs emit a summary file alongside the page outputs: `summary.json` (all pages succeeded), `summary_partial.json` (some failures), or `summary_incomplete.json` (stopped early). The schema captures:
+
+- `pdf_name` / `pdf_path`: Original filename and absolute path
+- `num_pages`: Number of pages in the source PDF
+- `processed_pages`: Count of pages processed (including fallbacks)
+- `output_directory`: Folder that contains per-page and summary JSON artifacts
+- `processed_at`: ISO-8601 timestamp for completion
+- `status_summary`: Totals of `complete`, `partial`, and `incomplete` pages
+- `pages`: Array of page status objects with optional file suffix (e.g., `partial` → `page_2_partial.json`)
+- `processing_stopped`: Indicates an early stop due to rate limits or unexpected errors
+
 ```json
 {
   "pdf_name": "document",
   "pdf_path": "/path/to/document.pdf",
   "num_pages": 10,
   "processed_pages": 10,
-  "output_directory": "/output/document/",
+  "output_directory": "output/gemini-2.5-flash/document",
   "processed_at": "2024-12-19T10:30:00",
+  "status_summary": {"complete": 10},
   "pages": [
-    {"page": 1, "status": "processed"},
-    {"page": 2, "status": "processed"}
-  ]
+    {"page": 1, "status": "complete", "file_suffix": ""},
+    {"page": 2, "status": "partial", "file_suffix": "partial"}
+  ],
+  "processing_stopped": false
 }
 ```
 
