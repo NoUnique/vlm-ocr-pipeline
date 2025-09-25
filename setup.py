@@ -8,6 +8,7 @@ import importlib
 import logging
 import site
 import sys
+import textwrap
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
@@ -93,15 +94,16 @@ def setup_environment():
     env_file = Path(".env")
     if not env_file.exists():
         logger.warning(".env file not found. Creating template...")
-        env_template = """# VLM Backend API Keys
-GEMINI_API_KEY=your_gemini_api_key_here
-OPENAI_API_KEY=your_openai_api_key_here
-OPENROUTER_API_KEY=your_openrouter_api_key_here
+        env_template = textwrap.dedent("""
+            # VLM Backend API Keys
+            GEMINI_API_KEY=your_gemini_api_key_here
+            OPENAI_API_KEY=your_openai_api_key_here
+            OPENROUTER_API_KEY=your_openrouter_api_key_here
 
-# Optional: Custom OpenAI base URL (for OpenRouter or other compatible services)
-# OPENAI_BASE_URL=https://openrouter.ai/api/v1
-"""
-        env_file.write_text(env_template)
+            # Optional: Custom OpenAI base URL (for OpenRouter or other compatible services)
+            # OPENAI_BASE_URL=https://openrouter.ai/api/v1
+        """).strip()
+        env_file.write_text(f"{env_template}\n")
         logger.info("Created .env template file. Please update with your API keys.")
 
     # Fix DocLayout-YOLO compatibility

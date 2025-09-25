@@ -7,12 +7,14 @@ Provides command-line interface for processing images and PDFs using Vision Lang
 import argparse
 import logging
 import sys
+import textwrap
 from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 from pipeline import Pipeline
+from pipeline.ratelimit import rate_limiter
 
 # Load environment variables from .env file
 load_dotenv()
@@ -67,7 +69,7 @@ def parse_specific_pages(pages_str: str) -> list | None:
         if not pages:
             raise ValueError("No valid page numbers found")
 
-        return sorted(list(set(pages)))  # Remove duplicates and sort
+        return sorted(set(pages))  # Remove duplicates and sort
     except Exception as e:
         logging.getLogger(__name__).error(f"Invalid pages format '{pages_str}': {e}")
         return None
@@ -78,19 +80,21 @@ def main():
     parser = argparse.ArgumentParser(
         description="VLM OCR Pipeline - Process images and PDFs with layout detection and VLM-powered text correction",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python main.py --input document.pdf
-  python main.py --input document.pdf --backend gemini
-  python main.py --input document.pdf --model openai/gpt-4o
-  python main.py --input document.pdf --backend openai --model gemini-2.5-flash
-  python main.py --input /path/to/images/
-  python main.py --input document.pdf --output /custom/output/
-  python main.py --input document.pdf --max-pages 5
-  python main.py --input document.pdf --page-range 10-20
-  python main.py --input document.pdf --pages 1,5,10,15
-  python main.py --input document.pdf --no-cache --confidence 0.7
-        """,
+        epilog=textwrap.dedent(
+            """
+            Examples:
+              python main.py --input document.pdf
+              python main.py --input document.pdf --backend gemini
+              python main.py --input document.pdf --model openai/gpt-4o
+              python main.py --input document.pdf --backend openai --model gemini-2.5-flash
+              python main.py --input /path/to/images/
+              python main.py --input document.pdf --output /custom/output/
+              python main.py --input document.pdf --max-pages 5
+              python main.py --input document.pdf --page-range 10-20
+              python main.py --input document.pdf --pages 1,5,10,15
+              python main.py --input document.pdf --no-cache --confidence 0.7
+            """
+        ),
     )
 
     parser.add_argument(
@@ -160,8 +164,6 @@ Examples:
     # Handle rate limit status request (only for Gemini backend)
     if args.rate_limit_status:
         if args.backend == "gemini":
-            from pipeline.ratelimit import rate_limiter
-
             rate_limiter.set_tier_and_model(args.gemini_tier, args.model)
             status = rate_limiter.get_status()
 
