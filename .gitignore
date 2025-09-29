@@ -1,6 +1,7 @@
 # Credentials and sensitive files
 .credentials/
 *.json
+!pyrightconfig.json
 
 # Environment variables
 .env

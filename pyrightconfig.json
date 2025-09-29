@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/pyright/main/packages/pyright-internal/src/schemas/pyrightconfig.schema.json",
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "basic",
+  "ignore": [
+    "models/doclayout_yolo.py"
+  ],
+  "extraPaths": [
+    "pipeline",
+    "models"
+  ]
+}

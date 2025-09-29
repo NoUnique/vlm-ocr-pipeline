@@ -20,7 +20,7 @@ except ImportError:
 
 import cv2
 import numpy as np
-from pdf2image import convert_from_path, pdfinfo_from_path
+from pdf2image.pdf2image import convert_from_path, pdfinfo_from_path
 
 from models import DocLayoutYOLO
 
