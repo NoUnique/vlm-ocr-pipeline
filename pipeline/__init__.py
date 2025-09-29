@@ -372,116 +372,180 @@ class Pipeline:
 
         logger.info("Processing %d pages: %s", len(pages_to_process), pages_to_process)
 
-        processed_pages = []
+        output_dir = self._get_pdf_output_dir(pdf_path)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        processed_pages, processing_stopped = self._process_pdf_pages(
+            pdf_path, pages_to_process, total_pages, output_dir
+        )
+
+        summary = self._create_pdf_summary(
+            pdf_path, total_pages, processed_pages, processing_stopped, output_dir
+        )
+
+        logger.info("PDF processing complete: %s -> %s", pdf_path, output_dir)
+
+        return summary
+
+    def _process_pdf_pages(
+        self,
+        pdf_path: Path,
+        pages_to_process: list[int],
+        total_pages: int,
+        page_output_dir: Path,
+    ) -> tuple[list[dict[str, Any]], bool]:
+        processed_pages: list[dict[str, Any]] = []
         processing_stopped = False
 
         for page_num in pages_to_process:
             logger.info("Processing page %d/%d", page_num, total_pages)
-
-            try:
-                # Convert PDF page to image
-                images = convert_from_path(pdf_path, first_page=page_num, last_page=page_num, dpi=200)
-                page_image = np.array(images[0])
-
-                # Save temporary image
-                temp_image_path = self.temp_dir / f"{pdf_path.stem}_page_{page_num}.jpg"
-                cv2.imwrite(str(temp_image_path), cv2.cvtColor(page_image, cv2.COLOR_RGB2BGR))
-                logger.info("Processing image: %s", temp_image_path)
-
-                # Detect layout
-                regions = self.doc_layout_model.predict(page_image, conf=self.confidence_threshold)
-
-                # Process regions
-                processed_regions = self._process_regions(page_image, regions)
-
-                # Check for rate limit errors
-                if self._check_for_rate_limit_errors({"regions": processed_regions}):
-                    logger.warning("Rate limit detected on page %d. Stopping processing.", page_num)
-                    processing_stopped = True
-                    break
-
-                # Page-level text aggregation and single correction
-                raw_text = self._compose_page_raw_text(processed_regions)
-
-                correction_result = self.correct_text(raw_text)
-                if isinstance(correction_result, dict):
-                    corrected_text = correction_result.get("corrected_text", raw_text)
-                    correction_confidence = float(correction_result.get("confidence", 1.0))
-                else:
-                    corrected_text = str(correction_result)
-                    correction_confidence = 1.0
-
-                # Check for rate limit signals in page-level correction
-                if isinstance(correction_result, str) and any(
-                    error in correction_result for error in ["RATE_LIMIT_EXCEEDED", "DAILY_LIMIT_EXCEEDED"]
-                ):
-                    logger.warning(
-                        "Rate limit detected during page text correction on page %d. Stopping processing.", page_num
-                    )
-                    processing_stopped = True
-                    break
-
-                # Compose legacy-style page result
-                page_height, page_width = page_image.shape[0], page_image.shape[1]
-                page_result = {
-                    "image_path": str(self.temp_dir / f"{pdf_path.stem}_page_{page_num}.jpg"),
-                    "width": int(page_width),
-                    "height": int(page_height),
-                    "regions": regions,  # detection results
-                    "processed_regions": processed_regions,  # extracted/processed content
-                    "raw_text": raw_text,
-                    "corrected_text": corrected_text,
-                    "correction_confidence": correction_confidence,
-                    "processed_at": tz_now().isoformat(),
-                    "page_number": page_num,
-                }
-
-                processed_pages.append(page_result)
-
-                # Save individual page result
-                page_output_dir = self._get_pdf_output_dir(pdf_path)
-                page_output_dir.mkdir(parents=True, exist_ok=True)
-
-                page_output_file = page_output_dir / f"page_{page_num}.json"
-                with page_output_file.open("w", encoding="utf-8") as f:
-                    json.dump(page_result, f, ensure_ascii=False, indent=2)
-                logger.info("Results saved to %s", page_output_file)
-
-                del images, page_image
-                gc.collect()
-
-            except Exception as e:
-                logger.error("Error processing page %d: %s", page_num, e)
-                error_page_result = {
-                    "page_number": page_num,
-                    "error": str(e),
-                    "processed_at": tz_now().isoformat(),
-                }
-                processed_pages.append(error_page_result)
-
-        # Prepare output directory for summary
-        summary_output_dir = self._get_pdf_output_dir(pdf_path)
-        summary_output_dir.mkdir(parents=True, exist_ok=True)
-
-        # Determine page statuses for legacy-style summary
-        pages_summary = []
-        status_counts = {"complete": 0, "partial": 0, "incomplete": 0}
-        for pr in processed_pages:
-            page_no = int(pr.get("page_number", 0))
-            if pr.get("error"):
-                status = "partial"
-            else:
-                status = "complete"
-            status_counts[status] += 1
-            pages_summary.append(
-                {"page": page_no, "status": status, "file_suffix": "" if status == "complete" else status}
+            page_result, stop_processing = self._process_pdf_page(
+                pdf_path, page_num, page_output_dir
             )
 
-        # Temp summary to reuse existing error check logic for filename decision
-        temp_summary_for_errors = {"pages_data": processed_pages, "processing_stopped": processing_stopped}
+            if page_result is not None:
+                processed_pages.append(page_result)
+
+            if stop_processing:
+                processing_stopped = True
+                break
+
+        return processed_pages, processing_stopped
+
+    def _process_pdf_page(
+        self,
+        pdf_path: Path,
+        page_num: int,
+        page_output_dir: Path,
+    ) -> tuple[dict[str, Any] | None, bool]:
+        page_image: np.ndarray | None = None
+
+        try:
+            page_image, temp_image_path = self._render_pdf_page(pdf_path, page_num)
+
+            regions = self.doc_layout_model.predict(page_image, conf=self.confidence_threshold)
+            processed_regions = self._process_regions(page_image, regions)
+
+            if self._check_for_rate_limit_errors({"regions": processed_regions}):
+                logger.warning("Rate limit detected on page %d. Stopping processing.", page_num)
+                return None, True
+
+            raw_text = self._compose_page_raw_text(processed_regions)
+            corrected_text, correction_confidence, stop_due_to_correction = self._perform_page_correction(
+                raw_text, page_num
+            )
+
+            if stop_due_to_correction:
+                return None, True
+
+            page_result = self._build_page_result(
+                pdf_path,
+                page_num,
+                page_image,
+                regions,
+                processed_regions,
+                raw_text,
+                corrected_text,
+                correction_confidence,
+            )
+
+            self._save_page_output(page_output_dir, page_num, page_result)
+
+            return page_result, False
+
+        except Exception as e:
+            logger.error("Error processing page %d: %s", page_num, e)
+            error_page_result = {
+                "page_number": page_num,
+                "error": str(e),
+                "processed_at": tz_now().isoformat(),
+            }
+            return error_page_result, False
+
+        finally:
+            if page_image is not None:
+                del page_image
+            gc.collect()
+
+    def _render_pdf_page(self, pdf_path: Path, page_num: int) -> tuple[np.ndarray, Path]:
+        images = convert_from_path(pdf_path, first_page=page_num, last_page=page_num, dpi=200)
+        page_image = np.array(images[0])
+
+        temp_image_path = self.temp_dir / f"{pdf_path.stem}_page_{page_num}.jpg"
+        cv2.imwrite(str(temp_image_path), cv2.cvtColor(page_image, cv2.COLOR_RGB2BGR))
+        logger.info("Processing image: %s", temp_image_path)
+
+        return page_image, temp_image_path
+
+    def _perform_page_correction(
+        self, raw_text: str, page_num: int
+    ) -> tuple[str, float, bool]:
+        correction_result = self.correct_text(raw_text)
+
+        if isinstance(correction_result, dict):
+            corrected_text = correction_result.get("corrected_text", raw_text)
+            confidence = float(correction_result.get("confidence", 1.0))
+            return corrected_text, confidence, False
+
+        corrected_text = str(correction_result)
+        rate_limit_indicators = ["RATE_LIMIT_EXCEEDED", "DAILY_LIMIT_EXCEEDED"]
+        if any(indicator in corrected_text for indicator in rate_limit_indicators):
+            logger.warning(
+                "Rate limit detected during page text correction on page %d. Stopping processing.",
+                page_num,
+            )
+            return corrected_text, 1.0, True
+
+        return corrected_text, 1.0, False
+
+    def _build_page_result(
+        self,
+        pdf_path: Path,
+        page_num: int,
+        page_image: np.ndarray,
+        regions: list[dict[str, Any]],
+        processed_regions: list[dict[str, Any]],
+        raw_text: str,
+        corrected_text: str,
+        correction_confidence: float,
+    ) -> dict[str, Any]:
+        page_height, page_width = page_image.shape[0], page_image.shape[1]
+
+        return {
+            "image_path": str(self.temp_dir / f"{pdf_path.stem}_page_{page_num}.jpg"),
+            "width": int(page_width),
+            "height": int(page_height),
+            "regions": regions,
+            "processed_regions": processed_regions,
+            "raw_text": raw_text,
+            "corrected_text": corrected_text,
+            "correction_confidence": correction_confidence,
+            "processed_at": tz_now().isoformat(),
+            "page_number": page_num,
+        }
+
+    def _save_page_output(self, page_output_dir: Path, page_num: int, page_result: dict[str, Any]) -> None:
+        page_output_file = page_output_dir / f"page_{page_num}.json"
+        with page_output_file.open("w", encoding="utf-8") as f:
+            json.dump(page_result, f, ensure_ascii=False, indent=2)
+        logger.info("Results saved to %s", page_output_file)
+
+    def _create_pdf_summary(
+        self,
+        pdf_path: Path,
+        total_pages: int,
+        processed_pages: list[dict[str, Any]],
+        processing_stopped: bool,
+        summary_output_dir: Path,
+    ) -> dict[str, Any]:
+        pages_summary, status_counts = self._build_pages_summary(processed_pages)
+
+        temp_summary_for_errors = {
+            "pages_data": processed_pages,
+            "processing_stopped": processing_stopped,
+        }
         has_errors = self._check_for_any_errors(temp_summary_for_errors)
 
-        # Create legacy-style summary
         summary = {
             "pdf_name": pdf_path.stem,
             "pdf_path": str(pdf_path),
@@ -493,23 +557,36 @@ class Pipeline:
             "pages": pages_summary,
         }
 
-        # Save summary
-        # Determine output filename based on completion status
-        if processing_stopped:
-            summary_filename = "summary_incomplete.json"
-        elif has_errors:
-            summary_filename = "summary_partial.json"
-        else:
-            summary_filename = "summary.json"
-
+        summary_filename = self._determine_summary_filename(processing_stopped, has_errors)
         summary_output_file = summary_output_dir / summary_filename
         with summary_output_file.open("w", encoding="utf-8") as f:
             json.dump(summary, f, ensure_ascii=False, indent=2)
         logger.info("Results saved to %s", summary_output_file)
 
-        logger.info("PDF processing complete: %s -> %s", pdf_path, summary_output_dir)
-
         return summary
+
+    def _build_pages_summary(
+        self, processed_pages: list[dict[str, Any]]
+    ) -> tuple[list[dict[str, Any]], dict[str, int]]:
+        pages_summary: list[dict[str, Any]] = []
+        status_counts = {"complete": 0, "partial": 0, "incomplete": 0}
+
+        for page_result in processed_pages:
+            page_no = int(page_result.get("page_number", 0))
+            status = "partial" if page_result.get("error") else "complete"
+            status_counts[status] += 1
+            pages_summary.append(
+                {"page": page_no, "status": status, "file_suffix": "" if status == "complete" else status}
+            )
+
+        return pages_summary, status_counts
+
+    def _determine_summary_filename(self, processing_stopped: bool, has_errors: bool) -> str:
+        if processing_stopped:
+            return "summary_incomplete.json"
+        if has_errors:
+            return "summary_partial.json"
+        return "summary.json"
 
     def _determine_pages_to_process(
         self,
