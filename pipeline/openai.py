@@ -11,10 +11,11 @@ import io
 import json
 import logging
 import os
-from typing import Any, TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import cv2
 import numpy as np
+
 # The OpenAI client class is dynamically provided by the SDK; import lazily.
 try:  # pragma: no cover - runtime import for actual usage
     from openai import OpenAI as _OpenAI  # pyright: ignore[reportAttributeAccessIssue]

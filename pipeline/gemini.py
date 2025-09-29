@@ -105,10 +105,6 @@ class GeminiClient:
                 }
             ]
 
-            generate_content_config = types.GenerateContentConfig(
-                response_mime_type="text/plain",
-            )
-
             # Apply rate limiting
             estimated_tokens = 2000  # Estimated tokens for image + text
             if not rate_limiter.wait_if_needed(estimated_tokens):
@@ -137,7 +133,6 @@ class GeminiClient:
             response = client.models.generate_content(
                 model=self.gemini_model,
                 contents=cast(types.ContentListUnionDict, contents),
-                config=generate_content_config,
             )
 
             del pil_image, img_byte_arr, img_bytes, region_img_resized
@@ -241,10 +236,6 @@ class GeminiClient:
                 }
             ]
 
-            generate_content_config = types.GenerateContentConfig(
-                response_mime_type="text/plain",
-            )
-
             # Apply rate limiting
             estimated_tokens = 2500  # Estimated tokens for special content analysis
             if not rate_limiter.wait_if_needed(estimated_tokens):
@@ -273,7 +264,6 @@ class GeminiClient:
             response = client.models.generate_content(
                 model=self.gemini_model,
                 contents=cast(types.ContentListUnionDict, contents),
-                config=generate_content_config,
             )
 
             del pil_image, img_byte_arr, img_bytes, region_img_resized
@@ -328,6 +318,8 @@ class GeminiClient:
         if not self.is_available() or not text:
             return self._text_correction_result(text, 0.0)
 
+        result: dict[str, Any]
+
         try:
             contents = [
                 {
@@ -336,77 +328,66 @@ class GeminiClient:
                 }
             ]
 
-            generate_content_config = types.GenerateContentConfig(
-                response_mime_type="text/plain",
-            )
-
             # Apply rate limiting
             estimated_tokens = len(text.split()) * 2  # Rough estimate based on input text
             if not rate_limiter.wait_if_needed(estimated_tokens):
-                return self._text_correction_result(
+                result = self._text_correction_result(
                     text,
                     0.0,
                     error="[TEXT_CORRECTION_DAILY_LIMIT_EXCEEDED]",
                     error_message="Daily rate limit exceeded",
                 )
+            else:
+                logger.info("Requesting Gemini correct_text (model=%s)", self.gemini_model)
+                client = self.client
+                if client is None:
+                    logger.warning("Gemini API client became unavailable")
+                    result = self._text_correction_result(
+                        text,
+                        0.0,
+                        error="[TEXT_CORRECTION_FAILED]",
+                        error_message="Gemini client not initialized",
+                    )
+                else:
+                    response = client.models.generate_content(
+                        model=self.gemini_model,
+                        contents=cast(types.ContentListUnionDict, contents),
+                    )
 
-            logger.info("Requesting Gemini correct_text (model=%s)", self.gemini_model)
-            client = self.client
-            if client is None:
-                logger.warning("Gemini API client became unavailable")
-                return self._text_correction_result(
-                    text,
-                    0.0,
-                    error="[TEXT_CORRECTION_FAILED]",
-                    error_message="Gemini client not initialized",
-                )
-
-            response = client.models.generate_content(
-                model=self.gemini_model,
-                contents=cast(types.ContentListUnionDict, contents),
-                config=generate_content_config,
-            )
-
-            corrected_text = (response.text or "").strip()
-
-            sm = difflib.SequenceMatcher(None, text, corrected_text)
-            confidence = sm.ratio()
-
-            return self._text_correction_result(corrected_text, confidence)
+                    corrected_text = (response.text or "").strip()
+                    confidence = difflib.SequenceMatcher(None, text, corrected_text).ratio()
+                    result = self._text_correction_result(corrected_text, confidence)
 
         except Exception as e:
             error_str = str(e)
             logger.error("Text correction error: %s", e)
 
-            # Handle rate limit errors specifically
             if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
                 logger.error("Rate limit exceeded during text correction")
-                return self._text_correction_result(
+                result = self._text_correction_result(
                     text,
                     0.0,
                     error="[TEXT_CORRECTION_RATE_LIMIT_EXCEEDED]",
                     error_message=error_str,
                 )
-
-            # Handle service unavailable errors
             elif "503" in error_str or "UNAVAILABLE" in error_str:
                 logger.error("Service unavailable during text correction")
-                return self._text_correction_result(
+                result = self._text_correction_result(
                     text,
                     0.0,
                     error="[TEXT_CORRECTION_SERVICE_UNAVAILABLE]",
                     error_message=error_str,
                 )
-
-            # For other errors, return original text with error indicator
             else:
                 logger.error("Text correction failed with other error")
-                return self._text_correction_result(
+                result = self._text_correction_result(
                     text,
                     0.0,
                     error="[TEXT_CORRECTION_FAILED]",
                     error_message=error_str,
                 )
+
+        return result
 
     def _text_correction_result(
         self,
