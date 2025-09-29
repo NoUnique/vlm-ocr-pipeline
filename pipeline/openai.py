@@ -11,15 +11,20 @@ import io
 import json
 import logging
 import os
-from typing import Any
+from typing import Any, TYPE_CHECKING, cast
 
 import cv2
 import numpy as np
-# The OpenAI client class is dynamically provided by the SDK; use Any for typing.
-try:
-    from openai import OpenAI
-except ImportError:  # pragma: no cover - fallback for type checkers
-    OpenAI = Any  # type: ignore
+# The OpenAI client class is dynamically provided by the SDK; import lazily.
+try:  # pragma: no cover - runtime import for actual usage
+    from openai import OpenAI as _OpenAI
+except ImportError:  # pragma: no cover - allows type checking without dependency
+    _OpenAI = None  # type: ignore[assignment]
+
+if TYPE_CHECKING:
+    from openai import OpenAI as OpenAIClientType
+else:  # pragma: no cover - used only at runtime
+    OpenAIClientType = Any
 from PIL import Image
 
 logger = logging.getLogger(__name__)
@@ -52,7 +57,7 @@ class OpenAIClient:
 
         self.client = self._setup_openai_client()
 
-    def _setup_openai_client(self) -> Any | None:
+    def _setup_openai_client(self) -> OpenAIClientType | None:
         """Setup OpenAI API client"""
         try:
             if not self.api_key:
@@ -63,7 +68,12 @@ class OpenAIClient:
             if self.base_url:
                 client_kwargs["base_url"] = self.base_url
 
-            client = OpenAI(**client_kwargs)
+            if _OpenAI is None:
+                logger.warning("OpenAI SDK not available; client not initialized")
+                return None
+
+            client_cls = cast(type[OpenAIClientType], _OpenAI)
+            client = client_cls(**client_kwargs)
             logger.info("OpenAI API client initialized successfully (base_url: %s)", self.base_url or "default")
             return client
         except Exception as e:
@@ -130,7 +140,16 @@ class OpenAIClient:
             logger.info(
                 "Requesting OpenAI extract_text (model=%s, base_url=%s)", self.model, self.base_url or "default"
             )
-            response = self.client.chat.completions.create(
+            client = self.client
+            if client is None:
+                logger.warning(
+                    "OpenAI API client became unavailable (model=%s, base_url=%s)",
+                    self.model,
+                    self.base_url or "default",
+                )
+                return {"type": region_info["type"], "coords": region_info["coords"], "text": "", "confidence": 0.0}
+
+            response = client.chat.completions.create(
                 model=self.model, messages=messages, max_tokens=2000, temperature=0.1
             )
 
@@ -219,7 +238,22 @@ class OpenAIClient:
                 self.model,
                 self.base_url or "default",
             )
-            response = self.client.chat.completions.create(
+            client = self.client
+            if client is None:
+                logger.warning(
+                    "OpenAI API client became unavailable (model=%s, base_url=%s)",
+                    self.model,
+                    self.base_url or "default",
+                )
+                return {
+                    "type": region_info["type"],
+                    "coords": region_info["coords"],
+                    "content": "OpenAI API not available",
+                    "analysis": "Client not initialized",
+                    "confidence": 0.0,
+                }
+
+            response = client.chat.completions.create(
                 model=self.model, messages=messages, max_tokens=3000, temperature=0.1
             )
 
@@ -279,7 +313,21 @@ class OpenAIClient:
             logger.info(
                 "Requesting OpenAI correct_text (model=%s, base_url=%s)", self.model, self.base_url or "default"
             )
-            response = self.client.chat.completions.create(
+            client = self.client
+            if client is None:
+                logger.warning(
+                    "OpenAI API client became unavailable (model=%s, base_url=%s)",
+                    self.model,
+                    self.base_url or "default",
+                )
+                return self._text_correction_result(
+                    text,
+                    0.0,
+                    error="[TEXT_CORRECTION_FAILED]",
+                    error_message="OpenAI client not initialized",
+                )
+
+            response = client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 max_tokens=len(text.split()) * 3,  # Allow for expansion
