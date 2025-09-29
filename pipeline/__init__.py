@@ -8,7 +8,7 @@ import hashlib
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 # Load environment variables if not already loaded
 try:
@@ -25,10 +25,10 @@ from pdf2image import convert_from_path, pdfinfo_from_path
 from models import DocLayoutYOLO
 
 from .gemini import GeminiClient
+from .misc import tz_now
 from .openai import OpenAIClient
 from .prompt import PromptManager
 from .ratelimit import rate_limiter
-from .misc import tz_now
 
 logger = logging.getLogger(__name__)
 
