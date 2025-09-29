@@ -9,7 +9,7 @@ import io
 import json
 import logging
 import os
-from typing import Any
+from typing import Any, cast
 
 import cv2
 import numpy as np
@@ -91,13 +91,18 @@ class GeminiClient:
             img_bytes = img_byte_arr.getvalue()
 
             contents = [
-                types.Content(
-                    role="user",
-                    parts=[
-                        types.Part.from_text(text=prompt),
-                        types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
+                {
+                    "role": "user",
+                    "parts": [
+                        {"text": prompt},
+                        {
+                            "inline_data": types.Blob(
+                                mime_type="image/jpeg",
+                                data=img_bytes,
+                            )
+                        },
                     ],
-                ),
+                }
             ]
 
             generate_content_config = types.GenerateContentConfig(
@@ -131,7 +136,7 @@ class GeminiClient:
 
             response = client.models.generate_content(
                 model=self.gemini_model,
-                contents=contents,
+                contents=cast(types.ContentListUnionDict, contents),
                 config=generate_content_config,
             )
 
@@ -222,13 +227,18 @@ class GeminiClient:
             img_bytes = img_byte_arr.getvalue()
 
             contents = [
-                types.Content(
-                    role="user",
-                    parts=[
-                        types.Part.from_text(text=prompt),
-                        types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
+                {
+                    "role": "user",
+                    "parts": [
+                        {"text": prompt},
+                        {
+                            "inline_data": types.Blob(
+                                mime_type="image/jpeg",
+                                data=img_bytes,
+                            )
+                        },
                     ],
-                ),
+                }
             ]
 
             generate_content_config = types.GenerateContentConfig(
@@ -262,7 +272,7 @@ class GeminiClient:
 
             response = client.models.generate_content(
                 model=self.gemini_model,
-                contents=contents,
+                contents=cast(types.ContentListUnionDict, contents),
                 config=generate_content_config,
             )
 
@@ -316,14 +326,14 @@ class GeminiClient:
             Dictionary containing corrected text and confidence
         """
         if not self.is_available() or not text:
-            return {"corrected_text": text, "confidence": 0.0}
+            return self._text_correction_result(text, 0.0)
 
         try:
             contents = [
-                types.Content(
-                    role="user",
-                    parts=[types.Part.from_text(text=f"{system_prompt}\n\n{user_prompt}")],
-                ),
+                {
+                    "role": "user",
+                    "parts": [{"text": f"{system_prompt}\n\n{user_prompt}"}],
+                }
             ]
 
             generate_content_config = types.GenerateContentConfig(
@@ -333,17 +343,27 @@ class GeminiClient:
             # Apply rate limiting
             estimated_tokens = len(text.split()) * 2  # Rough estimate based on input text
             if not rate_limiter.wait_if_needed(estimated_tokens):
-                return "[TEXT_CORRECTION_DAILY_LIMIT_EXCEEDED]"
+                return self._text_correction_result(
+                    text,
+                    0.0,
+                    error="[TEXT_CORRECTION_DAILY_LIMIT_EXCEEDED]",
+                    error_message="Daily rate limit exceeded",
+                )
 
             logger.info("Requesting Gemini correct_text (model=%s)", self.gemini_model)
             client = self.client
             if client is None:
                 logger.warning("Gemini API client became unavailable")
-                return "[TEXT_CORRECTION_FAILED]"
+                return self._text_correction_result(
+                    text,
+                    0.0,
+                    error="[TEXT_CORRECTION_FAILED]",
+                    error_message="Gemini client not initialized",
+                )
 
             response = client.models.generate_content(
                 model=self.gemini_model,
-                contents=contents,
+                contents=cast(types.ContentListUnionDict, contents),
                 config=generate_content_config,
             )
 
@@ -352,7 +372,7 @@ class GeminiClient:
             sm = difflib.SequenceMatcher(None, text, corrected_text)
             confidence = sm.ratio()
 
-            return {"corrected_text": corrected_text, "confidence": confidence}
+            return self._text_correction_result(corrected_text, confidence)
 
         except Exception as e:
             error_str = str(e)
@@ -361,17 +381,46 @@ class GeminiClient:
             # Handle rate limit errors specifically
             if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
                 logger.error("Rate limit exceeded during text correction")
-                return "[TEXT_CORRECTION_RATE_LIMIT_EXCEEDED]"
+                return self._text_correction_result(
+                    text,
+                    0.0,
+                    error="[TEXT_CORRECTION_RATE_LIMIT_EXCEEDED]",
+                    error_message=error_str,
+                )
 
             # Handle service unavailable errors
             elif "503" in error_str or "UNAVAILABLE" in error_str:
                 logger.error("Service unavailable during text correction")
-                return "[TEXT_CORRECTION_SERVICE_UNAVAILABLE]"
+                return self._text_correction_result(
+                    text,
+                    0.0,
+                    error="[TEXT_CORRECTION_SERVICE_UNAVAILABLE]",
+                    error_message=error_str,
+                )
 
             # For other errors, return original text with error indicator
             else:
                 logger.error("Text correction failed with other error")
-                return f"[TEXT_CORRECTION_FAILED]: {text}"
+                return self._text_correction_result(
+                    text,
+                    0.0,
+                    error="[TEXT_CORRECTION_FAILED]",
+                    error_message=error_str,
+                )
+
+    def _text_correction_result(
+        self,
+        corrected_text: str,
+        confidence: float,
+        error: str | None = None,
+        error_message: str | None = None,
+    ) -> dict[str, Any]:
+        result: dict[str, Any] = {"corrected_text": corrected_text, "confidence": confidence}
+        if error:
+            result["error"] = error
+        if error_message:
+            result["error_message"] = error_message
+        return result
 
     def _parse_gemini_response(self, response_text: str, region_info: dict[str, Any]) -> dict[str, Any]:
         """Parse Gemini response for special regions"""

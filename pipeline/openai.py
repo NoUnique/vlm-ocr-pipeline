@@ -15,7 +15,11 @@ from typing import Any
 
 import cv2
 import numpy as np
-from openai import OpenAI
+# The OpenAI client class is dynamically provided by the SDK; use Any for typing.
+try:
+    from openai import OpenAI
+except ImportError:  # pragma: no cover - fallback for type checkers
+    OpenAI = Any  # type: ignore
 from PIL import Image
 
 logger = logging.getLogger(__name__)
@@ -48,7 +52,7 @@ class OpenAIClient:
 
         self.client = self._setup_openai_client()
 
-    def _setup_openai_client(self) -> OpenAI | None:
+    def _setup_openai_client(self) -> Any | None:
         """Setup OpenAI API client"""
         try:
             if not self.api_key:
@@ -267,7 +271,7 @@ class OpenAIClient:
             Dictionary containing corrected text and confidence
         """
         if not self.is_available() or not text:
-            return {"corrected_text": text, "confidence": 0.0}
+            return self._text_correction_result(text, 0.0)
 
         try:
             messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
@@ -287,7 +291,7 @@ class OpenAIClient:
             sm = difflib.SequenceMatcher(None, text, corrected_text)
             confidence = sm.ratio()
 
-            return {"corrected_text": corrected_text, "confidence": confidence}
+            return self._text_correction_result(corrected_text, confidence)
 
         except Exception as e:
             error_str = str(e)
@@ -296,17 +300,46 @@ class OpenAIClient:
             # Handle rate limit errors specifically
             if "429" in error_str or "rate_limit" in error_str.lower():
                 logger.error("Rate limit exceeded during text correction")
-                return "[TEXT_CORRECTION_RATE_LIMIT_EXCEEDED]"
+                return self._text_correction_result(
+                    text,
+                    0.0,
+                    error="[TEXT_CORRECTION_RATE_LIMIT_EXCEEDED]",
+                    error_message=error_str,
+                )
 
             # Handle service unavailable errors
             elif "503" in error_str or "unavailable" in error_str.lower():
                 logger.error("Service unavailable during text correction")
-                return "[TEXT_CORRECTION_SERVICE_UNAVAILABLE]"
+                return self._text_correction_result(
+                    text,
+                    0.0,
+                    error="[TEXT_CORRECTION_SERVICE_UNAVAILABLE]",
+                    error_message=error_str,
+                )
 
             # For other errors, return original text with error indicator
             else:
                 logger.error("Text correction failed with other error")
-                return f"[TEXT_CORRECTION_FAILED]: {text}"
+                return self._text_correction_result(
+                    text,
+                    0.0,
+                    error="[TEXT_CORRECTION_FAILED]",
+                    error_message=error_str,
+                )
+
+    def _text_correction_result(
+        self,
+        corrected_text: str,
+        confidence: float,
+        error: str | None = None,
+        error_message: str | None = None,
+    ) -> dict[str, Any]:
+        result: dict[str, Any] = {"corrected_text": corrected_text, "confidence": confidence}
+        if error:
+            result["error"] = error
+        if error_message:
+            result["error_message"] = error_message
+        return result
 
     def _parse_openai_response(self, response_text: str, region_info: dict[str, Any]) -> dict[str, Any]:
         """Parse OpenAI response for special regions"""
