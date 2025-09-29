@@ -139,98 +139,85 @@ class RateLimitManager:
             return
 
         try:
-            with open(self.state_file) as f:
-                data = json.load(f)
-
-            # Load basic settings
-            self.tier = data.get("tier", self.tier)
-            self.current_model = data.get("current_model", data.get("model", self.current_model))
-            self.model = self.current_model  # For compatibility
-
-            now = time.time()
-
-            # Check if this is new model-specific format
-            if "models" in data:
-                # New format: model-specific states
-                for model_name, model_data in data["models"].items():
-                    # Load dates
-                    saved_date = model_data.get("last_reset_date")
-                    if saved_date:
-                        saved_date = date.fromisoformat(saved_date)
-                        if saved_date != tz_now().date():
-                            # Reset daily counter if date changed
-                            daily_requests = 0
-                            last_reset_date = tz_now().date()
-                        else:
-                            daily_requests = model_data.get("daily_requests", 0)
-                            last_reset_date = saved_date
-                    else:
-                        daily_requests = model_data.get("daily_requests", 0)
-                        last_reset_date = tz_now().date()
-
-                    # Load request times (only keep recent ones)
-                    request_times = model_data.get("request_times", [])
-                    valid_request_times = deque(
-                        t for t in request_times if now - t <= REQUEST_WINDOW_SECONDS
-                    )
-
-                    # Load token usage (only keep recent ones)
-                    token_usage = model_data.get("token_usage", [])
-                    valid_token_usage = deque(
-                        (t, tokens) for t, tokens in token_usage if now - t <= REQUEST_WINDOW_SECONDS
-                    )
-
-                    self.model_states[model_name] = {
-                        "request_times": valid_request_times,
-                        "token_usage": valid_token_usage,
-                        "daily_requests": daily_requests,
-                        "last_reset_date": last_reset_date,
-                    }
-
-                logger.debug("Loaded model-specific rate limit state for %d models", len(self.model_states))
-
-            else:
-                # Old format: single model state - migrate to new format
-                model_name = data.get("model", self.current_model)
-                daily_requests = data.get("daily_requests", 0)
-
-                # Load dates
-                saved_date = data.get("last_reset_date")
-                if saved_date:
-                    saved_date = date.fromisoformat(saved_date)
-                    if saved_date != tz_now().date():
-                        daily_requests = 0
-                        last_reset_date = tz_now().date()
-                    else:
-                        last_reset_date = saved_date
-                else:
-                    last_reset_date = tz_now().date()
-
-                # Load request times (only keep recent ones)
-                request_times = data.get("request_times", [])
-                valid_request_times = deque(
-                    t for t in request_times if now - t <= REQUEST_WINDOW_SECONDS
-                )
-
-                # Load token usage (only keep recent ones)
-                token_usage = data.get("token_usage", [])
-                valid_token_usage = deque(
-                    (t, tokens) for t, tokens in token_usage if now - t <= REQUEST_WINDOW_SECONDS
-                )
-
-                self.model_states[model_name] = {
-                    "request_times": valid_request_times,
-                    "token_usage": valid_token_usage,
-                    "daily_requests": daily_requests,
-                    "last_reset_date": last_reset_date,
-                }
-
-                logger.info("Migrated old format rate limit state for model %s", model_name)
-
+            data = self._read_state_file()
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.warning("Failed to load rate limit state: %s", e)
-            # Reset to defaults if file is corrupted
             self.model_states.clear()
+            return
+
+        self._apply_basic_state_settings(data)
+        now = time.time()
+        today = tz_now().date()
+
+        models_data = data.get("models")
+        if isinstance(models_data, dict):
+            self._load_models_state_from_new_format(models_data, now, today)
+        else:
+            self._load_state_from_legacy_format(data, now, today)
+
+    def _read_state_file(self) -> dict[str, Any]:
+        with open(self.state_file) as f:
+            return json.load(f)
+
+    def _apply_basic_state_settings(self, data: dict[str, Any]) -> None:
+        self.tier = data.get("tier", self.tier)
+        self.current_model = data.get("current_model", data.get("model", self.current_model))
+        self.model = self.current_model
+
+    def _load_models_state_from_new_format(
+        self, models_data: dict[str, Any], now: float, today: date
+    ) -> None:
+        for model_name, model_data in models_data.items():
+            state = self._build_model_state(model_data, now, today)
+            self.model_states[model_name] = state
+
+        logger.debug("Loaded model-specific rate limit state for %d models", len(self.model_states))
+
+    def _load_state_from_legacy_format(self, data: dict[str, Any], now: float, today: date) -> None:
+        model_name = data.get("model", self.current_model)
+        state = self._build_model_state(data, now, today)
+        self.model_states[model_name] = state
+        logger.info("Migrated old format rate limit state for model %s", model_name)
+
+    def _build_model_state(self, model_data: dict[str, Any], now: float, today: date) -> dict[str, Any]:
+        daily_requests = model_data.get("daily_requests", 0)
+        saved_date_value = model_data.get("last_reset_date")
+        last_reset_date, daily_requests = self._resolve_last_reset_date(
+            saved_date_value, daily_requests, today
+        )
+
+        request_times = model_data.get("request_times", [])
+        valid_request_times = deque(
+            t for t in request_times if now - t <= REQUEST_WINDOW_SECONDS
+        )
+
+        token_usage = model_data.get("token_usage", [])
+        valid_token_usage = deque(
+            (t, tokens) for t, tokens in token_usage if now - t <= REQUEST_WINDOW_SECONDS
+        )
+
+        return {
+            "request_times": valid_request_times,
+            "token_usage": valid_token_usage,
+            "daily_requests": daily_requests,
+            "last_reset_date": last_reset_date,
+        }
+
+    def _resolve_last_reset_date(
+        self, saved_date_value: str | None, daily_requests: int, today: date
+    ) -> tuple[date, int]:
+        if not saved_date_value:
+            return today, daily_requests
+
+        try:
+            saved_date = date.fromisoformat(saved_date_value)
+        except ValueError:
+            raise
+
+        if saved_date != today:
+            return today, 0
+
+        return saved_date, daily_requests
 
     def _save_state(self):
         """Save rate limit state to file (new model-specific format)"""
