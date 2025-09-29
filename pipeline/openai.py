@@ -17,12 +17,12 @@ import cv2
 import numpy as np
 # The OpenAI client class is dynamically provided by the SDK; import lazily.
 try:  # pragma: no cover - runtime import for actual usage
-    from openai import OpenAI as _OpenAI
+    from openai import OpenAI as _OpenAI  # pyright: ignore[reportAttributeAccessIssue]
 except ImportError:  # pragma: no cover - allows type checking without dependency
     _OpenAI = None  # type: ignore[assignment]
 
 if TYPE_CHECKING:
-    from openai import OpenAI as OpenAIClientType
+    OpenAIClientType = Any
 else:  # pragma: no cover - used only at runtime
     OpenAIClientType = Any
 from PIL import Image
