@@ -14,6 +14,7 @@ from typing import Any
 
 import yaml
 
+from .constants import REQUEST_WINDOW_SECONDS
 from .misc import tz_now
 
 logger = logging.getLogger(__name__)
@@ -169,11 +170,15 @@ class RateLimitManager:
 
                     # Load request times (only keep recent ones)
                     request_times = model_data.get("request_times", [])
-                    valid_request_times = deque(t for t in request_times if now - t <= 60)
+                    valid_request_times = deque(
+                        t for t in request_times if now - t <= REQUEST_WINDOW_SECONDS
+                    )
 
                     # Load token usage (only keep recent ones)
                     token_usage = model_data.get("token_usage", [])
-                    valid_token_usage = deque((t, tokens) for t, tokens in token_usage if now - t <= 60)
+                    valid_token_usage = deque(
+                        (t, tokens) for t, tokens in token_usage if now - t <= REQUEST_WINDOW_SECONDS
+                    )
 
                     self.model_states[model_name] = {
                         "request_times": valid_request_times,
@@ -203,11 +208,15 @@ class RateLimitManager:
 
                 # Load request times (only keep recent ones)
                 request_times = data.get("request_times", [])
-                valid_request_times = deque(t for t in request_times if now - t <= 60)
+                valid_request_times = deque(
+                    t for t in request_times if now - t <= REQUEST_WINDOW_SECONDS
+                )
 
                 # Load token usage (only keep recent ones)
                 token_usage = data.get("token_usage", [])
-                valid_token_usage = deque((t, tokens) for t, tokens in token_usage if now - t <= 60)
+                valid_token_usage = deque(
+                    (t, tokens) for t, tokens in token_usage if now - t <= REQUEST_WINDOW_SECONDS
+                )
 
                 self.model_states[model_name] = {
                     "request_times": valid_request_times,
@@ -255,11 +264,11 @@ class RateLimitManager:
         now = time.time()
 
         # Clean up request times older than 1 minute
-        while state["request_times"] and now - state["request_times"][0] > 60:
+        while state["request_times"] and now - state["request_times"][0] > REQUEST_WINDOW_SECONDS:
             state["request_times"].popleft()
 
         # Clean up token usage older than 1 minute
-        while state["token_usage"] and now - state["token_usage"][0][0] > 60:
+        while state["token_usage"] and now - state["token_usage"][0][0] > REQUEST_WINDOW_SECONDS:
             state["token_usage"].popleft()
 
         # Reset daily counter if date changed
@@ -279,7 +288,7 @@ class RateLimitManager:
         # RPM check
         if limits.get("rpm") and len(state["request_times"]) >= limits["rpm"]:
             oldest_request = state["request_times"][0]
-            wait_time = 60 - (time.time() - oldest_request)
+            wait_time = REQUEST_WINDOW_SECONDS - (time.time() - oldest_request)
             if wait_time > 0:
                 wait_times.append(wait_time)
 
@@ -293,7 +302,7 @@ class RateLimitManager:
                 for timestamp, tokens in state["token_usage"]:
                     if tokens_to_remove <= 0:
                         break
-                    wait_time = 60 - (time.time() - timestamp)
+                    wait_time = REQUEST_WINDOW_SECONDS - (time.time() - timestamp)
                     tokens_to_remove -= tokens
 
                 if wait_time > 0:
