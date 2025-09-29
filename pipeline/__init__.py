@@ -144,9 +144,11 @@ class Pipeline:
     def _calculate_image_hash(self, image: np.ndarray) -> str:
         """Calculate hash for image caching"""
         small_img = cv2.resize(image, (32, 32))
-        _, buffer = cv2.imencode(".jpg", small_img, [cv2.IMWRITE_JPEG_QUALITY, 50])
-        image_hash = hashlib.md5(buffer).hexdigest()
-        del small_img, buffer
+        success, encoded = cv2.imencode(".jpg", small_img, [cv2.IMWRITE_JPEG_QUALITY, 50])
+        if not success:
+            raise ValueError("Failed to encode image for hashing")
+        image_hash = hashlib.md5(encoded.tobytes()).hexdigest()
+        del small_img, encoded
         return image_hash
 
     def _get_cached_result(self, image_hash: str, cache_type: str) -> dict[str, Any] | None:
@@ -364,7 +366,7 @@ class Pipeline:
         logger.info("Processing PDF: %s", pdf_path)
 
         # Get PDF info
-        pdf_info = pdfinfo_from_path(pdf_path)
+        pdf_info = pdfinfo_from_path(str(pdf_path))
         total_pages = pdf_info["Pages"]
 
         # Determine which pages to process
