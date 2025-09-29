@@ -273,18 +273,20 @@ class RateLimitManager:
         wait_times = []
 
         # RPM check
-        if limits.get("rpm") and len(state["request_times"]) >= limits["rpm"]:
+        rpm_limit = limits.get("rpm")
+        if isinstance(rpm_limit, int) and len(state["request_times"]) >= rpm_limit:
             oldest_request = state["request_times"][0]
             wait_time = REQUEST_WINDOW_SECONDS - (time.time() - oldest_request)
             if wait_time > 0:
                 wait_times.append(wait_time)
 
         # TPM check
-        if limits.get("tpm"):
+        tpm_limit = limits.get("tpm")
+        if isinstance(tpm_limit, int):
             current_tokens = sum(tokens for _, tokens in state["token_usage"])
-            if current_tokens + estimated_tokens > limits["tpm"]:
+            if current_tokens + estimated_tokens > tpm_limit:
                 # Find the oldest token usage that we need to wait for
-                tokens_to_remove = (current_tokens + estimated_tokens) - limits["tpm"]
+                tokens_to_remove = (current_tokens + estimated_tokens) - tpm_limit
                 wait_time = 0
                 for timestamp, tokens in state["token_usage"]:
                     if tokens_to_remove <= 0:
@@ -296,7 +298,8 @@ class RateLimitManager:
                     wait_times.append(wait_time)
 
         # RPD check
-        if limits.get("rpd") and state["daily_requests"] >= limits["rpd"]:
+        rpd_limit = limits.get("rpd")
+        if isinstance(rpd_limit, int) and state["daily_requests"] >= rpd_limit:
             # Wait until next day using configured timezone
             now_dt = tz_now()
             tomorrow = now_dt.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
@@ -322,8 +325,9 @@ class RateLimitManager:
             state = self._get_model_state(self.current_model)
 
             # Check daily limit
-            if limits.get("rpd") and state["daily_requests"] >= limits["rpd"]:
-                logger.error("Daily request limit (%s) exceeded for model %s", limits["rpd"], self.current_model)
+            rpd_limit = limits.get("rpd")
+            if isinstance(rpd_limit, int) and state["daily_requests"] >= rpd_limit:
+                logger.error("Daily request limit (%s) exceeded for model %s", rpd_limit, self.current_model)
                 return False
 
             wait_time = self._calculate_wait_time(estimated_tokens)
@@ -360,11 +364,7 @@ class RateLimitManager:
                 "model": self.current_model,
                 "limits": limits,
                 "current": {"rpm": current_rpm, "tpm": current_tpm, "rpd": current_rpd},
-                "utilization": {
-                    "rpm_percent": (current_rpm / limits["rpm"] * 100) if limits.get("rpm") else 0,
-                    "tpm_percent": (current_tpm / limits["tpm"] * 100) if limits.get("tpm") else 0,
-                    "rpd_percent": (current_rpd / limits["rpd"] * 100) if limits.get("rpd") else 0,
-                },
+                "utilization": self._calculate_utilization(limits, current_rpm, current_tpm, current_rpd),
                 "all_models": {
                     model_name: {
                         "rpm": len(model_state["request_times"]),
@@ -374,6 +374,27 @@ class RateLimitManager:
                     for model_name, model_state in self.model_states.items()
                 },
             }
+
+    def _calculate_utilization(
+        self,
+        limits: dict[str, int | None],
+        current_rpm: int,
+        current_tpm: int,
+        current_rpd: int,
+    ) -> dict[str, float]:
+        rpm_limit = limits.get("rpm")
+        tpm_limit = limits.get("tpm")
+        rpd_limit = limits.get("rpd")
+
+        rpm_percent = (current_rpm / rpm_limit * 100) if isinstance(rpm_limit, int) and rpm_limit else 0.0
+        tpm_percent = (current_tpm / tpm_limit * 100) if isinstance(tpm_limit, int) and tpm_limit else 0.0
+        rpd_percent = (current_rpd / rpd_limit * 100) if isinstance(rpd_limit, int) and rpd_limit else 0.0
+
+        return {
+            "rpm_percent": rpm_percent,
+            "tpm_percent": tpm_percent,
+            "rpd_percent": rpd_percent,
+        }
 
 
 # Global instance

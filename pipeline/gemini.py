@@ -117,7 +117,19 @@ class GeminiClient:
                 }
 
             logger.info("Requesting Gemini extract_text (model=%s)", self.gemini_model)
-            response = self.client.models.generate_content(
+            client = self.client
+            if client is None:
+                logger.warning("Gemini API client became unavailable")
+                return {
+                    "type": region_info["type"],
+                    "coords": region_info["coords"],
+                    "text": "",
+                    "confidence": 0.0,
+                    "error": "client_unavailable",
+                    "error_message": "Gemini client not initialized",
+                }
+
+            response = client.models.generate_content(
                 model=self.gemini_model,
                 contents=contents,
                 config=generate_content_config,
@@ -126,7 +138,7 @@ class GeminiClient:
             del pil_image, img_byte_arr, img_bytes, region_img_resized
             gc.collect()
 
-            text = response.text.strip()
+            text = (response.text or "").strip()
 
             result = {
                 "type": region_info["type"],
@@ -237,7 +249,18 @@ class GeminiClient:
                 }
 
             logger.info("Requesting Gemini process_special_region (model=%s)", self.gemini_model)
-            response = self.client.models.generate_content(
+            client = self.client
+            if client is None:
+                logger.warning("Gemini API client became unavailable")
+                return {
+                    "type": region_info["type"],
+                    "coords": region_info["coords"],
+                    "content": "Gemini API not available",
+                    "analysis": "Client not initialized",
+                    "confidence": 0.0,
+                }
+
+            response = client.models.generate_content(
                 model=self.gemini_model,
                 contents=contents,
                 config=generate_content_config,
@@ -246,7 +269,7 @@ class GeminiClient:
             del pil_image, img_byte_arr, img_bytes, region_img_resized
             gc.collect()
 
-            response_text = response.text.strip()
+            response_text = (response.text or "").strip()
             parsed_result = self._parse_gemini_response(response_text, region_info)
 
             del response
@@ -313,13 +336,18 @@ class GeminiClient:
                 return "[TEXT_CORRECTION_DAILY_LIMIT_EXCEEDED]"
 
             logger.info("Requesting Gemini correct_text (model=%s)", self.gemini_model)
-            response = self.client.models.generate_content(
+            client = self.client
+            if client is None:
+                logger.warning("Gemini API client became unavailable")
+                return "[TEXT_CORRECTION_FAILED]"
+
+            response = client.models.generate_content(
                 model=self.gemini_model,
                 contents=contents,
                 config=generate_content_config,
             )
 
-            corrected_text = response.text.strip()
+            corrected_text = (response.text or "").strip()
 
             sm = difflib.SequenceMatcher(None, text, corrected_text)
             confidence = sm.ratio()
