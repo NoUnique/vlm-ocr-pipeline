@@ -32,3 +32,4 @@ known-first-party = ["pipeline", "models"]
 [lint.per-file-ignores]
 # Example: allow complex function bodies in a specific module
 # "pipeline/__init__.py" = ["PLR0912"]
+"models/doclayout_yolo.py" = ["PLC0415"]
