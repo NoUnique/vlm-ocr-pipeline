@@ -177,6 +177,15 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         help="Logging level (default: INFO)",
     )
     parser.add_argument(
+        "--multi-column-ordering",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Toggle multi-column aware reading order alignment for PDF pages (default: disabled). "
+            "Use --multi-column-ordering to enable or --no-multi-column-ordering to disable."
+        ),
+    )
+    parser.add_argument(
         "--rate-limit-status",
         action="store_true",
         help="Show current rate limit status and exit",
@@ -206,6 +215,7 @@ def _execute_command(
             backend=args.backend,
             model=args.model,
             gemini_tier=args.gemini_tier,
+            enable_multi_column_ordering=args.multi_column_ordering,
         )
 
         return _run_pipeline(pipeline, args, logger)
@@ -272,6 +282,10 @@ def _run_pipeline(pipeline: Pipeline, args: argparse.Namespace, logger: logging.
     logger.info("Model: %s", args.model)
     if args.backend == "gemini":
         logger.info("Gemini Tier: %s", args.gemini_tier)
+    logger.info(
+        "Multi-column ordering: %s",
+        "enabled" if args.multi_column_ordering else "disabled",
+    )
 
     input_path = Path(args.input)
     if not input_path.exists():

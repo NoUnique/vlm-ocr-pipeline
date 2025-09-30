@@ -1,14 +1,15 @@
-"""
-Unified VLM OCR Pipeline for document processing and text extraction.
-Integrates layout detection, OCR, and Vision Language Model-powered text correction.
-"""
+"""Unified VLM OCR Pipeline for document processing and text extraction."""
+
+from __future__ import annotations
 
 import gc
 import hashlib
 import json
 import logging
+from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict, cast
 
 # Load environment variables if not already loaded
 try:
@@ -24,13 +25,70 @@ from pdf2image.pdf2image import convert_from_path, pdfinfo_from_path
 
 from models import DocLayoutYOLO
 
+try:
+    import fitz  # type: ignore
+except Exception:  # pragma: no cover - optional dependency guard
+    fitz = None  # type: ignore
+
 from .gemini import GeminiClient
 from .misc import tz_now
+from .multi_column import column_boxes
 from .openai import OpenAIClient
 from .prompt import PromptManager
 from .ratelimit import rate_limiter
 
 logger = logging.getLogger(__name__)
+
+COLUMN_ORDER_EPSILON = 1e-6
+
+
+@dataclass
+class ColumnBand:
+    """Represents a provisional column band before serialization."""
+
+    x0: float
+    x1: float
+    centers: list[float]
+
+    def add_rect(self, x0: float, x1: float, center: float) -> None:
+        self.x0 = min(self.x0, x0)
+        self.x1 = max(self.x1, x1)
+        self.centers.append(center)
+
+    @property
+    def center(self) -> float:
+        return sum(self.centers) / len(self.centers)
+
+    @property
+    def width(self) -> float:
+        return self.x1 - self.x0
+
+    def to_output_dict(self, index: int) -> ColumnOrderingInfo:
+        return cast(
+            ColumnOrderingInfo,
+            {
+                "index": index,
+                "x0": float(self.x0),
+                "x1": float(self.x1),
+                "center": float(self.center),
+                "width": float(self.width),
+            },
+        )
+
+
+class ColumnOrderingInfo(TypedDict):
+    index: int
+    x0: float
+    x1: float
+    center: float
+    width: float
+
+
+@dataclass
+class RegionColumnMetrics:
+    column_index: int
+    order_key: tuple[float, float, float, float]
+    overlap_ratio: float
 
 
 class Pipeline:
@@ -47,6 +105,7 @@ class Pipeline:
         backend: str = "openai",
         model: str = "gemini-2.5-flash",
         gemini_tier: str = "free",
+        enable_multi_column_ordering: bool = False,
     ):
         """
         Initialize VLM OCR processing pipeline
@@ -61,6 +120,7 @@ class Pipeline:
             backend: Backend API to use ("openai" or "gemini")
             model: Model to use for text processing
             gemini_tier: Gemini API tier for rate limiting (only used with gemini backend)
+            enable_multi_column_ordering: Whether to align reading order using multi-column detection
         """
         self.model_path = Path(model_path) if model_path else None
         self.confidence_threshold = confidence_threshold
@@ -68,6 +128,13 @@ class Pipeline:
         self.backend = backend.lower()
         self.model = model
         self.gemini_tier = gemini_tier
+        self.enable_multi_column_ordering = enable_multi_column_ordering
+
+        if self.enable_multi_column_ordering and fitz is None:
+            logger.warning(
+                "PyMuPDF is not installed. Disabling multi-column ordering for this run."
+            )
+            self.enable_multi_column_ordering = False
 
         # Initialize rate limiter (only for Gemini backend)
         if self.backend == "gemini":
@@ -120,7 +187,7 @@ class Pipeline:
         if not isinstance(processed_regions, list):
             return ""
         text_like_types = {"plain text", "title", "list"}
-        sortable_regions: list[tuple[int, int, str]] = []
+        sortable_regions: list[tuple[int, int, str, int | None]] = []
         for region in processed_regions:
             if not isinstance(region, dict):
                 continue
@@ -135,11 +202,24 @@ class Pipeline:
             text_value = region.get("text")
             if isinstance(text_value, str) and text_value.strip():
                 # Keep internal newlines; trim outer whitespace only
-                sortable_regions.append((y, x, text_value.strip()))
+                order_rank = region.get("reading_order_rank")
+                sortable_regions.append((y, x, text_value.strip(), order_rank))
         # Sort by y then x
-        sortable_regions.sort(key=lambda t: (t[0], t[1]))
+        if sortable_regions:
+            if any(item[3] is not None for item in sortable_regions):
+                sortable_regions.sort(
+                    key=lambda item: (
+                        0 if item[3] is not None else 1,
+                        item[3] if item[3] is not None else item[0],
+                        item[0],
+                        item[1],
+                    )
+                )
+            else:
+                sortable_regions.sort(key=lambda item: (item[0], item[1]))
+
         # Join with a blank line between regions to separate blocks
-        return "\n\n".join(t[2] for t in sortable_regions)
+        return "\n\n".join(item[2] for item in sortable_regions)
 
     def _calculate_image_hash(self, image: np.ndarray) -> str:
         """Calculate hash for image caching"""
@@ -399,10 +479,29 @@ class Pipeline:
         processed_pages: list[dict[str, Any]] = []
         processing_stopped = False
 
+        pymupdf_doc = self._open_pymupdf_document(pdf_path) if self.enable_multi_column_ordering else None
+        disable_multi_column = False
+
         for page_num in pages_to_process:
             logger.info("Processing page %d/%d", page_num, total_pages)
+            pymupdf_page = None
+            if pymupdf_doc is not None and not disable_multi_column:
+                try:
+                    pymupdf_page = pymupdf_doc.load_page(page_num - 1)
+                except Exception as exc:  # pragma: no cover - PyMuPDF failure path
+                    logger.warning(
+                        "Failed to load page %d with PyMuPDF for multi-column ordering: %s",
+                        page_num,
+                        exc,
+                    )
+                    disable_multi_column = True
+                    pymupdf_page = None
+
             page_result, stop_processing = self._process_pdf_page(
-                pdf_path, page_num, page_output_dir
+                pdf_path,
+                page_num,
+                page_output_dir,
+                pymupdf_page,
             )
 
             if page_result is not None:
@@ -412,6 +511,9 @@ class Pipeline:
                 processing_stopped = True
                 break
 
+        if pymupdf_doc is not None:
+            pymupdf_doc.close()
+
         return processed_pages, processing_stopped
 
     def _process_pdf_page(
@@ -419,6 +521,7 @@ class Pipeline:
         pdf_path: Path,
         page_num: int,
         page_output_dir: Path,
+        pymupdf_page: Any | None,
     ) -> tuple[dict[str, Any] | None, bool]:
         page_image: np.ndarray | None = None
 
@@ -427,6 +530,23 @@ class Pipeline:
 
             regions = self.doc_layout_model.predict(page_image, conf=self.confidence_threshold)
             processed_regions = self._process_regions(page_image, regions)
+
+            column_layout: dict[str, Any] | None = None
+            if self.enable_multi_column_ordering and pymupdf_page is not None:
+                column_layout = self._detect_column_layout(pymupdf_page, page_image)
+                if column_layout is not None:
+                    ordering_columns = column_layout.get("_ordering_columns")
+                    if ordering_columns:
+                        typed_columns = cast(Sequence[ColumnOrderingInfo], ordering_columns)
+                        regions = self._sort_regions_by_columns(regions, typed_columns)
+                        processed_regions = self._sort_regions_by_columns(
+                            processed_regions,
+                            typed_columns,
+                            assign_rank=True,
+                            store_column_index=True,
+                        )
+                    else:
+                        column_layout = None
 
             if self._check_for_rate_limit_errors({"regions": processed_regions}):
                 logger.warning("Rate limit detected on page %d. Stopping processing.", page_num)
@@ -440,6 +560,9 @@ class Pipeline:
             if stop_due_to_correction:
                 return None, True
 
+            if column_layout is not None:
+                column_layout.pop("_ordering_columns", None)
+
             page_result = self._build_page_result(
                 pdf_path,
                 page_num,
@@ -449,6 +572,7 @@ class Pipeline:
                 raw_text,
                 corrected_text,
                 correction_confidence,
+                column_layout,
             )
 
             self._save_page_output(page_output_dir, page_num, page_result)
@@ -478,6 +602,191 @@ class Pipeline:
         logger.info("Processing image: %s", temp_image_path)
 
         return page_image, temp_image_path
+
+    def _open_pymupdf_document(self, pdf_path: Path) -> Any | None:
+        if fitz is None:
+            return None
+
+        try:
+            return fitz.open(str(pdf_path))
+        except Exception as exc:  # pragma: no cover - PyMuPDF failure path
+            logger.warning(
+                "Failed to open PDF with PyMuPDF for multi-column ordering: %s",
+                exc,
+            )
+            return None
+
+    def _detect_column_layout(
+        self,
+        pymupdf_page: Any,
+        page_image: np.ndarray,
+    ) -> dict[str, Any] | None:
+        try:
+            detected_boxes = column_boxes(pymupdf_page)
+        except Exception as exc:  # pragma: no cover - PyMuPDF failure path
+            logger.debug("PyMuPDF column detection failed: %s", exc)
+            return None
+
+        if not detected_boxes:
+            return None
+
+        page_rect = pymupdf_page.rect
+        if page_rect.width == 0 or page_rect.height == 0:
+            return None
+
+        image_height, image_width = page_image.shape[0], page_image.shape[1]
+        scale_x = image_width / float(page_rect.width)
+        scale_y = image_height / float(page_rect.height)
+
+        image_rects: list[tuple[int, int, int, int]] = []
+        for rect in detected_boxes:
+            image_rects.append(
+                (
+                    int(round(rect.x0 * scale_x)),
+                    int(round(rect.y0 * scale_y)),
+                    int(round(rect.x1 * scale_x)),
+                    int(round(rect.y1 * scale_y)),
+                )
+            )
+
+        column_bands = self._merge_column_rects(image_rects, image_width)
+        if len(column_bands) <= 1:
+            return None
+
+        ordering_columns: list[ColumnOrderingInfo] = []
+        columns_for_output: list[dict[str, float | int]] = []
+        for idx, band in enumerate(column_bands):
+            ordering_columns.append(band.to_output_dict(idx))
+            columns_for_output.append(
+                {
+                    "index": idx,
+                    "x0": int(round(band.x0)),
+                    "x1": int(round(band.x1)),
+                    "center": float(band.center),
+                    "width": float(band.width),
+                }
+            )
+
+        return {
+            "columns": columns_for_output,
+            "_ordering_columns": ordering_columns,
+            "image_rects": [
+                {"x0": rect[0], "y0": rect[1], "x1": rect[2], "y1": rect[3]} for rect in image_rects
+            ],
+            "scale": {"x": scale_x, "y": scale_y},
+        }
+
+    def _merge_column_rects(
+        self,
+        rects: list[tuple[int, int, int, int]],
+        page_width: int,
+    ) -> list[ColumnBand]:
+        if not rects:
+            return []
+
+        # Merge rectangles with similar horizontal centers into column bands.
+        columns: list[ColumnBand] = []
+        grouping_threshold = max(int(page_width * 0.05), 25)
+
+        for rect in rects:
+            x0, _, x1, _ = rect
+            center = (x0 + x1) / 2.0
+            added = False
+
+            for column in columns:
+                column_center = column.center
+                column_width = column.width
+                threshold = max(grouping_threshold, column_width)
+                if abs(center - column_center) <= threshold:
+                    column.add_rect(float(x0), float(x1), center)
+                    added = True
+                    break
+
+            if not added:
+                columns.append(ColumnBand(float(x0), float(x1), [center]))
+
+        columns.sort(key=lambda col: col.x0)
+
+        return columns
+
+    def _compute_region_column_metrics(
+        self,
+        region: dict[str, Any],
+        columns: Sequence[ColumnOrderingInfo],
+    ) -> RegionColumnMetrics:
+        coords = region.get("coords") or [0, 0, 0, 0]
+        try:
+            x, y, w, _ = (float(value) for value in coords[:4])
+        except Exception:
+            x = y = w = 0.0
+
+        x1 = x + w
+        region_center_x = x + (w / 2.0)
+        region_width = max(w, 1.0)
+
+        best_index = int(columns[0]["index"])
+        best_overlap = -1.0
+        best_distance = float("inf")
+
+        for column in columns:
+            col_x0 = column["x0"]
+            col_x1 = column["x1"]
+            overlap = max(0.0, min(x1, col_x1) - max(x, col_x0))
+            overlap_ratio = overlap / region_width
+            distance = abs(region_center_x - column["center"])
+
+            if overlap_ratio > best_overlap or (
+                abs(overlap_ratio - best_overlap) <= COLUMN_ORDER_EPSILON and distance < best_distance
+            ):
+                best_overlap = overlap_ratio
+                best_distance = distance
+                best_index = int(column["index"])
+
+        if best_overlap <= 0:
+            nearest_column = min(columns, key=lambda col: abs(region_center_x - col["center"]))
+            best_index = int(nearest_column["index"])
+            best_distance = abs(region_center_x - nearest_column["center"])
+
+        order_key = (
+            float(best_index),
+            float(y),
+            float(x),
+            float(best_distance),
+        )
+
+        return RegionColumnMetrics(
+            column_index=best_index,
+            order_key=order_key,
+            overlap_ratio=float(max(best_overlap, 0.0)),
+        )
+
+    def _sort_regions_by_columns(
+        self,
+        regions: list[dict[str, Any]],
+        columns: Sequence[ColumnOrderingInfo],
+        assign_rank: bool = False,
+        store_column_index: bool = False,
+    ) -> list[dict[str, Any]]:
+        if not regions:
+            return regions
+
+        keyed_regions: list[tuple[tuple[float, float, float, float], dict[str, Any], int]] = []
+
+        for region in regions:
+            metrics = self._compute_region_column_metrics(region, columns)
+            keyed_regions.append((metrics.order_key, region, metrics.column_index))
+
+        keyed_regions.sort(key=lambda item: item[0])
+
+        sorted_regions: list[dict[str, Any]] = []
+        for rank, (_, region, column_index) in enumerate(keyed_regions):
+            if assign_rank:
+                region["reading_order_rank"] = rank
+            if store_column_index:
+                region["column_index"] = int(column_index)
+            sorted_regions.append(region)
+
+        return sorted_regions
 
     def _perform_page_correction(
         self, raw_text: str, page_num: int
@@ -510,10 +819,11 @@ class Pipeline:
         raw_text: str,
         corrected_text: str,
         correction_confidence: float,
+        column_layout: dict[str, Any] | None,
     ) -> dict[str, Any]:
         page_height, page_width = page_image.shape[0], page_image.shape[1]
 
-        return {
+        page_result = {
             "image_path": str(self.temp_dir / f"{pdf_path.stem}_page_{page_num}.jpg"),
             "width": int(page_width),
             "height": int(page_height),
@@ -525,6 +835,11 @@ class Pipeline:
             "processed_at": tz_now().isoformat(),
             "page_number": page_num,
         }
+
+        if column_layout is not None:
+            page_result["column_layout"] = column_layout
+
+        return page_result
 
     def _save_page_output(self, page_output_dir: Path, page_num: int, page_result: dict[str, Any]) -> None:
         page_output_file = page_output_dir / f"page_{page_num}.json"
