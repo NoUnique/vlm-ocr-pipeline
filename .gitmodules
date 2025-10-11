@@ -1,0 +1,8 @@
+[submodule "external/MinerU"]
+	path = external/MinerU
+	url = https://github.com/opendatalab/MinerU.git
+	shallow = true
+[submodule "external/olmocr"]
+	path = external/olmocr
+	url = https://github.com/allenai/olmocr.git
+	shallow = true

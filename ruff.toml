@@ -2,6 +2,16 @@
 line-length = 120
 target-version = "py311"
 
+# Exclude directories
+exclude = [
+  "__pycache__",
+  "external",
+  ".git",
+  ".venv",
+  ".pytest_cache",
+  ".ruff_cache",
+]
+
 [format]
 quote-style = "double"
 

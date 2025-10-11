@@ -42,5 +42,8 @@ Thumbs.db
 # Sample files
 samples/
 
+# External repositories
+external/
+
 # TODO file
 TODO.md
