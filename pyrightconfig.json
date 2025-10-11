@@ -4,6 +4,20 @@
   "venv": ".venv",
   "pythonVersion": "3.11",
   "typeCheckingMode": "basic",
+  "exclude": [
+    "external",
+    ".git",
+    "__pycache__",
+    ".venv",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".pyright",
+    ".pyright_cache",
+    "typings",
+    "node_modules",
+    "**/__pycache__",
+    "**/.pytest_cache"
+  ],
   "ignore": [
     "models/doclayout_yolo.py"
   ],

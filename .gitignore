@@ -14,6 +14,11 @@
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
+.ruff_cache/
+.pyright/
+.pyright_cache/
+typings/
 
 # Output directories
 output/
@@ -31,6 +36,12 @@ Thumbs.db
 
 # Python virtual environments
 .venv/
+
+# Node.js
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
 # Logs
 .logs/

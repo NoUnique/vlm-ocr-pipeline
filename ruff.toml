@@ -10,6 +10,10 @@ exclude = [
   ".venv",
   ".pytest_cache",
   ".ruff_cache",
+  ".pyright",
+  ".pyright_cache",
+  "typings",
+  "node_modules",
 ]
 
 [format]
