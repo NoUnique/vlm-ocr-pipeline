@@ -17,7 +17,7 @@ from google import genai
 from google.genai import types
 from PIL import Image
 
-from ..ratelimit import rate_limiter
+from .ratelimit import rate_limiter
 
 logger = logging.getLogger(__name__)
 

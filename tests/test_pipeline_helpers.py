@@ -1,6 +1,10 @@
+from pathlib import Path
+
 import pytest
 
 from pipeline import Pipeline
+from pipeline.conversion import DocumentConverter
+from pipeline.layout.ordering import ReadingOrderAnalyzer
 
 
 def make_pipeline():
@@ -8,7 +12,7 @@ def make_pipeline():
 
 
 def test_compose_page_raw_text_orders_and_preserves_blocks():
-    pipeline = make_pipeline()
+    analyzer = ReadingOrderAnalyzer()
     regions = [
         {"type": "plain text", "coords": [30, 20, 40, 10], "text": "Second block"},
         {"type": "plain text", "coords": [10, 20, 40, 10], "text": "First block"},
@@ -16,13 +20,13 @@ def test_compose_page_raw_text_orders_and_preserves_blocks():
         {"type": "figure", "coords": [0, 0, 10, 10], "text": "Ignored"},
     ]
 
-    result = Pipeline._compose_page_raw_text(pipeline, regions)
+    result = analyzer.compose_page_text(regions)
 
     assert result == "First block\n\nSecond block\n\nTitle heading\nSubtitle"
 
 
 def test_compose_page_raw_text_skips_invalid_entries():
-    pipeline = make_pipeline()
+    analyzer = ReadingOrderAnalyzer()
     regions = [
         "not-a-dict",
         {"type": "plain text", "coords": [0, 0, 0, 0], "text": ""},
@@ -30,25 +34,25 @@ def test_compose_page_raw_text_skips_invalid_entries():
         {"coords": [0, 0, 0, 0], "text": "Missing type"},
     ]
 
-    result = Pipeline._compose_page_raw_text(pipeline, regions)
+    result = analyzer.compose_page_text(regions)
 
     assert result == ""
 
 
 def test_determine_pages_to_process_honors_priority_and_bounds():
-    pipeline = make_pipeline()
+    converter = DocumentConverter(temp_dir=Path(".tmp"))
     total_pages = 10
 
-    result_specific = Pipeline._determine_pages_to_process(
-        pipeline, total_pages, pages=[5, 1, 12, 0]
+    result_specific = converter.determine_pages_to_process(
+        total_pages, pages=[5, 1, 12, 0]
     )
-    result_range = Pipeline._determine_pages_to_process(
-        pipeline, total_pages, page_range=(0, 12)
+    result_range = converter.determine_pages_to_process(
+        total_pages, page_range=(0, 12)
     )
-    result_max = Pipeline._determine_pages_to_process(
-        pipeline, total_pages, max_pages=3
+    result_max = converter.determine_pages_to_process(
+        total_pages, max_pages=3
     )
-    result_all = Pipeline._determine_pages_to_process(pipeline, total_pages)
+    result_all = converter.determine_pages_to_process(total_pages)
 
     assert result_specific == [1, 5]
     assert result_range == list(range(1, 11))

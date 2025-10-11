@@ -8,7 +8,9 @@ from typing import cast
 
 import numpy as np
 
-from pipeline import ColumnOrderingInfo, Pipeline
+from pipeline import Pipeline
+from pipeline.layout.ordering import ReadingOrderAnalyzer
+from pipeline.layout.ordering.analyzer import ColumnOrderingInfo
 
 EXPECTED_COLUMN_COUNT = 2
 
@@ -26,7 +28,7 @@ def _make_pipeline_stub() -> Pipeline:
 
 
 def test_sort_regions_by_columns_assigns_reading_order() -> None:
-    pipeline = _make_pipeline_stub()
+    analyzer = ReadingOrderAnalyzer(enable_multi_column=True)
     columns = [
         {"index": 0, "x0": 0.0, "x1": 200.0, "center": 100.0, "width": 200.0},
         {"index": 1, "x0": 200.0, "x1": 400.0, "center": 300.0, "width": 200.0},
@@ -38,7 +40,7 @@ def test_sort_regions_by_columns_assigns_reading_order() -> None:
         {"coords": [210, 120, 50, 50], "text": "B2", "type": "plain text"},
     ]
 
-    ordered = pipeline._sort_regions_by_columns(
+    ordered = analyzer._sort_regions_by_columns(
         regions,
         cast(Sequence[ColumnOrderingInfo], columns),
         assign_rank=True,
@@ -51,7 +53,7 @@ def test_sort_regions_by_columns_assigns_reading_order() -> None:
 
 
 def test_compose_page_respects_reading_order_rank() -> None:
-    pipeline = _make_pipeline_stub()
+    analyzer = ReadingOrderAnalyzer(enable_multi_column=True)
     processed_regions = [
         {
             "type": "plain text",
@@ -72,22 +74,22 @@ def test_compose_page_respects_reading_order_rank() -> None:
         },
     ]
 
-    text = pipeline._compose_page_raw_text(processed_regions)
+    text = analyzer.compose_page_text(processed_regions)
     assert text.split("\n\n") == ["First", "Second", "Third"]
 
 
 def test_detect_column_layout_maps_boxes_to_columns(monkeypatch) -> None:
-    pipeline = _make_pipeline_stub()
+    analyzer = ReadingOrderAnalyzer(enable_multi_column=True)
 
     fake_page = SimpleNamespace(rect=SimpleNamespace(width=400, height=800))
     fake_image = np.zeros((800, 400, 3), dtype=np.uint8)
 
     monkeypatch.setattr(
-        "pipeline.column_boxes",
+        "pipeline.layout.ordering.multi_column.column_boxes",
         lambda page: [_Box(0, 0, 150, 200), _Box(200, 0, 350, 200)],
     )
 
-    layout = pipeline._detect_column_layout(fake_page, fake_image)
+    layout = analyzer._detect_column_layout(fake_page, fake_image)
 
     assert layout is not None
     assert len(layout["columns"]) == EXPECTED_COLUMN_COUNT

@@ -1,7 +1,8 @@
-"""Layout analysis and processing utilities."""
+"""Layout processing modules for document analysis."""
 
 from __future__ import annotations
 
-__all__: list[str] = []
+from .detection import LayoutDetector
+from .ordering import ReadingOrderAnalyzer
 
-
+__all__ = ["LayoutDetector", "ReadingOrderAnalyzer"]

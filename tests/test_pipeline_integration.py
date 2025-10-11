@@ -9,6 +9,11 @@ import numpy as np
 import pytest
 
 from pipeline import Pipeline
+from pipeline.conversion import DocumentConverter
+from pipeline.layout.detection import LayoutDetector
+from pipeline.layout.ordering import ReadingOrderAnalyzer
+from pipeline.recognition import TextRecognizer
+from pipeline.recognition.cache import RecognitionCache
 
 EXPECTED_REGION_COUNT = 3
 EXPECTED_PAGE_COUNT = 2
@@ -69,23 +74,30 @@ class FakeDocLayoutModel:
 @pytest.fixture
 def pipeline_fixture(tmp_path):
     pipeline = Pipeline.__new__(Pipeline)
-    pipeline.confidence_threshold = 0.5
     pipeline.backend = "openai"
     pipeline.model = "test-model"
-    pipeline.use_cache = False
     pipeline.cache_dir = tmp_path / "cache"
     pipeline.output_dir = tmp_path / "output"
     pipeline.temp_dir = tmp_path / "tmp"
     for directory in [pipeline.cache_dir, pipeline.output_dir, pipeline.temp_dir]:
         directory.mkdir(parents=True, exist_ok=True)
 
+    # Initialize components
+    pipeline.converter = DocumentConverter(temp_dir=pipeline.temp_dir)
+    pipeline.detector = LayoutDetector.__new__(LayoutDetector)
+    pipeline.analyzer = ReadingOrderAnalyzer()
+    pipeline.recognizer = TextRecognizer.__new__(TextRecognizer)
+
     fake_prompt_manager = FakePromptManager()
     fake_ai_client = FakeAIClient()
 
-    cast(Any, pipeline).prompt_manager = fake_prompt_manager
-    cast(Any, pipeline).ai_client = fake_ai_client
-    cast(Any, pipeline).gemini_client = fake_ai_client
-    cast(Any, pipeline).openai_client = fake_ai_client
+    # Set up recognizer with fake clients
+    cast(Any, pipeline.recognizer).prompt_manager = fake_prompt_manager
+    cast(Any, pipeline.recognizer).ai_client = fake_ai_client
+    cast(Any, pipeline.recognizer).gemini_client = fake_ai_client
+    cast(Any, pipeline.recognizer).openai_client = fake_ai_client
+    cast(Any, pipeline.recognizer).cache = RecognitionCache(pipeline.cache_dir, use_cache=False)
+    
     cast(Any, pipeline)._test_ai_client = fake_ai_client
     return pipeline
 
@@ -112,7 +124,7 @@ def sample_regions():
 
 
 def test_process_single_image_integration(pipeline_fixture, sample_regions):
-    cast(Any, pipeline_fixture).doc_layout_model = FakeDocLayoutModel([sample_regions])
+    cast(Any, pipeline_fixture.detector).model = FakeDocLayoutModel([sample_regions])
     image_path = Path("samples/98A-004_origin_page-0001.jpg")
 
     result = pipeline_fixture.process_single_image(image_path)
@@ -136,7 +148,7 @@ def test_process_pdf_integration(monkeypatch, pipeline_fixture, sample_regions, 
     pdf_path.write_bytes(b"%PDF-1.4 test")
 
     pages_regions = [sample_regions, sample_regions]
-    cast(Any, pipeline_fixture).doc_layout_model = FakeDocLayoutModel(pages_regions)
+    cast(Any, pipeline_fixture.detector).model = FakeDocLayoutModel(pages_regions)
 
     def fake_pdfinfo(_path):
         return {"Pages": EXPECTED_PAGE_COUNT}
@@ -147,8 +159,8 @@ def test_process_pdf_integration(monkeypatch, pipeline_fixture, sample_regions, 
         cv2.imwrite(str(temp_image_path), image)
         return image, temp_image_path
 
-    monkeypatch.setattr("pipeline.pdfinfo_from_path", fake_pdfinfo)
-    monkeypatch.setattr(Pipeline, "_render_pdf_page", fake_render_pdf_page)
+    monkeypatch.setattr("pipeline.conversion.converter.pdfinfo_from_path", fake_pdfinfo)
+    monkeypatch.setattr("pipeline.conversion.DocumentConverter.render_pdf_page", fake_render_pdf_page)
 
     summary = pipeline_fixture.process_pdf(pdf_path)
 

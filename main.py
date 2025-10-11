@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 
 from pipeline import Pipeline
 from pipeline.misc import tz_now
-from pipeline.ratelimit import rate_limiter
+from pipeline.recognition.api.ratelimit import rate_limiter
 
 # Load environment variables from .env file
 load_dotenv()

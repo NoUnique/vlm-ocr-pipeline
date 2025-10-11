@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 import gc
-import hashlib
 import json
 import logging
-from collections.abc import Sequence
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import Any
 
 # Load environment variables if not already loaded
 try:
@@ -19,79 +16,30 @@ try:
 except ImportError:
     pass
 
-import cv2
-import numpy as np
-from pdf2image.pdf2image import convert_from_path, pdfinfo_from_path
+from .conversion import DocumentConverter
+from .layout.detection import LayoutDetector
+from .layout.ordering import ReadingOrderAnalyzer
+from .misc import tz_now
+from .recognition import TextRecognizer
+from .recognition.api.ratelimit import rate_limiter
 
-from models import DocLayoutYOLO
+logger = logging.getLogger(__name__)
 
 try:
     import fitz  # type: ignore
 except Exception:  # pragma: no cover - optional dependency guard
     fitz = None  # type: ignore
 
-from .layout.order.multi_column import column_boxes
-from .misc import tz_now
-from .prompt import PromptManager
-from .ratelimit import rate_limiter
-from .vlm import GeminiClient, OpenAIClient
-
-logger = logging.getLogger(__name__)
-
-COLUMN_ORDER_EPSILON = 1e-6
-
-
-@dataclass
-class ColumnBand:
-    """Represents a provisional column band before serialization."""
-
-    x0: float
-    x1: float
-    centers: list[float]
-
-    def add_rect(self, x0: float, x1: float, center: float) -> None:
-        self.x0 = min(self.x0, x0)
-        self.x1 = max(self.x1, x1)
-        self.centers.append(center)
-
-    @property
-    def center(self) -> float:
-        return sum(self.centers) / len(self.centers)
-
-    @property
-    def width(self) -> float:
-        return self.x1 - self.x0
-
-    def to_output_dict(self, index: int) -> ColumnOrderingInfo:
-        return cast(
-            ColumnOrderingInfo,
-            {
-                "index": index,
-                "x0": float(self.x0),
-                "x1": float(self.x1),
-                "center": float(self.center),
-                "width": float(self.width),
-            },
-        )
-
-
-class ColumnOrderingInfo(TypedDict):
-    index: int
-    x0: float
-    x1: float
-    center: float
-    width: float
-
-
-@dataclass
-class RegionColumnMetrics:
-    column_index: int
-    order_key: tuple[float, float, float, float]
-    overlap_ratio: float
-
 
 class Pipeline:
-    """Unified VLM OCR processing pipeline with integrated text correction"""
+    """Unified VLM OCR processing pipeline with integrated text correction.
+    
+    This pipeline orchestrates four main stages:
+    1. Document Conversion: Convert PDFs/images to processable format
+    2. Layout Detection: Identify regions (text, tables, figures, etc.)
+    3. Layout Analysis: Determine reading order of regions
+    4. Recognition: Extract and correct text from regions
+    """
 
     def __init__(
         self,
@@ -106,8 +54,7 @@ class Pipeline:
         gemini_tier: str = "free",
         enable_multi_column_ordering: bool = False,
     ):
-        """
-        Initialize VLM OCR processing pipeline
+        """Initialize VLM OCR processing pipeline.
 
         Args:
             model_path: DocLayout-YOLO model path
@@ -121,9 +68,6 @@ class Pipeline:
             gemini_tier: Gemini API tier for rate limiting (only used with gemini backend)
             enable_multi_column_ordering: Whether to align reading order using multi-column detection
         """
-        self.model_path = Path(model_path) if model_path else None
-        self.confidence_threshold = confidence_threshold
-        self.use_cache = use_cache
         self.backend = backend.lower()
         self.model = model
         self.gemini_tier = gemini_tier
@@ -147,246 +91,33 @@ class Pipeline:
         # Create directories
         self._setup_directories()
 
-        # Initialize components
-        self.prompt_manager = PromptManager(model=self.model, backend=self.backend)
-        self.doc_layout_model = self._setup_layout_model()
-        # Initialize backend clients
-        if self.backend == "gemini":
-            self.gemini_client = GeminiClient(gemini_model=model)
-            self.ai_client = self.gemini_client
-        else:  # OpenAI backend
-            self.openai_client = OpenAIClient(model=model)
-            self.ai_client = self.openai_client
-            # Still initialize Gemini client for fallback if needed
-            self.gemini_client = GeminiClient(gemini_model="gemini-2.5-flash")
+        # Initialize modular components
+        self.converter = DocumentConverter(temp_dir=self.temp_dir)
+        self.detector = LayoutDetector(
+            model_path=model_path,
+            confidence_threshold=confidence_threshold,
+        )
+        self.analyzer = ReadingOrderAnalyzer(
+            enable_multi_column=self.enable_multi_column_ordering,
+        )
+        self.recognizer = TextRecognizer(
+            cache_dir=self.cache_dir,
+            use_cache=use_cache,
+            backend=backend,
+            model=model,
+            gemini_tier=gemini_tier,
+        )
 
-        logger.info("AI backend initialized: %s (model=%s)", self.backend.upper(), self.model)
+        logger.info("Pipeline initialized: %s (model=%s)", self.backend.upper(), self.model)
 
     def _setup_directories(self) -> None:
-        """Create necessary directories"""
+        """Create necessary directories."""
         for directory in [self.cache_dir, self.output_dir, self.temp_dir]:
             directory.mkdir(parents=True, exist_ok=True)
 
     def _get_pdf_output_dir(self, pdf_path: Path) -> Path:
-        """Return the output directory for a given PDF as <output>/<model>/<file_stem>"""
+        """Return the output directory for a given PDF as <output>/<model>/<file_stem>."""
         return self.output_dir / self.model / pdf_path.stem
-
-    def _setup_layout_model(self) -> DocLayoutYOLO:
-        """Setup DocLayout-YOLO model"""
-        model = DocLayoutYOLO(model_path=self.model_path)
-        logger.info("DocLayout-YOLO model loaded successfully")
-        return model
-
-    def _compose_page_raw_text(self, processed_regions: list[dict[str, Any]]) -> str:
-        """Compose page-level raw text from processed regions in reading order.
-
-        Reading order: top-to-bottom (y), then left-to-right (x). Includes text-like
-        regions only and preserves internal newlines within each region's text.
-        """
-        if not isinstance(processed_regions, list):
-            return ""
-        text_like_types = {"plain text", "title", "list"}
-        sortable_regions: list[tuple[int, int, str, int | None]] = []
-        for region in processed_regions:
-            if not isinstance(region, dict):
-                continue
-            region_type = region.get("type")
-            if region_type not in text_like_types:
-                continue
-            coords = region.get("coords") or [0, 0, 0, 0]
-            try:
-                x, y = int(coords[0]), int(coords[1])
-            except Exception:
-                x, y = 0, 0
-            text_value = region.get("text")
-            if isinstance(text_value, str) and text_value.strip():
-                # Keep internal newlines; trim outer whitespace only
-                order_rank = region.get("reading_order_rank")
-                sortable_regions.append((y, x, text_value.strip(), order_rank))
-        # Sort by y then x
-        if sortable_regions:
-            if any(item[3] is not None for item in sortable_regions):
-                sortable_regions.sort(
-                    key=lambda item: (
-                        0 if item[3] is not None else 1,
-                        item[3] if item[3] is not None else item[0],
-                        item[0],
-                        item[1],
-                    )
-                )
-            else:
-                sortable_regions.sort(key=lambda item: (item[0], item[1]))
-
-        # Join with a blank line between regions to separate blocks
-        return "\n\n".join(item[2] for item in sortable_regions)
-
-    def _calculate_image_hash(self, image: np.ndarray) -> str:
-        """Calculate hash for image caching"""
-        small_img = cv2.resize(image, (32, 32))
-        success, encoded = cv2.imencode(".jpg", small_img, [cv2.IMWRITE_JPEG_QUALITY, 50])
-        if not success:
-            raise ValueError("Failed to encode image for hashing")
-        image_hash = hashlib.md5(encoded.tobytes()).hexdigest()
-        del small_img, encoded
-        return image_hash
-
-    def _get_cached_result(self, image_hash: str, cache_type: str) -> dict[str, Any] | None:
-        """Get cached result if exists"""
-        if not self.use_cache:
-            return None
-
-        cache_file = self.cache_dir / f"{cache_type}_{image_hash}.json"
-
-        if cache_file.exists():
-            try:
-                with cache_file.open("r", encoding="utf-8") as f:
-                    cached_data = json.load(f)
-                logger.debug("Cache hit for %s: %s", cache_type, image_hash)
-                return cached_data
-            except Exception as e:
-                logger.warning("Failed to load cache file %s: %s", cache_file, e)
-
-        return None
-
-    def _save_to_cache(self, image_hash: str, cache_type: str, result: dict[str, Any]) -> None:
-        """Save result to cache"""
-        if not self.use_cache:
-            return
-
-        cache_file = self.cache_dir / f"{cache_type}_{image_hash}.json"
-
-        try:
-            # Remove coords before caching (will be added back when retrieved)
-            cache_data = {k: v for k, v in result.items() if k != "coords"}
-
-            with cache_file.open("w", encoding="utf-8") as f:
-                json.dump(cache_data, f, ensure_ascii=False, indent=2)
-            logger.debug("Cached result for %s: %s", cache_type, image_hash)
-        except Exception as e:
-            logger.warning("Failed to save cache file %s: %s", cache_file, e)
-
-    def _crop_region(self, image: np.ndarray, region: dict[str, Any]) -> np.ndarray:
-        """Crop region from image"""
-        coords = region["coords"]
-        x, y, w, h = coords  # coords format is [x, y, width, height]
-
-        # Convert to x1, y1, x2, y2
-        x1, y1 = x, y
-        x2, y2 = x + w, y + h
-
-        # Add small padding
-        padding = 5
-        x1 = max(0, x1 - padding)
-        y1 = max(0, y1 - padding)
-        x2 = min(image.shape[1], x2 + padding)
-        y2 = min(image.shape[0], y2 + padding)
-
-        # Ensure valid dimensions
-        if x2 <= x1 or y2 <= y1:
-            logger.warning("Invalid region coordinates: x1=%s, y1=%s, x2=%s, y2=%s", x1, y1, x2, y2)
-            return np.zeros((1, 1, 3), dtype=np.uint8)  # Return minimal image
-
-        return image[y1:y2, x1:x2]
-
-    def _extract_text_from_region(self, region_img: np.ndarray, region_info: dict[str, Any]) -> dict[str, Any]:
-        """Extract text from region using the configured AI backend"""
-        logger.debug("Using %s API for text extraction", self.backend.upper())
-        return self._extract_text_with_ai(region_img, region_info)
-
-    def _extract_text_with_ai(self, region_img: np.ndarray, region_info: dict[str, Any]) -> dict[str, Any]:
-        """Extract text from region using the configured AI backend"""
-        image_hash = self._calculate_image_hash(region_img)
-        cache_type = f"{self.backend}_ocr"
-
-        cached_result = self._get_cached_result(image_hash, cache_type)
-        if cached_result is not None:
-            cached_result["coords"] = region_info["coords"]
-            return cached_result
-
-        # Get prompt from PromptManager
-        prompt = self.prompt_manager.get_prompt("text_extraction", "user")
-
-        # Use AI client to extract text
-        result = self.ai_client.extract_text(region_img, region_info, prompt)
-
-        # Save to cache if successful
-        if "error" not in result:
-            self._save_to_cache(image_hash, cache_type, result)
-
-        return result
-
-    def _process_special_region_with_ai(self, region_img: np.ndarray, region_info: dict[str, Any]) -> dict[str, Any]:
-        """Process special regions (tables, figures) with configured AI backend"""
-        image_hash = self._calculate_image_hash(region_img)
-        cache_type = f"{region_info['type']}_{self.backend}"
-
-        cached_result = self._get_cached_result(image_hash, cache_type)
-        if cached_result is not None:
-            cached_result["coords"] = region_info["coords"]
-            return cached_result
-
-        if not self.ai_client.is_available():
-            logger.warning("%s API client not initialized, falling back to text extraction", self.backend.upper())
-            return self._extract_text_from_region(region_img, region_info)
-
-        # Get prompt from PromptManager
-        if self.backend == "gemini":
-            prompt = self.prompt_manager.get_gemini_prompt_for_region_type(region_info["type"])
-        else:
-            prompt = self.prompt_manager.get_prompt_for_region_type(region_info["type"])
-
-        # Use AI client to process special region
-        result = self.ai_client.process_special_region(region_img, region_info, prompt)
-
-        # Save to cache if successful
-        if "error" not in result:
-            self._save_to_cache(image_hash, cache_type, result)
-
-        return result
-
-    def correct_text(self, text: str) -> str:
-        """Correct OCR text using configured AI backend"""
-        if not self.ai_client.is_available() or not text:
-            return text
-
-        # Get prompts from PromptManager
-        system_prompt = self.prompt_manager.get_prompt("text_correction", "system")
-        user_prompt = self.prompt_manager.get_prompt("text_correction", "user", text=text)
-
-        # Use AI client to correct text
-        result = self.ai_client.correct_text(text, system_prompt, user_prompt)
-
-        # Handle different return types
-        if isinstance(result, dict):
-            return result.get("corrected_text", text)
-        else:
-            return str(result)
-
-    def _process_regions(self, image_np: np.ndarray, regions: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Process all detected regions"""
-        processed_regions = []
-        processed_coords = set()
-
-        for region in regions:
-            region_key = f"{region['coords'][0]}_{region['coords'][1]}_{region['coords'][2]}_{region['coords'][3]}"
-
-            if region_key in processed_coords:
-                continue
-
-            region_img = self._crop_region(image_np, region)
-
-            if region["type"] in ["table", "figure"]:
-                processed_region = self._process_special_region_with_ai(region_img, region)
-            else:
-                processed_region = self._extract_text_from_region(region_img, region)
-
-            processed_regions.append(processed_region)
-            processed_coords.add(region_key)
-
-            del region_img
-            gc.collect()
-
-        return processed_regions
 
     def process_image(
         self,
@@ -395,7 +126,17 @@ class Pipeline:
         page_range: tuple[int, int] | None = None,
         pages: list[int] | None = None,
     ) -> dict[str, Any]:
-        """Process single image or PDF"""
+        """Process single image or PDF.
+        
+        Args:
+            image_path: Path to image or PDF file
+            max_pages: Maximum number of pages to process (PDF only)
+            page_range: Range of pages to process (PDF only)
+            pages: Specific pages to process (PDF only)
+            
+        Returns:
+            Processing results
+        """
         image_path = Path(image_path)
 
         if not image_path.exists():
@@ -407,24 +148,32 @@ class Pipeline:
             return self.process_single_image(image_path)
 
     def process_single_image(self, image_path: Path) -> dict[str, Any]:
-        """Process a single image file"""
+        """Process a single image file.
+        
+        Args:
+            image_path: Path to image file
+            
+        Returns:
+            Processing results with regions and extracted text
+        """
         logger.info("Processing image: %s", image_path)
 
-        # Load image
-        image_np = cv2.imread(str(image_path))
-        if image_np is None:
-            raise ValueError(f"Could not load image: {image_path}")
+        # Stage 1: Load image
+        image_np = self.converter.load_image(image_path)
 
-        # Detect layout
-        regions = self.doc_layout_model.predict(image_np, conf=self.confidence_threshold)
+        # Stage 2: Detect layout regions
+        regions = self.detector.detect(image_np)
 
-        # Process regions
-        processed_regions = self._process_regions(image_np, regions)
+        # Stage 3: Reading order analysis (simple top-to-bottom for single images)
+        # Note: Multi-column ordering is typically not used for single images
+
+        # Stage 4: Recognition - extract text from regions
+        processed_regions = self.recognizer.process_regions(image_np, regions)
 
         # Correct text for text regions
         for region in processed_regions:
             if region["type"] in ["plain text", "title", "list"] and "text" in region:
-                region["corrected_text"] = self.correct_text(region["text"])
+                region["corrected_text"] = self.recognizer.correct_text(region["text"])
 
         result = {
             "image_path": str(image_path),
@@ -441,15 +190,27 @@ class Pipeline:
         page_range: tuple[int, int] | None = None,
         pages: list[int] | None = None,
     ) -> dict[str, Any]:
-        """Process PDF file with page limiting options"""
+        """Process PDF file with page limiting options.
+        
+        Args:
+            pdf_path: Path to PDF file
+            max_pages: Maximum number of pages to process
+            page_range: Range of pages to process (start, end)
+            pages: Specific list of page numbers to process
+            
+        Returns:
+            Summary of PDF processing results
+        """
         logger.info("Processing PDF: %s", pdf_path)
 
         # Get PDF info
-        pdf_info = pdfinfo_from_path(str(pdf_path))
+        pdf_info = self.converter.get_pdf_info(pdf_path)
         total_pages = pdf_info["Pages"]
 
         # Determine which pages to process
-        pages_to_process = self._determine_pages_to_process(total_pages, max_pages, page_range, pages)
+        pages_to_process = self.converter.determine_pages_to_process(
+            total_pages, max_pages, page_range, pages
+        )
 
         logger.info("Processing %d pages: %s", len(pages_to_process), pages_to_process)
 
@@ -475,10 +236,11 @@ class Pipeline:
         total_pages: int,
         page_output_dir: Path,
     ) -> tuple[list[dict[str, Any]], bool]:
+        """Process multiple PDF pages."""
         processed_pages: list[dict[str, Any]] = []
         processing_stopped = False
 
-        pymupdf_doc = self._open_pymupdf_document(pdf_path) if self.enable_multi_column_ordering else None
+        pymupdf_doc = self.converter.open_pymupdf_document(pdf_path) if self.enable_multi_column_ordering else None
         disable_multi_column = False
 
         for page_num in pages_to_process:
@@ -522,36 +284,33 @@ class Pipeline:
         page_output_dir: Path,
         pymupdf_page: Any | None,
     ) -> tuple[dict[str, Any] | None, bool]:
-        page_image: np.ndarray | None = None
+        """Process a single PDF page through the entire pipeline."""
+        page_image = None
 
         try:
-            page_image, temp_image_path = self._render_pdf_page(pdf_path, page_num)
+            # Stage 1: Convert PDF page to image
+            page_image, temp_image_path = self.converter.render_pdf_page(pdf_path, page_num)
 
-            regions = self.doc_layout_model.predict(page_image, conf=self.confidence_threshold)
-            processed_regions = self._process_regions(page_image, regions)
+            # Stage 2: Detect layout regions
+            regions = self.detector.detect(page_image)
 
-            column_layout: dict[str, Any] | None = None
-            if self.enable_multi_column_ordering and pymupdf_page is not None:
-                column_layout = self._detect_column_layout(pymupdf_page, page_image)
-                if column_layout is not None:
-                    ordering_columns = column_layout.get("_ordering_columns")
-                    if ordering_columns:
-                        typed_columns = cast(Sequence[ColumnOrderingInfo], ordering_columns)
-                        regions = self._sort_regions_by_columns(regions, typed_columns)
-                        processed_regions = self._sort_regions_by_columns(
-                            processed_regions,
-                            typed_columns,
-                            assign_rank=True,
-                            store_column_index=True,
-                        )
-                    else:
-                        column_layout = None
+            # Stage 3: Analyze reading order
+            sorted_regions, column_layout = self.analyzer.analyze_reading_order(
+                regions, page_image, pymupdf_page
+            )
 
+            # Stage 4: Recognition - extract text from regions
+            processed_regions = self.recognizer.process_regions(page_image, sorted_regions)
+
+            # Check for rate limit errors
             if self._check_for_rate_limit_errors({"regions": processed_regions}):
                 logger.warning("Rate limit detected on page %d. Stopping processing.", page_num)
                 return None, True
 
-            raw_text = self._compose_page_raw_text(processed_regions)
+            # Compose page-level text
+            raw_text = self.analyzer.compose_page_text(processed_regions)
+            
+            # Correct text
             corrected_text, correction_confidence, stop_due_to_correction = self._perform_page_correction(
                 raw_text, page_num
             )
@@ -559,14 +318,12 @@ class Pipeline:
             if stop_due_to_correction:
                 return None, True
 
-            if column_layout is not None:
-                column_layout.pop("_ordering_columns", None)
-
+            # Build result
             page_result = self._build_page_result(
                 pdf_path,
                 page_num,
                 page_image,
-                regions,
+                sorted_regions,
                 processed_regions,
                 raw_text,
                 corrected_text,
@@ -592,205 +349,11 @@ class Pipeline:
                 del page_image
             gc.collect()
 
-    def _render_pdf_page(self, pdf_path: Path, page_num: int) -> tuple[np.ndarray, Path]:
-        images = convert_from_path(pdf_path, first_page=page_num, last_page=page_num, dpi=200)
-        page_image = np.array(images[0])
-
-        temp_image_path = self.temp_dir / f"{pdf_path.stem}_page_{page_num}.jpg"
-        cv2.imwrite(str(temp_image_path), cv2.cvtColor(page_image, cv2.COLOR_RGB2BGR))
-        logger.info("Processing image: %s", temp_image_path)
-
-        return page_image, temp_image_path
-
-    def _open_pymupdf_document(self, pdf_path: Path) -> Any | None:
-        if fitz is None:
-            return None
-
-        try:
-            return fitz.open(str(pdf_path))
-        except Exception as exc:  # pragma: no cover - PyMuPDF failure path
-            logger.warning(
-                "Failed to open PDF with PyMuPDF for multi-column ordering: %s",
-                exc,
-            )
-            return None
-
-    def _detect_column_layout(
-        self,
-        pymupdf_page: Any,
-        page_image: np.ndarray,
-    ) -> dict[str, Any] | None:
-        try:
-            detected_boxes = column_boxes(pymupdf_page)
-        except Exception as exc:  # pragma: no cover - PyMuPDF failure path
-            logger.debug("PyMuPDF column detection failed: %s", exc)
-            return None
-
-        if not detected_boxes:
-            return None
-
-        page_rect = pymupdf_page.rect
-        if page_rect.width == 0 or page_rect.height == 0:
-            return None
-
-        image_height, image_width = page_image.shape[0], page_image.shape[1]
-        scale_x = image_width / float(page_rect.width)
-        scale_y = image_height / float(page_rect.height)
-
-        image_rects: list[tuple[int, int, int, int]] = []
-        for rect in detected_boxes:
-            image_rects.append(
-                (
-                    int(round(rect.x0 * scale_x)),
-                    int(round(rect.y0 * scale_y)),
-                    int(round(rect.x1 * scale_x)),
-                    int(round(rect.y1 * scale_y)),
-                )
-            )
-
-        column_bands = self._merge_column_rects(image_rects, image_width)
-        if len(column_bands) <= 1:
-            return None
-
-        ordering_columns: list[ColumnOrderingInfo] = []
-        columns_for_output: list[dict[str, float | int]] = []
-        for idx, band in enumerate(column_bands):
-            ordering_columns.append(band.to_output_dict(idx))
-            columns_for_output.append(
-                {
-                    "index": idx,
-                    "x0": int(round(band.x0)),
-                    "x1": int(round(band.x1)),
-                    "center": float(band.center),
-                    "width": float(band.width),
-                }
-            )
-
-        return {
-            "columns": columns_for_output,
-            "_ordering_columns": ordering_columns,
-            "image_rects": [
-                {"x0": rect[0], "y0": rect[1], "x1": rect[2], "y1": rect[3]} for rect in image_rects
-            ],
-            "scale": {"x": scale_x, "y": scale_y},
-        }
-
-    def _merge_column_rects(
-        self,
-        rects: list[tuple[int, int, int, int]],
-        page_width: int,
-    ) -> list[ColumnBand]:
-        if not rects:
-            return []
-
-        # Merge rectangles with similar horizontal centers into column bands.
-        columns: list[ColumnBand] = []
-        grouping_threshold = max(int(page_width * 0.05), 25)
-
-        for rect in rects:
-            x0, _, x1, _ = rect
-            center = (x0 + x1) / 2.0
-            added = False
-
-            for column in columns:
-                column_center = column.center
-                column_width = column.width
-                threshold = max(grouping_threshold, column_width)
-                if abs(center - column_center) <= threshold:
-                    column.add_rect(float(x0), float(x1), center)
-                    added = True
-                    break
-
-            if not added:
-                columns.append(ColumnBand(float(x0), float(x1), [center]))
-
-        columns.sort(key=lambda col: col.x0)
-
-        return columns
-
-    def _compute_region_column_metrics(
-        self,
-        region: dict[str, Any],
-        columns: Sequence[ColumnOrderingInfo],
-    ) -> RegionColumnMetrics:
-        coords = region.get("coords") or [0, 0, 0, 0]
-        try:
-            x, y, w, _ = (float(value) for value in coords[:4])
-        except Exception:
-            x = y = w = 0.0
-
-        x1 = x + w
-        region_center_x = x + (w / 2.0)
-        region_width = max(w, 1.0)
-
-        best_index = int(columns[0]["index"])
-        best_overlap = -1.0
-        best_distance = float("inf")
-
-        for column in columns:
-            col_x0 = column["x0"]
-            col_x1 = column["x1"]
-            overlap = max(0.0, min(x1, col_x1) - max(x, col_x0))
-            overlap_ratio = overlap / region_width
-            distance = abs(region_center_x - column["center"])
-
-            if overlap_ratio > best_overlap or (
-                abs(overlap_ratio - best_overlap) <= COLUMN_ORDER_EPSILON and distance < best_distance
-            ):
-                best_overlap = overlap_ratio
-                best_distance = distance
-                best_index = int(column["index"])
-
-        if best_overlap <= 0:
-            nearest_column = min(columns, key=lambda col: abs(region_center_x - col["center"]))
-            best_index = int(nearest_column["index"])
-            best_distance = abs(region_center_x - nearest_column["center"])
-
-        order_key = (
-            float(best_index),
-            float(y),
-            float(x),
-            float(best_distance),
-        )
-
-        return RegionColumnMetrics(
-            column_index=best_index,
-            order_key=order_key,
-            overlap_ratio=float(max(best_overlap, 0.0)),
-        )
-
-    def _sort_regions_by_columns(
-        self,
-        regions: list[dict[str, Any]],
-        columns: Sequence[ColumnOrderingInfo],
-        assign_rank: bool = False,
-        store_column_index: bool = False,
-    ) -> list[dict[str, Any]]:
-        if not regions:
-            return regions
-
-        keyed_regions: list[tuple[tuple[float, float, float, float], dict[str, Any], int]] = []
-
-        for region in regions:
-            metrics = self._compute_region_column_metrics(region, columns)
-            keyed_regions.append((metrics.order_key, region, metrics.column_index))
-
-        keyed_regions.sort(key=lambda item: item[0])
-
-        sorted_regions: list[dict[str, Any]] = []
-        for rank, (_, region, column_index) in enumerate(keyed_regions):
-            if assign_rank:
-                region["reading_order_rank"] = rank
-            if store_column_index:
-                region["column_index"] = int(column_index)
-            sorted_regions.append(region)
-
-        return sorted_regions
-
     def _perform_page_correction(
         self, raw_text: str, page_num: int
     ) -> tuple[str, float, bool]:
-        correction_result = self.correct_text(raw_text)
+        """Perform page-level text correction."""
+        correction_result = self.recognizer.correct_text(raw_text)
 
         if isinstance(correction_result, dict):
             corrected_text = correction_result.get("corrected_text", raw_text)
@@ -812,7 +375,7 @@ class Pipeline:
         self,
         pdf_path: Path,
         page_num: int,
-        page_image: np.ndarray,
+        page_image: Any,
         regions: list[dict[str, Any]],
         processed_regions: list[dict[str, Any]],
         raw_text: str,
@@ -820,6 +383,7 @@ class Pipeline:
         correction_confidence: float,
         column_layout: dict[str, Any] | None,
     ) -> dict[str, Any]:
+        """Build page result dictionary."""
         page_height, page_width = page_image.shape[0], page_image.shape[1]
 
         page_result = {
@@ -841,6 +405,7 @@ class Pipeline:
         return page_result
 
     def _save_page_output(self, page_output_dir: Path, page_num: int, page_result: dict[str, Any]) -> None:
+        """Save page processing output."""
         page_output_file = page_output_dir / f"page_{page_num}.json"
         with page_output_file.open("w", encoding="utf-8") as f:
             json.dump(page_result, f, ensure_ascii=False, indent=2)
@@ -854,6 +419,7 @@ class Pipeline:
         processing_stopped: bool,
         summary_output_dir: Path,
     ) -> dict[str, Any]:
+        """Create PDF processing summary."""
         pages_summary, status_counts = self._build_pages_summary(processed_pages)
 
         temp_summary_for_errors = {
@@ -884,6 +450,7 @@ class Pipeline:
     def _build_pages_summary(
         self, processed_pages: list[dict[str, Any]]
     ) -> tuple[list[dict[str, Any]], dict[str, int]]:
+        """Build summary of processed pages."""
         pages_summary: list[dict[str, Any]] = []
         status_counts = {"complete": 0, "partial": 0, "incomplete": 0}
 
@@ -898,45 +465,15 @@ class Pipeline:
         return pages_summary, status_counts
 
     def _determine_summary_filename(self, processing_stopped: bool, has_errors: bool) -> str:
+        """Determine summary filename based on processing status."""
         if processing_stopped:
             return "summary_incomplete.json"
         if has_errors:
             return "summary_partial.json"
         return "summary.json"
 
-    def _determine_pages_to_process(
-        self,
-        total_pages: int,
-        max_pages: int | None = None,
-        page_range: tuple[int, int] | None = None,
-        pages: list[int] | None = None,
-    ) -> list[int]:
-        """Determine which pages to process based on limiting options"""
-        if pages is not None:
-            # Specific pages specified
-            valid_pages = [p for p in pages if 1 <= p <= total_pages]
-            if len(valid_pages) != len(pages):
-                invalid_pages = [p for p in pages if p not in valid_pages]
-                logger.warning("Invalid page numbers (outside 1-%d): %s", total_pages, invalid_pages)
-            return sorted(valid_pages)
-
-        elif page_range is not None:
-            # Page range specified
-            start, end = page_range
-            start = max(1, start)
-            end = min(total_pages, end)
-            return list(range(start, end + 1))
-
-        elif max_pages is not None:
-            # Max pages specified
-            return list(range(1, min(max_pages + 1, total_pages + 1)))
-
-        else:
-            # Process all pages
-            return list(range(1, total_pages + 1))
-
     def _check_for_rate_limit_errors(self, page_result: dict[str, Any]) -> bool:
-        """Check if page result contains rate limit errors"""
+        """Check if page result contains rate limit errors."""
         try:
             # Check in regions
             regions = page_result.get("regions", [])
@@ -968,7 +505,7 @@ class Pipeline:
         return False
 
     def _check_for_any_errors(self, summary: dict[str, Any]) -> bool:
-        """Check if summary contains any processing errors"""
+        """Check if summary contains any processing errors."""
         try:
             pages_data = summary.get("pages_data", [])
             for page_result in pages_data:
@@ -1019,7 +556,7 @@ class Pipeline:
         page_range: tuple[int, int] | None = None,
         specific_pages: list[int] | None = None,
     ) -> dict[str, Any]:
-        """Process all PDFs in a directory"""
+        """Process all PDFs in a directory."""
         input_dir = Path(input_dir)
         output_base = Path(output_dir)
         model_base_dir = output_base / self.model
@@ -1082,7 +619,7 @@ class Pipeline:
         return summary
 
     def _save_results(self, result: dict[str, Any], output_path: Path) -> None:
-        """Save processing results to JSON file"""
+        """Save processing results to JSON file."""
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         with output_path.open("w", encoding="utf-8") as f:
