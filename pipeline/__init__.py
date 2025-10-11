@@ -30,12 +30,11 @@ try:
 except Exception:  # pragma: no cover - optional dependency guard
     fitz = None  # type: ignore
 
-from .gemini import GeminiClient
+from .layout.order.multi_column import column_boxes
 from .misc import tz_now
-from .multi_column import column_boxes
-from .openai import OpenAIClient
 from .prompt import PromptManager
 from .ratelimit import rate_limiter
+from .vlm import GeminiClient, OpenAIClient
 
 logger = logging.getLogger(__name__)
 
