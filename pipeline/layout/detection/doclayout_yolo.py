@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ..types import BBox, Region
+from ...types import BBox, Region
 
 if TYPE_CHECKING:
     import numpy as np
@@ -41,7 +41,7 @@ class DocLayoutYOLODetector:
             model_path: Path to DocLayout-YOLO model weights
             confidence_threshold: Confidence threshold for detections
         """
-        from models import DocLayoutYOLO
+        from models.doclayout_yolo import DocLayoutYOLO
 
         self.model_path = Path(model_path) if model_path else None
         self.confidence_threshold = confidence_threshold

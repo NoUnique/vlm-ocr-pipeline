@@ -12,10 +12,12 @@ from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
+from .detector import LayoutDetector
 from .doclayout_yolo import DocLayoutYOLODetector
 from .mineru import MinerUVLMDetector, MinerUDocLayoutYOLODetector
 
 __all__ = [
+    "LayoutDetector",
     "DocLayoutYOLODetector",
     "MinerUVLMDetector",
     "MinerUDocLayoutYOLODetector",

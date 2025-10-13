@@ -10,7 +10,8 @@ from typing import Any
 import numpy as np
 
 from ..prompt import PromptManager
-from .api import GeminiClient, OpenAIClient
+from .api.gemini import GeminiClient
+from .api.openai import OpenAIClient
 from .cache import RecognitionCache
 
 logger = logging.getLogger(__name__)

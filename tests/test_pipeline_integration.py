@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from pipeline import Pipeline
-from pipeline.conversion import DocumentConverter
+from pipeline.conversion.converter import DocumentConverter
 from pipeline.layout.detection import LayoutDetector
 from pipeline.layout.ordering import ReadingOrderAnalyzer
 from pipeline.recognition import TextRecognizer

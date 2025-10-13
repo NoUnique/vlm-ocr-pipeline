@@ -14,6 +14,7 @@ from typing import Any, Callable
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "ReadingOrderAnalyzer",
     "MultiColumnSorter",
     "MinerULayoutReaderSorter",
     "MinerUXYCutSorter", 
@@ -24,6 +25,7 @@ __all__ = [
     "validate_combination",
 ]
 
+from .analyzer import ReadingOrderAnalyzer
 from .pymupdf import MultiColumnSorter
 from .mineru import MinerULayoutReaderSorter, MinerUXYCutSorter, MinerUVLMSorter
 from .olmocr import OlmOCRVLMSorter

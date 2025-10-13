@@ -16,7 +16,7 @@ try:
 except ImportError:
     pass
 
-from .conversion import DocumentConverter
+from .conversion.converter import DocumentConverter
 from .layout.detection import create_detector as create_detector_impl
 from .layout.ordering import create_sorter as create_sorter_impl
 from .layout.ordering import validate_combination
