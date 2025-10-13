@@ -13,6 +13,10 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from mineru.model.layout.doclayoutyolo import DocLayoutYOLOModel
+from mineru.utils.enum_class import ModelPath
+from mineru.utils.models_download_utils import auto_download_and_get_model_root_path
+
 from ....types import BBox, Region
 
 if TYPE_CHECKING:
@@ -45,18 +49,9 @@ class MinerUDocLayoutYOLODetector:
             device: Device to use ("cuda" or "cpu")
             imgsz: Image size for inference
         """
-        try:
-            from mineru.model.layout.doclayoutyolo import DocLayoutYOLOModel
-            from mineru.utils.enum_class import ModelPath
-            from mineru.utils.models_download_utils import auto_download_and_get_model_root_path
-        except ImportError as e:
-            raise ImportError(
-                "MinerU dependencies required. Install MinerU to use this detector."
-            ) from e
-
         if model_path is None:
-            model_root = auto_download_and_get_model_root_path(ModelPath.layout_model)
-            model_path = str(Path(model_root) / ModelPath.layout_model)
+            model_root = auto_download_and_get_model_root_path(ModelPath.doclayout_yolo)
+            model_path = str(Path(model_root) / ModelPath.doclayout_yolo)
 
         self.model = DocLayoutYOLOModel(
             weight=str(model_path),

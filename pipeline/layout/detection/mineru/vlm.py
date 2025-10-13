@@ -13,6 +13,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from mineru.backend.vlm.vlm_analyze import ModelSingleton
+
 from ....types import BBox, Region
 
 if TYPE_CHECKING:
@@ -50,14 +52,6 @@ class MinerUVLMDetector:
         Raises:
             ImportError: If MinerU dependencies not available
         """
-        try:
-            from mineru.backend.vlm.vlm_analyze import ModelSingleton
-        except ImportError as e:
-            raise ImportError(
-                "MinerU VLM dependencies not available. "
-                "Please install MinerU to use this detector."
-            ) from e
-
         self.model_path = model
         self.backend = backend
         self.detection_only = detection_only

@@ -28,9 +28,10 @@ def test_doclayout_detector_returns_regions_with_bbox():
     
     # If regions exist, they should have proper format
     for region in regions:
-        assert "type" in region
-        assert "coords" in region
-        assert "confidence" in region
-        assert "bbox" in region
-        assert "source" in region
+        assert hasattr(region, "type")
+        assert hasattr(region, "coords")
+        assert hasattr(region, "confidence")
+        assert hasattr(region, "bbox")
+        assert hasattr(region, "source")
+        assert region.bbox is not None
 

@@ -77,7 +77,7 @@ class TextRecognizer:
         )
 
     def process_regions(
-        self, image: np.ndarray, regions: Sequence[dict[str, Any]]
+        self, image: np.ndarray, regions: Sequence[Region]
     ) -> list[Region]:
         """Process all regions to extract text.
 
@@ -123,8 +123,8 @@ class TextRecognizer:
 
         # Extract text
         try:
-            text = self.client.extract_text(region_image, region, prompt)
-            region.text = text
+            result = self.client.extract_text(region_image, region.to_dict(), prompt)
+            region.text = result.get("text", "") if isinstance(result, dict) else str(result)
         except Exception as e:
             logger.error("Failed to extract text: %s", e)
             region.text = ""

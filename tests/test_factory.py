@@ -1,72 +1,60 @@
-"""Tests for factory pattern."""
+"""Tests for factory functions."""
 
 from __future__ import annotations
 
 import pytest
 
-from pipeline.factory import DetectorFactory, SorterFactory
+from pipeline.layout.detection import create_detector, list_available_detectors
+from pipeline.layout.ordering import create_sorter, list_available_sorters
 
 
-def test_detector_factory_lists_available():
-    """Test DetectorFactory lists available detectors."""
-    available = DetectorFactory.list_available()
+def test_list_available_detectors():
+    """Test list_available_detectors function."""
+    available = list_available_detectors()
     
     assert "doclayout-yolo" in available
 
 
-def test_detector_factory_creates_doclayout():
-    """Test DetectorFactory creates DocLayout-YOLO detector."""
-    detector = DetectorFactory.create("doclayout-yolo", confidence_threshold=0.5)
+def test_create_detector_doclayout():
+    """Test create_detector creates DocLayout-YOLO detector."""
+    detector = create_detector("doclayout-yolo", confidence_threshold=0.5)
     
     assert detector is not None
     assert hasattr(detector, "detect")
 
 
-def test_detector_factory_unknown_detector():
-    """Test DetectorFactory raises error for unknown detector."""
+def test_create_detector_unknown():
+    """Test create_detector raises error for unknown detector."""
     with pytest.raises(ValueError, match="Unknown detector"):
-        DetectorFactory.create("unknown-detector")
+        create_detector("unknown-detector")
 
 
-def test_sorter_factory_lists_available():
-    """Test SorterFactory lists available sorters."""
-    available = SorterFactory.list_available()
+def test_list_available_sorters():
+    """Test list_available_sorters function."""
+    available = list_available_sorters()
     
     assert "pymupdf" in available
     assert "mineru-xycut" in available
 
 
-def test_sorter_factory_creates_pymupdf():
-    """Test SorterFactory creates PyMuPDF sorter."""
-    sorter = SorterFactory.create("pymupdf")
+def test_create_sorter_pymupdf():
+    """Test create_sorter creates PyMuPDF sorter."""
+    sorter = create_sorter("pymupdf")
     
     assert sorter is not None
     assert hasattr(sorter, "sort")
 
 
-def test_sorter_factory_creates_xycut():
-    """Test SorterFactory creates XY-Cut sorter."""
-    sorter = SorterFactory.create("mineru-xycut")
+def test_create_sorter_xycut():
+    """Test create_sorter creates XY-Cut sorter."""
+    sorter = create_sorter("mineru-xycut")
     
     assert sorter is not None
     assert hasattr(sorter, "sort")
 
 
-def test_sorter_factory_unknown_sorter():
-    """Test SorterFactory raises error for unknown sorter."""
+def test_create_sorter_unknown():
+    """Test create_sorter raises error for unknown sorter."""
     with pytest.raises(ValueError, match="Unknown sorter"):
-        SorterFactory.create("unknown-sorter")
-
-
-def test_detector_factory_is_available():
-    """Test DetectorFactory.is_available()."""
-    assert DetectorFactory.is_available("doclayout-yolo") is True
-    assert DetectorFactory.is_available("unknown") is False
-
-
-def test_sorter_factory_is_available():
-    """Test SorterFactory.is_available()."""
-    assert SorterFactory.is_available("pymupdf") is True
-    assert SorterFactory.is_available("mineru-xycut") is True
-    assert SorterFactory.is_available("unknown") is False
+        create_sorter("unknown-sorter")
 

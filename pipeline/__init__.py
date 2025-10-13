@@ -7,7 +7,7 @@ import json
 import logging
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 # Load environment variables if not already loaded
 try:
@@ -236,11 +236,7 @@ class Pipeline:
         if self.sorter_name == "olmocr-vlm":
             processed_regions: list[Region] = sorted_regions
         else:
-            # Convert to list for recognizer processing
-            processed_regions_list = self.recognizer.process_regions(
-                image_np, cast(Sequence[dict[str, Any]], sorted_regions)
-            )
-            processed_regions = processed_regions_list
+            processed_regions = self.recognizer.process_regions(image_np, sorted_regions)
 
         # Correct text for text regions
         for region in processed_regions:
@@ -385,9 +381,7 @@ class Pipeline:
             if self.sorter_name == "olmocr-vlm":
                 processed_regions = sorted_regions
             else:
-                processed_regions = self.recognizer.process_regions(
-                    page_image, cast(Sequence[dict[str, Any]], sorted_regions)
-                )
+                processed_regions = self.recognizer.process_regions(page_image, sorted_regions)
 
             # Check for rate limit errors
             if self._check_for_rate_limit_errors({"regions": processed_regions}):
@@ -395,7 +389,7 @@ class Pipeline:
                 return None, True
 
             # Compose page-level text
-            raw_text = self._compose_page_text(cast(Sequence[dict[str, Any]], processed_regions))
+            raw_text = self._compose_page_text(processed_regions)
             
             # Correct text
             corrected_text, correction_confidence, stop_due_to_correction = self._perform_page_correction(
@@ -410,8 +404,8 @@ class Pipeline:
                 pdf_path,
                 page_num,
                 page_image,
-                cast(Sequence[dict[str, Any]], sorted_regions),
-                cast(Sequence[dict[str, Any]], processed_regions),
+                sorted_regions,
+                processed_regions,
                 raw_text,
                 corrected_text,
                 correction_confidence,
@@ -463,8 +457,8 @@ class Pipeline:
         pdf_path: Path,
         page_num: int,
         page_image: Any,
-        regions: Sequence[dict[str, Any]],
-        processed_regions: Sequence[dict[str, Any]],
+        regions: Sequence[Region],
+        processed_regions: Sequence[Region],
         raw_text: str,
         corrected_text: str,
         correction_confidence: float,
@@ -748,7 +742,7 @@ class Pipeline:
         
         return {"columns": columns}
     
-    def _compose_page_text(self, processed_regions: Sequence[dict[str, Any]]) -> str:
+    def _compose_page_text(self, processed_regions: Sequence[Region]) -> str:
         """Compose page-level raw text from processed regions in reading order.
 
         Reading order: Uses reading_order_rank if available, otherwise top-to-bottom (y),
@@ -761,27 +755,24 @@ class Pipeline:
         Returns:
             Composed text in natural reading order
         """
-        if not isinstance(processed_regions, list):
+        if not processed_regions:
             return ""
             
         text_like_types = {"plain text", "text", "title", "list"}
         sortable_regions: list[tuple[int, int, str, int | None]] = []
         
         for region in processed_regions:
-            if not isinstance(region, dict):
+            if region.type not in text_like_types:
                 continue
-            region_type = region.get("type")
-            if region_type not in text_like_types:
-                continue
-            coords = region.get("coords") or [0, 0, 0, 0]
+            coords = region.coords
             try:
                 x, y = int(coords[0]), int(coords[1])
             except Exception:
                 x, y = 0, 0
-            text_value = region.get("text")
-            if isinstance(text_value, str) and text_value.strip():
+            text_value = region.text
+            if text_value and text_value.strip():
                 # Keep internal newlines; trim outer whitespace only
-                order_rank = region.get("reading_order_rank")
+                order_rank = region.reading_order_rank
                 sortable_regions.append((y, x, text_value.strip(), order_rank))
                 
         # Sort by reading order rank if available, otherwise by y then x

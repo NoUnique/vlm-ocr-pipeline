@@ -51,6 +51,5 @@ known-first-party = ["pipeline", "models"]
 "pipeline/layout/ordering/mineru/*.py" = ["PLC0415"]
 "pipeline/layout/ordering/olmocr/*.py" = ["PLC0415"]
 "pipeline/layout/ordering/pymupdf/*.py" = ["PLC0415"]
-# Test files: allow magic numbers (concrete test values) and sys.path modification
-"tests/test_*_standalone.py" = ["E402", "PLR2004"]
+# Test files: allow magic numbers (concrete test values)
 "tests/test_*.py" = ["PLR2004"]

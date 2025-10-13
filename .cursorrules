@@ -88,6 +88,13 @@
   - Install dependencies: `uv pip install <package>`
   - Sync dependencies: `uv sync`
   - Run commands in uv environment: `uv run <command>`
+  - **Install to project venv:** All packages must be installed in the project's `.venv`
+  - **NEVER install with -e (editable mode)** from external directories
+- **Dependency Management:**
+  - Install from PyPI: `uv pip install <package>`
+  - After installation, check version: `uv pip show <package>`
+  - Add to requirements.txt with exact version: `package==X.Y.Z`
+  - Keep requirements.txt updated with all installed packages
 - **Testing:** All Python code execution and testing MUST be done within the `uv` environment.
   - Run tests: `uv run pytest`
   - Run scripts: `uv run python script.py`

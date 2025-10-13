@@ -11,7 +11,6 @@ import pytest
 from pipeline import Pipeline
 from pipeline.conversion.converter import DocumentConverter
 from pipeline.layout.detection import LayoutDetector
-from pipeline.layout.ordering import ReadingOrderAnalyzer
 from pipeline.recognition import TextRecognizer
 from pipeline.recognition.cache import RecognitionCache
 
@@ -85,7 +84,6 @@ def pipeline_fixture(tmp_path):
     # Initialize components
     pipeline.converter = DocumentConverter(temp_dir=pipeline.temp_dir)
     pipeline.detector = LayoutDetector.__new__(LayoutDetector)
-    pipeline.analyzer = ReadingOrderAnalyzer()
     pipeline.recognizer = TextRecognizer.__new__(TextRecognizer)
 
     fake_prompt_manager = FakePromptManager()

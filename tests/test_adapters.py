@@ -1,91 +1,56 @@
-"""Tests for framework adapters."""
+"""Tests for BBox format conversions.
+
+These tests verify bbox format conversions between different frameworks.
+"""
 
 from __future__ import annotations
 
-from pipeline.adapters import DocLayoutYOLOAdapter, MinerUAdapter
 from pipeline.types import BBox
 
 
-def test_doclayout_yolo_adapter_to_region():
-    """Test DocLayout-YOLO adapter to_region conversion."""
-    adapter = DocLayoutYOLOAdapter()
-    
-    raw_data = {
-        "type": "plain text",
-        "coords": [100, 50, 200, 150],
-        "confidence": 0.95,
-    }
-    
-    region = adapter.to_region(raw_data)
-    
-    assert region["type"] == "plain text"
-    assert region["coords"] == [100, 50, 200, 150]
-    assert region["confidence"] == 0.95
-    assert "bbox" in region
-    assert region["bbox"].x0 == 100
-    assert region["bbox"].x1 == 300
-    assert region["source"] == "doclayout-yolo"
+class TestBBoxFormatConversions:
+    """Test various bbox format conversions."""
 
+    def test_doclayout_to_mineru(self):
+        """Test DocLayout-YOLO format to MinerU format."""
+        # DocLayout: [x, y, w, h]
+        doclayout_coords = [100, 50, 200, 150]
+        bbox = BBox.from_list(doclayout_coords, coord_format="xywh")
 
-def test_doclayout_yolo_adapter_from_region():
-    """Test DocLayout-YOLO adapter from_region conversion."""
-    adapter = DocLayoutYOLOAdapter()
-    
-    region = {
-        "type": "text",
-        "coords": [100, 50, 200, 150],
-        "confidence": 0.9,
-        "bbox": BBox(100, 50, 300, 200),
-        "source": "doclayout-yolo",
-    }
-    
-    raw_data = adapter.from_region(region)
-    
-    assert raw_data["type"] == "text"
-    assert raw_data["coords"] == [100, 50, 200, 150]
-    assert raw_data["confidence"] == 0.9
+        # Convert to MinerU: [x0, y0, x1, y1]
+        mineru_coords = bbox.to_mineru_bbox()
 
+        assert mineru_coords == [100, 50, 300, 200]
 
-def test_mineru_adapter_to_region():
-    """Test MinerU adapter to_region conversion."""
-    adapter = MinerUAdapter()
-    
-    raw_data = {
-        "type": "text",
-        "bbox": [100, 50, 300, 200],
-        "text": "Hello world",
-        "index": 0,
-        "confidence": 0.95,
-    }
-    
-    region = adapter.to_region(raw_data)
-    
-    assert region["type"] == "text"
-    assert region["coords"] == [100, 50, 200, 150]  # Converted to xywh
-    assert region["confidence"] == 0.95
-    assert region["text"] == "Hello world"
-    assert region["index"] == 0
-    assert region["reading_order_rank"] == 0  # Copied from index
-    assert region["source"] == "mineru-vlm"
+    def test_mineru_to_doclayout(self):
+        """Test MinerU format to DocLayout-YOLO format."""
+        # MinerU: [x0, y0, x1, y1]
+        mineru_coords = [100, 50, 300, 200]
+        bbox = BBox.from_mineru_bbox(mineru_coords)
 
+        # Convert to DocLayout: [x, y, w, h]
+        doclayout_coords = bbox.to_list_xywh()
 
-def test_mineru_adapter_from_region():
-    """Test MinerU adapter from_region conversion."""
-    adapter = MinerUAdapter()
-    
-    region = {
-        "type": "text",
-        "coords": [100, 50, 200, 150],
-        "confidence": 0.9,
-        "bbox": BBox(100, 50, 300, 200),
-        "text": "Hello",
-        "reading_order_rank": 0,
-    }
-    
-    raw_data = adapter.from_region(region)
-    
-    assert raw_data["type"] == "text"
-    assert raw_data["bbox"] == [100, 50, 300, 200]  # Converted to xyxy
-    assert raw_data["text"] == "Hello"
-    assert raw_data["index"] == 0  # Copied from reading_order_rank
+        assert doclayout_coords == [100, 50, 200, 150]
+
+    def test_doclayout_to_olmocr_anchor(self):
+        """Test DocLayout-YOLO to olmOCR anchor text."""
+        doclayout_coords = [100, 50, 200, 150]
+        bbox = BBox.from_list(doclayout_coords, coord_format="xywh")
+
+        # Text region
+        anchor_text = bbox.to_olmocr_anchor("text", "Chapter 1")
+        assert anchor_text == "[100x50]Chapter 1"
+
+        # Image region
+        anchor_image = bbox.to_olmocr_anchor("image")
+        assert anchor_image == "[Image 100x50 to 300x200]"
+
+    def test_mineru_to_olmocr_anchor(self):
+        """Test MinerU bbox to olmOCR anchor text."""
+        mineru_bbox = [100, 50, 300, 200]
+        bbox = BBox.from_mineru_bbox(mineru_bbox)
+
+        anchor = bbox.to_olmocr_anchor("table")
+        assert anchor == "[Table 100x50 to 300x200]"
 

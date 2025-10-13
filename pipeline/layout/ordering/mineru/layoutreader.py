@@ -112,7 +112,7 @@ class MinerULayoutReaderSorter:
         heights = []
 
         for region in regions:
-            if region.type in text_types:
+            if region.type in text_types and region.bbox is not None:
                 heights.append(region.bbox.height)
 
         if heights:
@@ -136,6 +136,9 @@ class MinerULayoutReaderSorter:
 
         for region_idx, region in enumerate(regions):
             bbox = region.bbox
+            if bbox is None:
+                continue  # Skip regions without bbox
+                
             region_type = region.type
 
             if region_type in {"plain text", "text", "title"}:
