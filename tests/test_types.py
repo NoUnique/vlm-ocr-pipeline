@@ -129,7 +129,7 @@ def test_regions_to_olmocr_anchor_text():
 
 def test_bbox_from_list_xywh():
     """Test BBox creation from list with xywh format."""
-    bbox = BBox.from_list([100, 50, 200, 150], format="xywh")
+    bbox = BBox.from_list([100, 50, 200, 150], coord_format="xywh")
     
     assert bbox.x0 == 100
     assert bbox.x1 == 300
@@ -137,7 +137,7 @@ def test_bbox_from_list_xywh():
 
 def test_bbox_from_list_xyxy():
     """Test BBox creation from list with xyxy format."""
-    bbox = BBox.from_list([100, 50, 300, 200], format="xyxy")
+    bbox = BBox.from_list([100, 50, 300, 200], coord_format="xyxy")
     
     assert bbox.x0 == 100
     assert bbox.x1 == 300
@@ -146,7 +146,7 @@ def test_bbox_from_list_xyxy():
 def test_bbox_from_list_invalid_format():
     """Test BBox creation with invalid format."""
     with pytest.raises(ValueError, match="Unknown bbox format"):
-        BBox.from_list([100, 50, 200, 150], format="invalid")
+        BBox.from_list([100, 50, 200, 150], coord_format="invalid")
 
 
 def test_bbox_clip():

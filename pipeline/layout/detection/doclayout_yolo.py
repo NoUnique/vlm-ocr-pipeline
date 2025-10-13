@@ -83,7 +83,7 @@ class DocLayoutYOLODetector:
             Unified Region dict with BBox
         """
         coords = raw_data["coords"]
-        bbox = BBox.from_list(coords, format="xywh")
+        bbox = BBox.from_list(coords, coord_format="xywh")
 
         return {
             "type": raw_data["type"],

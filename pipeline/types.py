@@ -112,29 +112,29 @@ class BBox:
         return cls(x0=x0, y0=y0, x1=x1, y1=y1)
 
     @classmethod
-    def from_list(cls, coords: list[float] | tuple[float, ...], format: str = "xywh") -> BBox:
+    def from_list(cls, coords: list[float] | tuple[float, ...], coord_format: str = "xywh") -> BBox:
         """Create from coordinate list.
 
         Args:
             coords: Coordinate list (at least 4 elements)
-            format: "xywh" or "xyxy"
+            coord_format: "xywh" or "xyxy"
 
         Returns:
             Unified BBox object
 
         Raises:
-            ValueError: If format is unknown
+            ValueError: If coord_format is unknown
 
         Example:
-            >>> bbox = BBox.from_list([100, 50, 200, 150], format="xywh")
-            >>> bbox = BBox.from_list([100, 50, 300, 200], format="xyxy")
+            >>> bbox = BBox.from_list([100, 50, 200, 150], coord_format="xywh")
+            >>> bbox = BBox.from_list([100, 50, 300, 200], coord_format="xyxy")
         """
-        if format == "xywh":
+        if coord_format == "xywh":
             return cls.from_xywh(*coords[:4])
-        elif format == "xyxy":
+        elif coord_format == "xyxy":
             return cls.from_xyxy(*coords[:4])
         else:
-            raise ValueError(f"Unknown bbox format: {format}. Use 'xywh' or 'xyxy'.")
+            raise ValueError(f"Unknown bbox coord_format: {coord_format}. Use 'xywh' or 'xyxy'.")
 
     @classmethod
     def from_pymupdf_rect(cls, rect: Any) -> BBox:
@@ -657,7 +657,7 @@ def ensure_bbox_in_region(region: Region) -> Region:
         BBox(x0=100, y0=50, x1=300, y1=200)
     """
     if "bbox" not in region or region["bbox"] is None:
-        region["bbox"] = BBox.from_list(region["coords"], format="xywh")
+        region["bbox"] = BBox.from_list(region["coords"], coord_format="xywh")
     return region
 
 
@@ -731,10 +731,10 @@ def normalize_region_coords(region: dict[str, Any]) -> Region:
     if "coords" in region:
         coords = region["coords"]
         if "bbox" not in region:
-            region["bbox"] = BBox.from_list(coords, format="xywh")
+            region["bbox"] = BBox.from_list(coords, coord_format="xywh")
     # If has bbox field (MinerU format), convert to coords
     elif "bbox" in region and isinstance(region["bbox"], (list, tuple)):
-        bbox = BBox.from_list(region["bbox"], format="xyxy")
+        bbox = BBox.from_list(region["bbox"], coord_format="xyxy")
         region["coords"] = bbox.to_list_xywh()
         region["bbox"] = bbox
     else:

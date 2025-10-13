@@ -44,6 +44,13 @@ combine-as-imports = true
 known-first-party = ["pipeline", "models"]
 
 [lint.per-file-ignores]
-# Example: allow complex function bodies in a specific module
-# "pipeline/__init__.py" = ["PLR0912"]
+# Allow lazy imports (optional dependencies) in these modules
 "models/doclayout_yolo.py" = ["PLC0415"]
+"pipeline/layout/detection/doclayout_yolo.py" = ["PLC0415"]
+"pipeline/layout/detection/mineru/*.py" = ["PLC0415"]
+"pipeline/layout/ordering/mineru/*.py" = ["PLC0415"]
+"pipeline/layout/ordering/olmocr/*.py" = ["PLC0415"]
+"pipeline/layout/ordering/pymupdf/*.py" = ["PLC0415"]
+# Test files: allow magic numbers (concrete test values) and sys.path modification
+"tests/test_*_standalone.py" = ["E402", "PLR2004"]
+"tests/test_*.py" = ["PLR2004"]

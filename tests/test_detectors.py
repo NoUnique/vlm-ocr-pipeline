@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from pipeline.layout.detection import DocLayoutYOLODetector
 
@@ -13,7 +12,7 @@ def test_doclayout_detector_has_detect_method():
     detector = DocLayoutYOLODetector()
     
     assert hasattr(detector, "detect")
-    assert callable(detector.detect")
+    assert callable(detector.detect)
 
 
 def test_doclayout_detector_returns_regions_with_bbox():

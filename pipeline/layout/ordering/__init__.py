@@ -12,6 +12,11 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from .analyzer import ReadingOrderAnalyzer
+from .mineru import MinerULayoutReaderSorter, MinerUVLMSorter, MinerUXYCutSorter
+from .olmocr import OlmOCRVLMSorter
+from .pymupdf import MultiColumnSorter
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -25,11 +30,6 @@ __all__ = [
     "list_available_sorters",
     "validate_combination",
 ]
-
-from .analyzer import ReadingOrderAnalyzer
-from .mineru import MinerULayoutReaderSorter, MinerUVLMSorter, MinerUXYCutSorter
-from .olmocr import OlmOCRVLMSorter
-from .pymupdf import MultiColumnSorter
 
 _SORTER_REGISTRY: dict[str, Callable[..., Any]] = {
     "pymupdf": MultiColumnSorter,  # Legacy name for backward compatibility

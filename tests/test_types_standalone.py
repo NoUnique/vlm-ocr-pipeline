@@ -42,14 +42,14 @@ class TestBBoxCreation:
 
     def test_from_list_xywh(self):
         """Test BBox creation from list with xywh format."""
-        bbox = BBox.from_list([100, 50, 200, 150], format="xywh")
+        bbox = BBox.from_list([100, 50, 200, 150], coord_format="xywh")
 
         assert bbox.x0 == 100
         assert bbox.x1 == 300
 
     def test_from_list_xyxy(self):
         """Test BBox creation from list with xyxy format."""
-        bbox = BBox.from_list([100, 50, 300, 200], format="xyxy")
+        bbox = BBox.from_list([100, 50, 300, 200], coord_format="xyxy")
 
         assert bbox.x0 == 100
         assert bbox.x1 == 300
@@ -57,7 +57,7 @@ class TestBBoxCreation:
     def test_from_list_invalid_format(self):
         """Test BBox creation with invalid format raises error."""
         with pytest.raises(ValueError, match="Unknown bbox format"):
-            BBox.from_list([100, 50, 200, 150], format="invalid")
+            BBox.from_list([100, 50, 200, 150], coord_format="invalid")
 
     def test_from_mineru_bbox(self):
         """Test BBox creation from MinerU bbox format."""
@@ -250,7 +250,7 @@ class TestBBoxRoundTrip:
     def test_xywh_roundtrip(self):
         """Test xywh → BBox → xywh."""
         original = [100, 50, 200, 150]
-        bbox = BBox.from_list(original, format="xywh")
+        bbox = BBox.from_list(original, coord_format="xywh")
         converted = bbox.to_list_xywh()
 
         assert converted == original
@@ -258,7 +258,7 @@ class TestBBoxRoundTrip:
     def test_xyxy_roundtrip(self):
         """Test xyxy → BBox → xyxy."""
         original = [100, 50, 300, 200]
-        bbox = BBox.from_list(original, format="xyxy")
+        bbox = BBox.from_list(original, coord_format="xyxy")
         converted = bbox.to_list_xyxy()
 
         assert converted == original

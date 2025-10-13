@@ -20,14 +20,6 @@ def test_validator_invalid_detector():
     assert "Unknown detector" in result.message
 
 
-def test_validator_invalid_detector():
-    """Test validator rejects invalid detector."""
-    result = PipelineValidator.validate("invalid-detector", "pymupdf")
-    
-    assert result.is_valid is False
-    assert "Unknown detector" in result.message
-
-
 def test_validator_recommended_combination():
     """Test validator identifies recommended combinations."""
     result = PipelineValidator.validate("mineru-vlm", "mineru-vlm")

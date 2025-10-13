@@ -11,11 +11,11 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from .detector import LayoutDetector
 from .doclayout_yolo import DocLayoutYOLODetector
 from .mineru import MinerUDocLayoutYOLODetector, MinerUVLMDetector
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "LayoutDetector",
