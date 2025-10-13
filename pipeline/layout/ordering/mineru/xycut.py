@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from ..types import Region, ensure_bbox_in_region
+from pipeline.types import Region, ensure_bbox_in_region
 
 if TYPE_CHECKING:
     import numpy as np

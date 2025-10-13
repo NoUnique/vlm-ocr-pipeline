@@ -367,7 +367,7 @@ class MultiColumnSorter:
     
     def _detect_column_layout(self, pymupdf_page: Any, page_image: np.ndarray) -> dict[str, Any] | None:
         """Detect column layout using column_boxes utility function."""
-        from ..types import BBox
+        from pipeline.types import BBox
         
         try:
             detected_boxes = column_boxes(pymupdf_page)
@@ -422,7 +422,7 @@ class MultiColumnSorter:
                 threshold = max(grouping_threshold, col_width)
                 
                 if abs(center_x - col_center) <= threshold:
-                    from ..types import BBox
+                    from pipeline.types import BBox
                     column["bbox"] = BBox(
                         x0=min(column["bbox"].x0, bbox.x0),
                         y0=min(column["bbox"].y0, bbox.y0),
@@ -458,7 +458,7 @@ class MultiColumnSorter:
     
     def _sort_by_columns(self, regions: list[Any], columns: list[ColumnInfo]) -> list[Any]:
         """Sort regions by column-aware reading order."""
-        from ..types import ensure_bbox_in_region
+        from pipeline.types import ensure_bbox_in_region
         
         if not regions:
             return regions
@@ -507,7 +507,7 @@ class MultiColumnSorter:
     
     def _fallback_sort(self, regions: list[Any]) -> list[Any]:
         """Fallback to simple geometric sorting."""
-        from ..types import ensure_bbox_in_region
+        from pipeline.types import ensure_bbox_in_region
         
         if not regions:
             return regions

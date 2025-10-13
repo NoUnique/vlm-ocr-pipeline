@@ -6,7 +6,7 @@ import gc
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence, cast
 
 # Load environment variables if not already loaded
 try:
@@ -235,12 +235,16 @@ class Pipeline:
         if self.sorter_name == "olmocr-vlm":
             processed_regions = sorted_regions
         else:
-            processed_regions = self.recognizer.process_regions(image_np, sorted_regions)
+            processed_regions = self.recognizer.process_regions(
+                image_np, cast(Sequence[dict[str, Any]], sorted_regions)
+            )
 
         # Correct text for text regions
         for region in processed_regions:
             if region["type"] in ["plain text", "title", "list"] and "text" in region:
-                region["corrected_text"] = self.recognizer.correct_text(region["text"])
+                corrected = self.recognizer.correct_text(region["text"])
+                if isinstance(corrected, str):
+                    region["corrected_text"] = corrected
 
         result = {
             "image_path": str(image_path),
@@ -378,7 +382,9 @@ class Pipeline:
             if self.sorter_name == "olmocr-vlm":
                 processed_regions = sorted_regions
             else:
-                processed_regions = self.recognizer.process_regions(page_image, sorted_regions)
+                processed_regions = self.recognizer.process_regions(
+                    page_image, cast(Sequence[dict[str, Any]], sorted_regions)
+                )
 
             # Check for rate limit errors
             if self._check_for_rate_limit_errors({"regions": processed_regions}):
@@ -386,7 +392,7 @@ class Pipeline:
                 return None, True
 
             # Compose page-level text
-            raw_text = self._compose_page_text(processed_regions)
+            raw_text = self._compose_page_text(cast(Sequence[dict[str, Any]], processed_regions))
             
             # Correct text
             corrected_text, correction_confidence, stop_due_to_correction = self._perform_page_correction(
@@ -401,8 +407,8 @@ class Pipeline:
                 pdf_path,
                 page_num,
                 page_image,
-                sorted_regions,
-                processed_regions,
+                cast(Sequence[dict[str, Any]], sorted_regions),
+                cast(Sequence[dict[str, Any]], processed_regions),
                 raw_text,
                 corrected_text,
                 correction_confidence,
@@ -454,8 +460,8 @@ class Pipeline:
         pdf_path: Path,
         page_num: int,
         page_image: Any,
-        regions: list[dict[str, Any]],
-        processed_regions: list[dict[str, Any]],
+        regions: Sequence[dict[str, Any]],
+        processed_regions: Sequence[dict[str, Any]],
         raw_text: str,
         corrected_text: str,
         correction_confidence: float,
@@ -717,9 +723,9 @@ class Pipeline:
         if not column_indices:
             return None
         
-        # Build column layout info
+        # Build column layout info (filter out None values)
         columns = []
-        for col_idx in sorted(column_indices):
+        for col_idx in sorted(idx for idx in column_indices if idx is not None):
             col_regions = [r for r in regions if r.get("column_index") == col_idx]
             if col_regions:
                 # Get bbox if available
@@ -739,7 +745,7 @@ class Pipeline:
         
         return {"columns": columns}
     
-    def _compose_page_text(self, processed_regions: list[Region]) -> str:
+    def _compose_page_text(self, processed_regions: Sequence[dict[str, Any]]) -> str:
         """Compose page-level raw text from processed regions in reading order.
 
         Reading order: Uses reading_order_rank if available, otherwise top-to-bottom (y),

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from ..types import Region
+from pipeline.types import Region
 
 if TYPE_CHECKING:
     import numpy as np
@@ -76,7 +76,7 @@ class MinerUVLMSorter:
 
     def _fallback_sort(self, regions: list[Region]) -> list[Region]:
         """Fallback to simple geometric sorting."""
-        from ..types import ensure_bbox_in_region
+        from pipeline.types import ensure_bbox_in_region
 
         regions = [ensure_bbox_in_region(r) for r in regions]
         sorted_regions = sorted(regions, key=lambda r: (r["bbox"].y0, r["bbox"].x0))

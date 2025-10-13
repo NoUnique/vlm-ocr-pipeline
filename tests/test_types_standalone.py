@@ -304,6 +304,7 @@ class TestRegionUtilities:
         region = ensure_bbox_in_region(region)
 
         # Should keep the same bbox object
+        assert "bbox" in region
         assert region["bbox"] is bbox_obj
 
     def test_regions_to_olmocr_anchor_text(self):

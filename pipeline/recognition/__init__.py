@@ -5,7 +5,7 @@ from __future__ import annotations
 import gc
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 
@@ -58,7 +58,7 @@ class TextRecognizer:
 
         # Initialize VLM client
         if self.backend == "gemini":
-            self.client = GeminiClient(model=model, tier=gemini_tier)
+            self.client = GeminiClient(gemini_model=model)
         elif self.backend == "openai":
             self.client = OpenAIClient(model=model)
         else:
@@ -75,7 +75,7 @@ class TextRecognizer:
         )
 
     def process_regions(
-        self, image: np.ndarray, regions: list[dict[str, Any]]
+        self, image: np.ndarray, regions: Sequence[dict[str, Any]]
     ) -> list[dict[str, Any]]:
         """Process all regions to extract text.
 
@@ -121,7 +121,7 @@ class TextRecognizer:
 
         # Extract text
         try:
-            text = self.client.extract_text(region_image, prompt)
+            text = self.client.extract_text(region_image, region, prompt)
             region["text"] = text
         except Exception as e:
             logger.error("Failed to extract text: %s", e)
@@ -165,23 +165,23 @@ class TextRecognizer:
 
         return image[y1:y2, x1:x2]
 
-    def _get_prompt_for_region_type(self, region_type: str) -> dict[str, str]:
+    def _get_prompt_for_region_type(self, region_type: str) -> str:
         """Get prompt for specific region type.
 
         Args:
             region_type: Type of region
 
         Returns:
-            Prompt dict with system and user prompts
+            Prompt string for the region type
         """
         if region_type in ["plain text", "title", "list"]:
-            return self.prompt_manager.get_prompt("text_extraction")
+            return self.prompt_manager.get_prompt("text_extraction", "user")
         elif region_type == "table":
-            return self.prompt_manager.get_prompt("content_analysis")
+            return self.prompt_manager.get_prompt("content_analysis", "table_analysis", "user")
         elif region_type in ["figure", "equation"]:
-            return self.prompt_manager.get_prompt("content_analysis")
+            return self.prompt_manager.get_prompt("content_analysis", "figure_analysis", "user")
         else:
-            return self.prompt_manager.get_prompt("text_extraction")
+            return self.prompt_manager.get_prompt("text_extraction", "user")
 
     def correct_text(self, text: str) -> str | dict[str, Any]:
         """Correct extracted text using VLM.
@@ -196,8 +196,9 @@ class TextRecognizer:
             return text
 
         try:
-            prompt = self.prompt_manager.get_prompt("text_correction")
-            corrected = self.client.correct_text(text, prompt)
+            system_prompt = self.prompt_manager.get_prompt("text_correction", "system")
+            user_prompt = self.prompt_manager.get_prompt("text_correction", "user", text=text)
+            corrected = self.client.correct_text(text, system_prompt, user_prompt)
             return corrected
         except Exception as e:
             logger.error("Text correction failed: %s", e)

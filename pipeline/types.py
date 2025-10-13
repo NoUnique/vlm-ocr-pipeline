@@ -9,7 +9,7 @@ This module provides:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, NotRequired, Protocol, TypedDict
+from typing import TYPE_CHECKING, Any, NotRequired, Protocol, Sequence, TypedDict
 
 if TYPE_CHECKING:
     import numpy as np
@@ -112,7 +112,7 @@ class BBox:
         return cls(x0=x0, y0=y0, x1=x1, y1=y1)
 
     @classmethod
-    def from_list(cls, coords: list[float] | tuple[float, ...], coord_format: str = "xywh") -> BBox:
+    def from_list(cls, coords: Sequence[float], coord_format: str = "xywh") -> BBox:
         """Create from coordinate list.
 
         Args:
@@ -157,7 +157,7 @@ class BBox:
         return cls(x0=float(rect.x0), y0=float(rect.y0), x1=float(rect.x1), y1=float(rect.y1))
 
     @classmethod
-    def from_mineru_bbox(cls, bbox: list[float]) -> BBox:
+    def from_mineru_bbox(cls, bbox: Sequence[float]) -> BBox:
         """Create from MinerU bbox format.
 
         Format: [x0, y0, x1, y1]
@@ -639,7 +639,7 @@ class Sorter(Protocol):
 
 # ==================== Utility Functions ====================
 
-def ensure_bbox_in_region(region: Region) -> Region:
+def ensure_bbox_in_region(region: dict[str, Any]) -> dict[str, Any]:
     """Ensure region has bbox field populated from coords.
 
     This function is idempotent and safe to call multiple times.
@@ -648,7 +648,7 @@ def ensure_bbox_in_region(region: Region) -> Region:
         region: Region dict (may or may not have bbox)
 
     Returns:
-        Region with bbox field added
+        Region dict with bbox field added
 
     Example:
         >>> region = {"type": "text", "coords": [100, 50, 200, 150], "confidence": 0.9}
@@ -662,7 +662,7 @@ def ensure_bbox_in_region(region: Region) -> Region:
 
 
 def regions_to_olmocr_anchor_text(
-    regions: list[Region],
+    regions: Sequence[dict[str, Any]],
     page_width: int,
     page_height: int,
     max_length: int = 4000,
@@ -690,13 +690,15 @@ def regions_to_olmocr_anchor_text(
         [Image 100x100 to 300x250]
     """
     # Ensure all regions have bbox
-    regions = [ensure_bbox_in_region(r) for r in regions]
+    regions_with_bbox: Sequence[dict[str, Any]] = [ensure_bbox_in_region(r) for r in regions]
 
     # Header
     lines = [f"Page dimensions: {page_width:.1f}x{page_height:.1f}"]
 
     # Convert each region
-    for region in regions:
+    for region in regions_with_bbox:
+        if "bbox" not in region:
+            continue
         bbox: BBox = region["bbox"]
         text_content = region.get("text", "")[:50] if region["type"] in ["text", "title"] else ""
         anchor_line = bbox.to_olmocr_anchor(content_type=region["type"], text_content=text_content)

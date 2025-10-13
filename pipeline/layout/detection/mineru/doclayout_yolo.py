@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from ..types import BBox, Region
+from ....types import BBox, Region
 
 if TYPE_CHECKING:
     import numpy as np

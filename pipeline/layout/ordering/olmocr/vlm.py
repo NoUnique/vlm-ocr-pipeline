@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from ..types import BBox, Region, regions_to_olmocr_anchor_text
+from pipeline.types import BBox, Region, regions_to_olmocr_anchor_text
 
 if TYPE_CHECKING:
     import numpy as np
@@ -150,7 +150,7 @@ class OlmOCRVLMSorter:
 
     def _fallback_sort(self, regions: list[Region]) -> list[Region]:
         """Fallback to simple geometric sorting."""
-        from ..types import ensure_bbox_in_region
+        from pipeline.types import ensure_bbox_in_region
 
         if not regions:
             return regions
