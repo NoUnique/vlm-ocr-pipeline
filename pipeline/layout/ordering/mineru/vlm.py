@@ -55,7 +55,7 @@ class MinerUVLMSorter:
         if not regions:
             return regions
 
-        has_index = all("index" in r for r in regions)
+        has_index = all(r.index is not None for r in regions)
 
         if not has_index:
             logger.warning(
@@ -65,10 +65,10 @@ class MinerUVLMSorter:
             )
             return self._fallback_sort(regions)
 
-        sorted_regions = sorted(regions, key=lambda r: r.get("index", float("inf")))
+        sorted_regions = sorted(regions, key=lambda r: r.index if r.index is not None else float("inf"))
 
         for rank, region in enumerate(sorted_regions):
-            region["reading_order_rank"] = rank
+            region.reading_order_rank = rank
 
         logger.debug("Sorted %d regions using MinerU VLM ordering", len(sorted_regions))
 
@@ -79,10 +79,10 @@ class MinerUVLMSorter:
         from pipeline.types import ensure_bbox_in_region
 
         regions = [ensure_bbox_in_region(r) for r in regions]
-        sorted_regions = sorted(regions, key=lambda r: (r["bbox"].y0, r["bbox"].x0))
+        sorted_regions = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0) if r.bbox else (0, 0))
 
         for rank, region in enumerate(sorted_regions):
-            region["reading_order_rank"] = rank
+            region.reading_order_rank = rank
 
         return sorted_regions
 

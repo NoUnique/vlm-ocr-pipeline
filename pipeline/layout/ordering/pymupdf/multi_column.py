@@ -467,7 +467,7 @@ class MultiColumnSorter:
         keyed_regions: list[tuple[tuple[float, float, float], Any, int]] = []
         
         for region in regions:
-            bbox = region["bbox"]
+            bbox = region.bbox
             region_center_x, _ = bbox.center
             
             best_col_idx = 0
@@ -499,8 +499,8 @@ class MultiColumnSorter:
         
         sorted_regions = []
         for rank, (_, region, col_idx) in enumerate(keyed_regions):
-            region["reading_order_rank"] = rank
-            region["column_index"] = col_idx
+            region.reading_order_rank = rank
+            region.column_index = col_idx
             sorted_regions.append(region)
         
         return sorted_regions
@@ -513,9 +513,9 @@ class MultiColumnSorter:
             return regions
         
         regions = [ensure_bbox_in_region(r) for r in regions]
-        sorted_regions = sorted(regions, key=lambda r: (r["bbox"].y0, r["bbox"].x0))
+        sorted_regions = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0) if r.bbox else (0, 0))
         
         for rank, region in enumerate(sorted_regions):
-            region["reading_order_rank"] = rank
+            region.reading_order_rank = rank
         
         return sorted_regions

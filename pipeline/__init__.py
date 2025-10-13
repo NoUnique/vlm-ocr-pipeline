@@ -5,8 +5,9 @@ from __future__ import annotations
 import gc
 import json
 import logging
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence, cast
+from typing import Any, cast
 
 # Load environment variables if not already loaded
 try:
@@ -233,22 +234,24 @@ class Pipeline:
 
         # Stage 4: Recognition - extract text from regions
         if self.sorter_name == "olmocr-vlm":
-            processed_regions = sorted_regions
+            processed_regions: list[Region] = sorted_regions
         else:
-            processed_regions = self.recognizer.process_regions(
+            # Convert to list for recognizer processing
+            processed_regions_list = self.recognizer.process_regions(
                 image_np, cast(Sequence[dict[str, Any]], sorted_regions)
             )
+            processed_regions = processed_regions_list
 
         # Correct text for text regions
         for region in processed_regions:
-            if region["type"] in ["plain text", "title", "list"] and "text" in region:
-                corrected = self.recognizer.correct_text(region["text"])
+            if region.type in ["plain text", "title", "list"] and region.text:
+                corrected = self.recognizer.correct_text(region.text)
                 if isinstance(corrected, str):
-                    region["corrected_text"] = corrected
+                    region.corrected_text = corrected
 
         result = {
             "image_path": str(image_path),
-            "regions": processed_regions,
+            "regions": [r.to_dict() for r in processed_regions],
             "processed_at": tz_now().isoformat(),
         }
 
@@ -474,8 +477,8 @@ class Pipeline:
             "image_path": str(self.temp_dir / f"{pdf_path.stem}_page_{page_num}.jpg"),
             "width": int(page_width),
             "height": int(page_height),
-            "regions": regions,
-            "processed_regions": processed_regions,
+            "regions": [r.to_dict() for r in regions],
+            "processed_regions": [r.to_dict() for r in processed_regions],
             "raw_text": raw_text,
             "corrected_text": corrected_text,
             "correction_confidence": correction_confidence,
@@ -712,26 +715,26 @@ class Pipeline:
             Column layout dict or None
         """
         # Check if any regions have column_index
-        has_columns = any("column_index" in r for r in regions)
+        has_columns = any(r.column_index is not None for r in regions)
         
         if not has_columns:
             return None
         
         # Extract unique columns
-        column_indices = {r.get("column_index") for r in regions if "column_index" in r}
+        column_indices = {r.column_index for r in regions if r.column_index is not None}
         
         if not column_indices:
             return None
         
         # Build column layout info (filter out None values)
         columns = []
-        for col_idx in sorted(idx for idx in column_indices if idx is not None):
-            col_regions = [r for r in regions if r.get("column_index") == col_idx]
+        for col_idx in sorted(column_indices):
+            col_regions = [r for r in regions if r.column_index == col_idx]
             if col_regions:
                 # Get bbox if available
                 first_region = col_regions[0]
-                if "bbox" in first_region:
-                    bbox = first_region["bbox"]
+                if first_region.bbox:
+                    bbox = first_region.bbox
                     columns.append({
                         "index": col_idx,
                         "x0": int(bbox.x0),

@@ -80,16 +80,16 @@ class DocLayoutYOLODetector:
             raw_data: {"type": str, "coords": [x, y, w, h], "confidence": float}
             
         Returns:
-            Unified Region dict with BBox
+            Unified Region dataclass instance with BBox
         """
         coords = raw_data["coords"]
         bbox = BBox.from_list(coords, coord_format="xywh")
 
-        return {
-            "type": raw_data["type"],
-            "coords": coords,
-            "confidence": float(raw_data["confidence"]),
-            "bbox": bbox,
-            "source": "doclayout-yolo",
-        }
+        return Region(
+            type=raw_data["type"],
+            coords=coords,
+            confidence=float(raw_data["confidence"]),
+            bbox=bbox,
+            source="doclayout-yolo",
+        )
 

@@ -112,8 +112,8 @@ class MinerULayoutReaderSorter:
         heights = []
 
         for region in regions:
-            if region["type"] in text_types:
-                heights.append(region["bbox"].height)
+            if region.type in text_types:
+                heights.append(region.bbox.height)
 
         if heights:
             return statistics.median(heights)
@@ -135,8 +135,8 @@ class MinerULayoutReaderSorter:
         lines_data = []
 
         for region_idx, region in enumerate(regions):
-            bbox = region["bbox"]
-            region_type = region["type"]
+            bbox = region.bbox
+            region_type = region.type
 
             if region_type in {"plain text", "text", "title"}:
                 block_height = bbox.height
@@ -255,7 +255,7 @@ class MinerULayoutReaderSorter:
 
         sorted_regions = []
         for rank, (_, _, region) in enumerate(region_orders):
-            region["reading_order_rank"] = rank
+            region.reading_order_rank = rank
             sorted_regions.append(region)
 
         return sorted_regions
@@ -263,10 +263,10 @@ class MinerULayoutReaderSorter:
     def _fallback_sort(self, regions: list[Region]) -> list[Region]:
         """Fallback to simple geometric sorting."""
         regions = [ensure_bbox_in_region(r) for r in regions]
-        sorted_regions = sorted(regions, key=lambda r: (r["bbox"].y0, r["bbox"].x0))
+        sorted_regions = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0) if r.bbox else (0, 0))
 
         for rank, region in enumerate(sorted_regions):
-            region["reading_order_rank"] = rank
+            region.reading_order_rank = rank
 
         return sorted_regions
 

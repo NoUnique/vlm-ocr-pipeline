@@ -67,7 +67,7 @@ class MinerUXYCutSorter:
             import numpy as np
 
             bboxes = np.array(
-                [[r["bbox"].x0, r["bbox"].y0, r["bbox"].x1, r["bbox"].y1] for r in regions],
+                [[r.bbox.x0, r.bbox.y0, r.bbox.x1, r.bbox.y1] for r in regions if r.bbox],
                 dtype=int,
             )
 
@@ -78,7 +78,7 @@ class MinerUXYCutSorter:
             sorted_regions = [regions[i] for i in result_indices]
 
             for rank, region in enumerate(sorted_regions):
-                region["reading_order_rank"] = rank
+                region.reading_order_rank = rank
 
             logger.debug("Sorted %d regions using XY-Cut algorithm", len(sorted_regions))
 
@@ -211,10 +211,10 @@ class MinerUXYCutSorter:
             return regions
 
         regions = [ensure_bbox_in_region(r) for r in regions]
-        sorted_regions = sorted(regions, key=lambda r: (r["bbox"].y0, r["bbox"].x0))
+        sorted_regions = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0) if r.bbox else (0, 0))
 
         for rank, region in enumerate(sorted_regions):
-            region["reading_order_rank"] = rank
+            region.reading_order_rank = rank
 
         return sorted_regions
 

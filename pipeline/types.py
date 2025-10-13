@@ -8,8 +8,9 @@ This module provides:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, NotRequired, Protocol, Sequence, TypedDict
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     import numpy as np
@@ -540,11 +541,12 @@ class BBox:
 
 # ==================== Region TypedDict ====================
 
-class Region(TypedDict):
+@dataclass
+class Region:
     """Unified region format used throughout the pipeline.
 
-    This TypedDict maintains backward compatibility with existing dict-based
-    code while providing type safety.
+    This dataclass provides type safety and better IDE support while
+    supporting dynamic field updates throughout the pipeline.
 
     Standard fields:
     - type: Region type (e.g., "plain text", "title", "figure", "table")
@@ -566,19 +568,45 @@ class Region(TypedDict):
     confidence: float
 
     # Optional bbox object (for type-safe operations)
-    bbox: NotRequired[BBox]
+    bbox: BBox | None = None
 
     # Added by sorters
-    reading_order_rank: NotRequired[int]
-    column_index: NotRequired[int]
+    reading_order_rank: int | None = None
+    column_index: int | None = None
 
     # Added by recognizers
-    text: NotRequired[str]
-    corrected_text: NotRequired[str]
+    text: str | None = None
+    corrected_text: str | None = None
 
     # Metadata
-    source: NotRequired[str]  # "doclayout-yolo", "mineru-vlm", etc.
-    index: NotRequired[int]  # MinerU VLM internal index
+    source: str | None = None  # "doclayout-yolo", "mineru-vlm", etc.
+    index: int | None = None  # MinerU VLM internal index
+    
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        result = asdict(self)
+        # Remove None values for cleaner output
+        return {k: v for k, v in result.items() if v is not None}
+    
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Region:
+        """Create Region from dictionary."""
+        # Handle bbox field separately if it's a dict
+        if "bbox" in data and isinstance(data["bbox"], dict):
+            data = data.copy()
+            bbox_data = data.pop("bbox")
+            if bbox_data:
+                data["bbox"] = BBox(**bbox_data) if not isinstance(bbox_data, BBox) else bbox_data
+        
+        # Filter only known fields
+        known_fields = {
+            "type", "coords", "confidence", "bbox", 
+            "reading_order_rank", "column_index", 
+            "text", "corrected_text", "source", "index"
+        }
+        filtered_data = {k: v for k, v in data.items() if k in known_fields}
+        
+        return cls(**filtered_data)
 
 
 # ==================== Protocol Interfaces ====================
@@ -639,30 +667,30 @@ class Sorter(Protocol):
 
 # ==================== Utility Functions ====================
 
-def ensure_bbox_in_region(region: dict[str, Any]) -> dict[str, Any]:
+def ensure_bbox_in_region(region: Region) -> Region:
     """Ensure region has bbox field populated from coords.
 
     This function is idempotent and safe to call multiple times.
 
     Args:
-        region: Region dict (may or may not have bbox)
+        region: Region instance (may or may not have bbox)
 
     Returns:
-        Region dict with bbox field added
+        Region with bbox field added
 
     Example:
-        >>> region = {"type": "text", "coords": [100, 50, 200, 150], "confidence": 0.9}
+        >>> region = Region(type="text", coords=[100, 50, 200, 150], confidence=0.9)
         >>> region = ensure_bbox_in_region(region)
-        >>> region["bbox"]
+        >>> region.bbox
         BBox(x0=100, y0=50, x1=300, y1=200)
     """
-    if "bbox" not in region or region["bbox"] is None:
-        region["bbox"] = BBox.from_list(region["coords"], coord_format="xywh")
+    if region.bbox is None:
+        region.bbox = BBox.from_list(region.coords, coord_format="xywh")
     return region
 
 
 def regions_to_olmocr_anchor_text(
-    regions: Sequence[dict[str, Any]],
+    regions: Sequence[Region],
     page_width: int,
     page_height: int,
     max_length: int = 4000,
@@ -670,7 +698,7 @@ def regions_to_olmocr_anchor_text(
     """Convert regions to olmOCR anchor text format.
 
     Args:
-        regions: List of regions with bbox information
+        regions: List of Region instances with bbox information
         page_width: Page width in pixels
         page_height: Page height in pixels
         max_length: Maximum anchor text length (approximate)
@@ -680,8 +708,8 @@ def regions_to_olmocr_anchor_text(
 
     Example:
         >>> regions = [
-        ...     {"type": "title", "coords": [100, 50, 200, 30], "confidence": 0.9},
-        ...     {"type": "figure", "coords": [100, 100, 200, 150], "confidence": 0.95},
+        ...     Region(type="title", coords=[100, 50, 200, 30], confidence=0.9),
+        ...     Region(type="figure", coords=[100, 100, 200, 150], confidence=0.95),
         ... ]
         >>> anchor = regions_to_olmocr_anchor_text(regions, 800, 600)
         >>> print(anchor)
@@ -690,18 +718,18 @@ def regions_to_olmocr_anchor_text(
         [Image 100x100 to 300x250]
     """
     # Ensure all regions have bbox
-    regions_with_bbox: Sequence[dict[str, Any]] = [ensure_bbox_in_region(r) for r in regions]
+    regions_with_bbox = [ensure_bbox_in_region(r) for r in regions]
 
     # Header
     lines = [f"Page dimensions: {page_width:.1f}x{page_height:.1f}"]
 
     # Convert each region
     for region in regions_with_bbox:
-        if "bbox" not in region:
+        if region.bbox is None:
             continue
-        bbox: BBox = region["bbox"]
-        text_content = region.get("text", "")[:50] if region["type"] in ["text", "title"] else ""
-        anchor_line = bbox.to_olmocr_anchor(content_type=region["type"], text_content=text_content)
+        bbox = region.bbox
+        text_content = (region.text or "")[:50] if region.type in ["text", "title"] else ""
+        anchor_line = bbox.to_olmocr_anchor(content_type=region.type, text_content=text_content)
         lines.append(anchor_line)
 
         # Check length limit
@@ -712,7 +740,7 @@ def regions_to_olmocr_anchor_text(
     return "\n".join(lines)
 
 
-def normalize_region_coords(region: dict[str, Any]) -> Region:
+def normalize_region_coords(region: dict[str, Any]) -> dict[str, Any]:
     """Normalize a region dict to ensure it has proper coords and bbox.
 
     Handles various input formats and ensures consistent output.

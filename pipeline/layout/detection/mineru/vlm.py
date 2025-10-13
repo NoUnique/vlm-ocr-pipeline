@@ -130,25 +130,21 @@ class MinerUVLMDetector:
             block: {"type": str, "bbox": [x0, y0, x1, y1], "text": str (optional), "index": int (optional)}
             
         Returns:
-            Unified Region dict with BBox
+            Unified Region dataclass instance with BBox
         """
         bbox = BBox.from_mineru_bbox(block["bbox"])
         x, y, w, h = bbox.to_xywh()
 
-        region: Region = {
-            "type": block["type"],
-            "coords": [x, y, w, h],
-            "confidence": float(block.get("confidence", 1.0)),
-            "bbox": bbox,
-            "source": "mineru-vlm",
-        }
-
-        if "text" in block:
-            region["text"] = block["text"]
-
-        if "index" in block:
-            region["index"] = block["index"]
-            region["reading_order_rank"] = block["index"]
+        region = Region(
+            type=block["type"],
+            coords=[x, y, w, h],
+            confidence=float(block.get("confidence", 1.0)),
+            bbox=bbox,
+            source="mineru-vlm",
+            text=block.get("text"),
+            index=block.get("index"),
+            reading_order_rank=block.get("index"),
+        )
 
         return region
 

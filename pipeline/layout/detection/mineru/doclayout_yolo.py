@@ -110,13 +110,13 @@ class MinerUDocLayoutYOLODetector:
         category_id = raw_data["category_id"]
         region_type = self._category_to_type(category_id)
 
-        return {
-            "type": region_type,
-            "coords": [x, y, w, h],
-            "confidence": float(raw_data["score"]),
-            "bbox": bbox,
-            "source": "mineru-doclayout-yolo",
-        }
+        return Region(
+            type=region_type,
+            coords=[x, y, w, h],
+            confidence=float(raw_data["score"]),
+            bbox=bbox,
+            source="mineru-doclayout-yolo",
+        )
 
     def _category_to_type(self, category_id: int) -> str:
         """Convert MinerU category ID to region type name."""

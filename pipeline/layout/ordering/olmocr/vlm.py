@@ -105,20 +105,15 @@ class OlmOCRVLMSorter:
             vlm_client = self._get_vlm_client()
             response = vlm_client.process(image, prompt)
 
-            result_region: Region = {
-                "type": "text",
-                "coords": [0, 0, float(page_width), float(page_height)],
-                "confidence": 1.0,
-                "bbox": BBox(0, 0, page_width, page_height),
-                "source": "olmocr-vlm",
-                "text": response.get("natural_text", ""),
-                "reading_order_rank": 0,
-            }
-
-            if "is_table" in response:
-                result_region["is_table"] = response["is_table"]  # type: ignore[typeddict-unknown-key]
-            if "is_diagram" in response:
-                result_region["is_diagram"] = response["is_diagram"]  # type: ignore[typeddict-unknown-key]
+            result_region = Region(
+                type="text",
+                coords=[0, 0, float(page_width), float(page_height)],
+                confidence=1.0,
+                bbox=BBox(0, 0, page_width, page_height),
+                source="olmocr-vlm",
+                text=response.get("natural_text", ""),
+                reading_order_rank=0,
+            )
 
             logger.debug("Processed page with olmOCR VLM")
 
@@ -156,10 +151,10 @@ class OlmOCRVLMSorter:
             return regions
 
         regions = [ensure_bbox_in_region(r) for r in regions]
-        sorted_regions = sorted(regions, key=lambda r: (r["bbox"].y0, r["bbox"].x0))
+        sorted_regions = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0) if r.bbox else (0, 0))
 
         for rank, region in enumerate(sorted_regions):
-            region["reading_order_rank"] = rank
+            region.reading_order_rank = rank
 
         return sorted_regions
 

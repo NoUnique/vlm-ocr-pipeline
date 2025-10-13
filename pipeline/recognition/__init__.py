@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import gc
 import logging
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 import numpy as np
 
 from ..prompt import PromptManager
+from ..types import Region
 from .api.gemini import GeminiClient
 from .api.openai import OpenAIClient
 from .cache import RecognitionCache
@@ -76,7 +78,7 @@ class TextRecognizer:
 
     def process_regions(
         self, image: np.ndarray, regions: Sequence[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
+    ) -> list[Region]:
         """Process all regions to extract text.
 
         Args:
@@ -95,25 +97,25 @@ class TextRecognizer:
         return processed_regions
 
     def _process_single_region(
-        self, image: np.ndarray, region: dict[str, Any]
-    ) -> dict[str, Any]:
+        self, image: np.ndarray, region: Region
+    ) -> Region:
         """Process a single region to extract text.
 
         Args:
             image: Full page image
-            region: Single region dict
+            region: Region instance
 
         Returns:
             Region with text extracted
         """
-        region_type = region.get("type", "unknown")
+        region_type = region.type
 
         # Extract region image
         try:
             region_image = self._crop_region(image, region)
         except Exception as e:
             logger.error("Failed to crop region: %s", e)
-            region["error"] = "crop_failed"
+            # Note: error field not in Region dataclass, just log and continue
             return region
 
         # Get prompt for region type
@@ -122,11 +124,10 @@ class TextRecognizer:
         # Extract text
         try:
             text = self.client.extract_text(region_image, region, prompt)
-            region["text"] = text
+            region.text = text
         except Exception as e:
             logger.error("Failed to extract text: %s", e)
-            region["error"] = "extraction_failed"
-            region["text"] = ""
+            region.text = ""
 
         # Cleanup
         del region_image
@@ -134,7 +135,7 @@ class TextRecognizer:
 
         return region
 
-    def _crop_region(self, image: np.ndarray, region: dict[str, Any]) -> np.ndarray:
+    def _crop_region(self, image: np.ndarray, region: Region) -> np.ndarray:
         """Crop a region from the full image.
 
         Args:
@@ -144,7 +145,7 @@ class TextRecognizer:
         Returns:
             Cropped region image
         """
-        coords = region.get("coords", [0, 0, 0, 0])
+        coords = region.coords
         x, y, w, h = coords
 
         # Convert to corners
