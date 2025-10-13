@@ -48,6 +48,7 @@
 
 - **Comprehensive Type Annotations:** All functions, methods, and class members must have type annotations, using the most specific types possible.
 - **Detailed Docstrings:** All functions, methods, and classes must have Google-style docstrings, thoroughly explaining their purpose, parameters, return values, and any exceptions raised. Include usage examples where helpful.
+- **Comments:** Write comments ONLY when necessary to explain complex logic. Always write comments in English. Self-documenting code with clear naming is preferred over excessive commenting.
 - **Thorough Unit Testing:** Aim for high test coverage (90% or higher) using `pytest`. Test both common cases and edge cases.
 - **Robust Exception Handling:** Use specific exception types, provide informative error messages, and handle exceptions gracefully. Implement custom exception classes when needed. Avoid bare `except` clauses.
 - **Logging:** Employ the `logging` module judiciously to log important events, warnings, and errors.
@@ -81,11 +82,43 @@
 - **Versioning:** Plan for API versioning from the start (e.g., using URL prefixes or headers).
 - **CORS:** Configure Cross-Origin Resource Sharing (CORS) settings correctly.
 
+## 7. Environment Management and Testing
+
+- **Environment Management:** Always use `uv` for dependency and environment management.
+  - Install dependencies: `uv pip install <package>`
+  - Sync dependencies: `uv sync`
+  - Run commands in uv environment: `uv run <command>`
+- **Testing:** All Python code execution and testing MUST be done within the `uv` environment.
+  - Run tests: `uv run pytest`
+  - Run scripts: `uv run python script.py`
+  - Import verification: `uv run python -c "from module import Class"`
+- **NEVER** run Python commands directly without `uv run` prefix
+- **Package Structure:** Python 3.3+ supports packages without `__init__.py` (PEP 420 Namespace Packages).
+  - **DO NOT create `__init__.py`** unless it contains actual implementation logic (factory functions, registries, etc.)
+  - **NEVER create `__init__.py`** for simple re-exports - use direct imports instead
+  - Remove existing `__init__.py` if it only does simple re-exports
+  - Use direct imports: `from package.module import Class` instead of `from package import Class`
+  - Default to namespace packages (no `__init__.py`) for cleaner structure
+
+## 8. Code Quality Tools
+
+- **Type Checking:** Use `pyright` for static type checking.
+  - Check types: `npx pyright`
+  - Ensure all code passes type checking before committing
+- **Linting & Formatting:** Use `ruff` for linting and code formatting.
+  - Check formatting: `uv run ruff check .`
+  - Auto-fix formatting: `uv run ruff check . --fix`
+  - Always run formatting checks before committing
+- **Pre-commit Workflow:**
+  1. Run `npx pyright` to check types
+  2. Run `uv run ruff check . --fix` to auto-fix formatting issues
+  3. Run `uv run pytest` to ensure all tests pass
+
 # Code Example Requirements
 
 - All functions must include type annotations.
 - Must provide clear, Google-style docstrings.
-- Key logic should be annotated with comments.
+- Add comments ONLY when necessary to explain complex logic (always in English).
 - Provide usage examples (e.g., in the `tests/` directory or as a `__main__` section).
 - Include error handling.
 - Use `ruff` for code formatting.
