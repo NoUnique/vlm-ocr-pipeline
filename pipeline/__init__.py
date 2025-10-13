@@ -18,8 +18,7 @@ except ImportError:
 
 from .conversion.converter import DocumentConverter
 from .layout.detection import create_detector as create_detector_impl
-from .layout.ordering import create_sorter as create_sorter_impl
-from .layout.ordering import validate_combination
+from .layout.ordering import create_sorter as create_sorter_impl, validate_combination
 from .misc import tz_now
 from .recognition import TextRecognizer
 from .recognition.api.ratelimit import rate_limiter

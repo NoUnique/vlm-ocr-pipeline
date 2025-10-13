@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
-from typing import Any, TypedDict, cast, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 if TYPE_CHECKING:
     import numpy as np
@@ -341,7 +341,6 @@ class MultiColumnSorter:
         Returns:
             Sorted regions with reading_order_rank and column_index added
         """
-        from ..types import BBox, ensure_bbox_in_region
         
         pymupdf_page = kwargs.get("pymupdf_page")
         

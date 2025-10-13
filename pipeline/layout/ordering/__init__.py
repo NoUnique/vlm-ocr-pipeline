@@ -9,7 +9,8 @@ Sorters organized by framework:
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +27,9 @@ __all__ = [
 ]
 
 from .analyzer import ReadingOrderAnalyzer
-from .pymupdf import MultiColumnSorter
-from .mineru import MinerULayoutReaderSorter, MinerUXYCutSorter, MinerUVLMSorter
+from .mineru import MinerULayoutReaderSorter, MinerUVLMSorter, MinerUXYCutSorter
 from .olmocr import OlmOCRVLMSorter
+from .pymupdf import MultiColumnSorter
 
 _SORTER_REGISTRY: dict[str, Callable[..., Any]] = {
     "pymupdf": MultiColumnSorter,  # Legacy name for backward compatibility

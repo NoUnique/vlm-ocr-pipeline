@@ -16,7 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 # Direct import from types module
-from pipeline.types import BBox, ensure_bbox_in_region, regions_to_olmocr_anchor_text, Region
+from pipeline.types import BBox, Region, ensure_bbox_in_region, regions_to_olmocr_anchor_text
 
 
 class TestBBoxCreation:

@@ -48,7 +48,6 @@ class MinerULayoutReaderSorter:
         """
         try:
             import torch  # noqa: F401
-
             from mineru.utils.block_sort import ModelSingleton
         except ImportError as e:
             raise ImportError(
@@ -187,7 +186,6 @@ class MinerULayoutReaderSorter:
         Returns:
             List of line indices in reading order
         """
-        import numpy as np
         import torch
 
         x_scale = 1000.0 / page_width

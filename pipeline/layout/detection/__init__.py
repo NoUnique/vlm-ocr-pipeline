@@ -8,13 +8,14 @@ Detectors organized by framework:
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 from .detector import LayoutDetector
 from .doclayout_yolo import DocLayoutYOLODetector
-from .mineru import MinerUVLMDetector, MinerUDocLayoutYOLODetector
+from .mineru import MinerUDocLayoutYOLODetector, MinerUVLMDetector
 
 __all__ = [
     "LayoutDetector",

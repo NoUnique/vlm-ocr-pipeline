@@ -100,7 +100,6 @@ class MinerUXYCutSorter:
             indices: Current indices mapping to original regions
             result: Output list to accumulate sorted indices
         """
-        import numpy as np
 
         if len(boxes) == 0:
             return
