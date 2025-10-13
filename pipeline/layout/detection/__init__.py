@@ -1,8 +1,56 @@
-"""Layout detection module for identifying regions in document images."""
+"""Layout detection module.
+
+Detectors organized by framework:
+- doclayout_yolo.py: This project's DocLayout-YOLO
+- mineru/: MinerU detectors (DocLayout-YOLO, VLM)
+"""
 
 from __future__ import annotations
 
-from .detector import LayoutDetector
+import logging
+from typing import Any, Callable
 
-__all__ = ["LayoutDetector"]
+logger = logging.getLogger(__name__)
 
+from .doclayout_yolo import DocLayoutYOLODetector
+from .mineru import MinerUVLMDetector, MinerUDocLayoutYOLODetector
+
+__all__ = [
+    "DocLayoutYOLODetector",
+    "MinerUVLMDetector",
+    "MinerUDocLayoutYOLODetector",
+    "create_detector",
+    "list_available_detectors",
+]
+
+_DETECTOR_REGISTRY: dict[str, Callable[..., Any]] = {
+    "doclayout-yolo": DocLayoutYOLODetector,
+}
+
+if MinerUVLMDetector is not None:
+    _DETECTOR_REGISTRY["mineru-vlm"] = MinerUVLMDetector
+
+if MinerUDocLayoutYOLODetector is not None:
+    _DETECTOR_REGISTRY["mineru-doclayout-yolo"] = MinerUDocLayoutYOLODetector
+
+
+def create_detector(name: str, **kwargs: Any) -> Any:
+    """Create a detector instance.
+    
+    Args:
+        name: Detector name
+        **kwargs: Arguments for detector
+        
+    Returns:
+        Detector instance
+    """
+    if name not in _DETECTOR_REGISTRY:
+        available = ", ".join(_DETECTOR_REGISTRY.keys())
+        raise ValueError(f"Unknown detector: {name}. Available: {available}")
+    
+    return _DETECTOR_REGISTRY[name](**kwargs)
+
+
+def list_available_detectors() -> list[str]:
+    """List available detector names."""
+    return list(_DETECTOR_REGISTRY.keys())

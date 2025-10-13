@@ -92,10 +92,19 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         epilog=textwrap.dedent(
             """
             Examples:
+              # Basic usage
               python main.py --input document.pdf
               python main.py --input document.pdf --backend gemini
-              python main.py --input document.pdf --model openai/gpt-4o
-              python main.py --input document.pdf --backend openai --model gemini-2.5-flash
+              
+              # Traditional pipeline with ordering
+              python main.py --input document.pdf --sorter pymupdf
+              python main.py --input document.pdf --sorter mineru-xycut
+              
+              # MinerU VLM (detection + ordering)
+              python main.py --input document.pdf --detector mineru-vlm --sorter mineru-vlm \
+                  --mineru-model opendatalab/PDF-Extract-Kit-1.0
+              
+              # Advanced options
               python main.py --input /path/to/images/
               python main.py --input document.pdf --output /custom/output/
               python main.py --input document.pdf --max-pages 5
@@ -182,9 +191,51 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         default=False,
         help=(
             "Toggle multi-column aware reading order alignment for PDF pages (default: disabled). "
-            "Use --multi-column-ordering to enable or --no-multi-column-ordering to disable."
+            "Use --multi-column-ordering to enable or --no-multi-column-ordering to disable. "
+            "LEGACY: Use --sorter pymupdf instead."
         ),
     )
+    
+    # New modular detector/sorter options
+    parser.add_argument(
+        "--detector",
+        choices=["doclayout-yolo", "mineru-doclayout-yolo", "mineru-vlm"],
+        default="doclayout-yolo",
+        help=(
+            "Layout detection method (default: doclayout-yolo). "
+            "Options: doclayout-yolo (this project), mineru-doclayout-yolo (MinerU's YOLO), mineru-vlm (MinerU VLM)."
+        ),
+    )
+    parser.add_argument(
+        "--sorter",
+        choices=["pymupdf", "mineru-layoutreader", "mineru-xycut", "mineru-vlm", "olmocr-vlm"],
+        help=(
+            "Reading order sorting method. If not specified, defaults to mineru-xycut (fast and accurate). "
+            "Options: pymupdf (multi-column), mineru-layoutreader (LayoutLMv3), "
+            "mineru-xycut (XY-Cut algorithm, default), mineru-vlm (VLM ordering), olmocr-vlm (VLM full-page)."
+        ),
+    )
+    
+    # MinerU options
+    mineru_group = parser.add_argument_group("MinerU options")
+    mineru_group.add_argument(
+        "--mineru-model",
+        help="MinerU model path (for --detector mineru-vlm or --sorter mineru-*)",
+    )
+    mineru_group.add_argument(
+        "--mineru-backend",
+        choices=["transformers", "vllm-engine", "vllm-async-engine"],
+        default="transformers",
+        help="MinerU VLM backend (default: transformers)",
+    )
+    
+    # olmOCR options
+    olmocr_group = parser.add_argument_group("olmOCR options")
+    olmocr_group.add_argument(
+        "--olmocr-model",
+        help="olmOCR model path (for --sorter olmocr-vlm)",
+    )
+    
     parser.add_argument(
         "--rate-limit-status",
         action="store_true",
@@ -216,6 +267,12 @@ def _execute_command(
             model=args.model,
             gemini_tier=args.gemini_tier,
             enable_multi_column_ordering=args.multi_column_ordering,
+            # New modular options
+            detector=args.detector,
+            sorter=args.sorter,
+            mineru_model=args.mineru_model,
+            mineru_backend=args.mineru_backend,
+            olmocr_model=args.olmocr_model,
         )
 
         return _run_pipeline(pipeline, args, logger)
@@ -282,10 +339,13 @@ def _run_pipeline(pipeline: Pipeline, args: argparse.Namespace, logger: logging.
     logger.info("Model: %s", args.model)
     if args.backend == "gemini":
         logger.info("Gemini Tier: %s", args.gemini_tier)
-    logger.info(
-        "Multi-column ordering: %s",
-        "enabled" if args.multi_column_ordering else "disabled",
-    )
+    logger.info("Detector: %s", args.detector)
+    logger.info("Sorter: %s", pipeline.sorter_name)
+    if args.multi_column_ordering:
+        logger.info(
+            "Multi-column ordering (legacy): %s",
+            "enabled (using sorter='pymupdf')" if args.multi_column_ordering else "disabled",
+        )
 
     input_path = Path(args.input)
     if not input_path.exists():

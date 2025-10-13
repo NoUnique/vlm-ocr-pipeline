@@ -8,6 +8,9 @@ A unified OCR processing pipeline that leverages Vision Language Models (VLMs) f
 
 - **Document Layout Detection**: Automatically detects text, tables, figures, and other elements using DocLayout-YOLO
 - **Multi-VLM Backend Support**: Support for OpenAI, OpenRouter, and Gemini VLM APIs for text extraction and processing
+- **Modular Detection & Ordering**: Flexible detector and sorter combinations (DocLayout-YOLO, MinerU, olmOCR)
+- **Advanced Ordering Algorithms**: Support for multi-column, LayoutReader (LayoutLMv3), XY-Cut, and VLM-based ordering
+- **Unified BBox System**: Automatic conversion between 6+ different bbox formats (YOLO, MinerU, PyMuPDF, PyPDF, olmOCR)
 - **VLM-Powered Text Extraction**: Advanced text extraction using Vision Language Models with intelligent context understanding
 - **Multi-Language Support**: Supports English, Korean, and Japanese text extraction
 - **AI-Powered Correction**: Intelligent text correction and content analysis
@@ -22,22 +25,101 @@ A unified OCR processing pipeline that leverages Vision Language Models (VLMs) f
 ```
 vlm-ocr-pipeline/
 ├── main.py                     # CLI entry point
-├── pipeline/                  # Modular VLM OCR Pipeline package
+├── pipeline/                   # Modular VLM OCR Pipeline
 │   ├── __init__.py            # Main Pipeline class
-│   ├── prompt.py              # PromptManager for YAML prompts
-│   ├── gemini.py              # GeminiClient for Gemini VLM API
-│   ├── openai.py              # OpenAIClient for OpenAI/OpenRouter VLM APIs
-│   └── ratelimit.py           # Rate limit management
+│   ├── types.py               # Unified BBox and Region types
+│   ├── constants.py
+│   ├── misc.py
+│   ├── prompt.py
+│   │
+│   ├── layout/
+│   │   ├── detection/         # Layout detection strategies
+│   │   │   ├── __init__.py    # create_detector()
+│   │   │   ├── doclayout_yolo.py  # This project's DocLayout-YOLO
+│   │   │   └── mineru/        # MinerU detectors
+│   │   │       ├── doclayout_yolo.py  # MinerU's DocLayout-YOLO
+│   │   │       └── vlm.py     # MinerU VLM
+│   │   │
+│   │   └── ordering/          # Reading order strategies
+│   │       ├── __init__.py    # create_sorter(), validate_combination()
+│   │       ├── pymupdf/       # PyMuPDF sorters
+│   │       │   └── multi_column.py  # Multi-column detection & sorting
+│   │       ├── mineru/        # MinerU sorters
+│   │       │   ├── layoutreader.py  # LayoutLMv3
+│   │       │   ├── xycut.py   # XY-Cut algorithm
+│   │       │   └── vlm.py     # VLM ordering
+│   │       └── olmocr/        # olmOCR sorters
+│   │           └── vlm.py     # VLM ordering
+│   │
+│   ├── conversion/            # PDF/Image conversion
+│   │   └── converter.py
+│   │
+│   └── recognition/           # Text recognition and correction
+│       ├── __init__.py        # TextRecognizer
+│       ├── cache.py
+│       └── api/               # VLM API clients (OpenAI, Gemini)
+│
 ├── models/
-│   └── doclayout_yolo.py      # Document layout detection model
-├── requirements.txt           # Python dependencies
+│   └── doclayout_yolo.py      # DocLayout-YOLO wrapper
+│
+├── external/                  # External frameworks (git submodules)
+│   ├── MinerU/                # MinerU 2.5
+│   └── olmocr/                # olmOCR
+│
+├── settings/
+│   └── prompts/               # YAML prompt templates by model
+│
+├── tests/                     # Unit tests
+├── requirements.txt
 ├── README.md                  # This file
-├── cursor_refactoring.md      # Development progress tracking
+├── BBOX_FORMATS.md            # BBox format reference
+│
 ├── .tmp/                      # Temporary files (auto-created)
-├── .cache/                    # Processing cache (auto-created)
-├── .logs/                     # Log files with timestamps (auto-created)
-├── output/                    # Processing results (auto-created)
+├── .cache/                    # Recognition cache (auto-created)
+├── .logs/                     # Log files (auto-created)
+└── output/                    # Processing results (auto-created)
 ```
+
+## BBox Format Reference
+
+This project integrates multiple frameworks (DocLayout-YOLO, MinerU, PyMuPDF, PyPDF, olmOCR), each using different bounding box formats. We provide a **unified BBox conversion system** that handles all formats automatically.
+
+### **Coordinate Systems**
+
+| Framework | Format | Coordinate Order | Origin | Example |
+|-----------|--------|------------------|--------|---------|
+| **Current Project** | `[x, y, w, h]` | Top-Left + Size | Top-Left (0,0) | `[100, 50, 200, 150]` |
+| **YOLO** | `[x1, y1, x2, y2]` | Top-Left + Bottom-Right | Top-Left (0,0) | `[100, 50, 300, 200]` |
+| **MinerU** | `[x0, y0, x1, y1]` | Top-Left + Bottom-Right | Top-Left (0,0) | `[100, 50, 300, 200]` |
+| **PyMuPDF** | `Rect(x0, y0, x1, y1)` | Top-Left + Bottom-Right | Top-Left (0,0) | `Rect(100, 50, 300, 200)` |
+| **PyPDF** ⚠️ | `[x0, y0, x1, y1]` | **Bottom-Left + Top-Right** ⚠️ | **Bottom-Left (0,0)** ⚠️ | `[100, 592, 300, 742]` |
+| **olmOCR** | `"[x, y]text"` | Text format | Top-Left (0,0) | `"[100x50]Chapter 1"` |
+
+**Key Points:**
+- ✅ Most frameworks use **Top-Left origin** (like images)
+- ⚠️ **PyPDF uses Bottom-Left origin** (traditional PDF coordinate system)
+- 📦 Our **BBox class** handles all conversions automatically
+
+**Example Conversion:**
+```python
+from pipeline.types import BBox
+
+# Current project → MinerU
+bbox = BBox.from_xywh(100, 50, 200, 150)  # [x, y, w, h]
+mineru = bbox.to_mineru_bbox()             # [100, 50, 300, 200]
+
+# MinerU → olmOCR anchor
+bbox = BBox.from_mineru_bbox([100, 50, 300, 200])
+anchor = bbox.to_olmocr_anchor("image")    # "[Image 100x50 to 300x200]"
+
+# PyPDF → Current (Y-axis flip!)
+bbox = BBox.from_pypdf_rect([100, 592, 300, 742], page_height=792)
+coords = bbox.to_list_xywh()               # [100, 50, 200, 150]
+```
+
+For detailed format specifications and conversion examples, see [BBOX_FORMATS.md](BBOX_FORMATS.md).
+
+---
 
 ## Installation
 

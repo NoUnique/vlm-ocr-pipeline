@@ -17,11 +17,13 @@ except ImportError:
     pass
 
 from .conversion import DocumentConverter
-from .layout.detection import LayoutDetector
-from .layout.ordering import ReadingOrderAnalyzer
+from .layout.detection import create_detector as create_detector_impl
+from .layout.ordering import create_sorter as create_sorter_impl
+from .layout.ordering import validate_combination
 from .misc import tz_now
 from .recognition import TextRecognizer
 from .recognition.api.ratelimit import rate_limiter
+from .types import Region
 
 logger = logging.getLogger(__name__)
 
@@ -53,11 +55,17 @@ class Pipeline:
         model: str = "gemini-2.5-flash",
         gemini_tier: str = "free",
         enable_multi_column_ordering: bool = False,
+        # New options for modular detector/sorter
+        detector: str = "doclayout-yolo",
+        sorter: str | None = None,
+        mineru_model: str | None = None,
+        mineru_backend: str = "transformers",
+        olmocr_model: str | None = None,
     ):
         """Initialize VLM OCR processing pipeline.
 
         Args:
-            model_path: DocLayout-YOLO model path
+            model_path: DocLayout-YOLO model path (used if detector="doclayout-yolo")
             confidence_threshold: Detection confidence threshold
             use_cache: Whether to use caching
             cache_dir: Cache directory path
@@ -66,18 +74,44 @@ class Pipeline:
             backend: Backend API to use ("openai" or "gemini")
             model: Model to use for text processing
             gemini_tier: Gemini API tier for rate limiting (only used with gemini backend)
-            enable_multi_column_ordering: Whether to align reading order using multi-column detection
+            enable_multi_column_ordering: Legacy option - use sorter="pymupdf" instead
+            detector: Detector to use ("doclayout-yolo", "mineru-vlm", "none")
+            sorter: Sorter to use (None for auto-selection based on legacy options)
+            mineru_model: MinerU model path (for mineru-vlm detector/sorter)
+            mineru_backend: MinerU backend ("transformers", "vllm-engine", "vllm-async-engine")
+            olmocr_model: olmOCR model path (for olmocr-vlm sorter)
         """
         self.backend = backend.lower()
         self.model = model
         self.gemini_tier = gemini_tier
         self.enable_multi_column_ordering = enable_multi_column_ordering
 
-        if self.enable_multi_column_ordering and fitz is None:
+        # Auto-select sorter based on legacy option if not explicitly provided
+        if sorter is None:
+            sorter = "pymupdf" if enable_multi_column_ordering else "mineru-xycut"
+            if enable_multi_column_ordering:
+                logger.info("Legacy option: enable_multi_column_ordering=True → using sorter='pymupdf'")
+            else:
+                logger.info("Using default sorter='mineru-xycut' (fast and accurate)")
+
+        # Store detector/sorter choices
+        self.detector_name = detector
+        self.sorter_name = sorter
+
+        # Validate combination
+        is_valid, message = validate_combination(detector, sorter)
+        if not is_valid:
+            raise ValueError(f"Invalid detector/sorter combination: {message}")
+        
+        logger.info("Pipeline combination: %s", message)
+
+        # Check PyMuPDF availability for pymupdf sorter
+        if sorter == "pymupdf" and fitz is None:
             logger.warning(
-                "PyMuPDF is not installed. Disabling multi-column ordering for this run."
+                "PyMuPDF is not installed. Falling back to sorter='mineru-xycut'"
             )
-            self.enable_multi_column_ordering = False
+            sorter = "mineru-xycut"
+            self.sorter_name = "mineru-xycut"
 
         # Initialize rate limiter (only for Gemini backend)
         if self.backend == "gemini":
@@ -91,15 +125,37 @@ class Pipeline:
         # Create directories
         self._setup_directories()
 
-        # Initialize modular components
+        # Initialize components using new factory system
         self.converter = DocumentConverter(temp_dir=self.temp_dir)
-        self.detector = LayoutDetector(
-            model_path=model_path,
-            confidence_threshold=confidence_threshold,
-        )
-        self.analyzer = ReadingOrderAnalyzer(
-            enable_multi_column=self.enable_multi_column_ordering,
-        )
+        
+        # Create detector
+        detector_kwargs = {}
+        if detector == "doclayout-yolo":
+            detector_kwargs = {
+                "model_path": model_path,
+                "confidence_threshold": confidence_threshold,
+            }
+        elif detector == "mineru-vlm":
+            detector_kwargs = {
+                "model": mineru_model,
+                "backend": mineru_backend,
+                "detection_only": (sorter != "mineru-vlm"),  # Full pipeline if using mineru-vlm sorter
+            }
+        
+        # Create detector
+        self.detector = create_detector_impl(detector, **detector_kwargs)
+        
+        # Create sorter
+        sorter_kwargs = {}
+        if sorter == "olmocr-vlm":
+            sorter_kwargs = {
+                "model": olmocr_model or "allenai/olmOCR-7B-0825-FP8",
+                "use_anchoring": True,
+            }
+        
+        self.sorter = create_sorter_impl(sorter, **sorter_kwargs)
+        
+        # Recognizer (for traditional pipeline)
         self.recognizer = TextRecognizer(
             cache_dir=self.cache_dir,
             use_cache=use_cache,
@@ -108,7 +164,13 @@ class Pipeline:
             gemini_tier=gemini_tier,
         )
 
-        logger.info("Pipeline initialized: %s (model=%s)", self.backend.upper(), self.model)
+        logger.info(
+            "Pipeline initialized: detector=%s, sorter=%s, recognizer=%s (model=%s)",
+            detector,
+            sorter,
+            self.backend.upper(),
+            self.model,
+        )
 
     def _setup_directories(self) -> None:
         """Create necessary directories."""
@@ -161,14 +223,20 @@ class Pipeline:
         # Stage 1: Load image
         image_np = self.converter.load_image(image_path)
 
-        # Stage 2: Detect layout regions
-        regions = self.detector.detect(image_np)
+        # Stage 2: Detect layout regions (new detector interface)
+        regions: list[Region] = self.detector.detect(image_np) if self.detector else []
 
-        # Stage 3: Reading order analysis (simple top-to-bottom for single images)
-        # Note: Multi-column ordering is typically not used for single images
+        # Stage 3: Sort regions by reading order (new sorter interface)
+        if self.sorter:
+            sorted_regions: list[Region] = self.sorter.sort(regions, image_np)
+        else:
+            sorted_regions = regions
 
         # Stage 4: Recognition - extract text from regions
-        processed_regions = self.recognizer.process_regions(image_np, regions)
+        if self.sorter_name == "olmocr-vlm":
+            processed_regions = sorted_regions
+        else:
+            processed_regions = self.recognizer.process_regions(image_np, sorted_regions)
 
         # Correct text for text regions
         for region in processed_regions:
@@ -291,16 +359,27 @@ class Pipeline:
             # Stage 1: Convert PDF page to image
             page_image, temp_image_path = self.converter.render_pdf_page(pdf_path, page_num)
 
-            # Stage 2: Detect layout regions
-            regions = self.detector.detect(page_image)
+            # Stage 2: Detect layout regions (new detector interface)
+            regions: list[Region] = self.detector.detect(page_image) if self.detector else []
 
-            # Stage 3: Analyze reading order
-            sorted_regions, column_layout = self.analyzer.analyze_reading_order(
-                regions, page_image, pymupdf_page
-            )
+            # Stage 3: Sort regions by reading order (new sorter interface)
+            if self.sorter:
+                sorted_regions: list[Region] = self.sorter.sort(
+                    regions, page_image, pymupdf_page=pymupdf_page
+                )
+            else:
+                # No sorting - keep original order
+                sorted_regions = regions
+            
+            # Extract column layout info if available (for output compatibility)
+            column_layout = self._extract_column_layout(sorted_regions)
 
             # Stage 4: Recognition - extract text from regions
-            processed_regions = self.recognizer.process_regions(page_image, sorted_regions)
+            # Note: olmocr-vlm sorter already includes text, skip recognition
+            if self.sorter_name == "olmocr-vlm":
+                processed_regions = sorted_regions
+            else:
+                processed_regions = self.recognizer.process_regions(page_image, sorted_regions)
 
             # Check for rate limit errors
             if self._check_for_rate_limit_errors({"regions": processed_regions}):
@@ -308,7 +387,7 @@ class Pipeline:
                 return None, True
 
             # Compose page-level text
-            raw_text = self.analyzer.compose_page_text(processed_regions)
+            raw_text = self._compose_page_text(processed_regions)
             
             # Correct text
             corrected_text, correction_confidence, stop_due_to_correction = self._perform_page_correction(
@@ -617,6 +696,102 @@ class Pipeline:
         logger.info("Directory processing complete. Summary saved to: %s", summary_file)
 
         return summary
+
+    def _extract_column_layout(self, regions: list[Region]) -> dict[str, Any] | None:
+        """Extract column layout information from sorted regions.
+        
+        Args:
+            regions: Sorted regions (may have column_index)
+            
+        Returns:
+            Column layout dict or None
+        """
+        # Check if any regions have column_index
+        has_columns = any("column_index" in r for r in regions)
+        
+        if not has_columns:
+            return None
+        
+        # Extract unique columns
+        column_indices = {r.get("column_index") for r in regions if "column_index" in r}
+        
+        if not column_indices:
+            return None
+        
+        # Build column layout info
+        columns = []
+        for col_idx in sorted(column_indices):
+            col_regions = [r for r in regions if r.get("column_index") == col_idx]
+            if col_regions:
+                # Get bbox if available
+                first_region = col_regions[0]
+                if "bbox" in first_region:
+                    bbox = first_region["bbox"]
+                    columns.append({
+                        "index": col_idx,
+                        "x0": int(bbox.x0),
+                        "x1": int(bbox.x1),
+                        "center": bbox.center[0],
+                        "width": bbox.width,
+                    })
+        
+        if not columns:
+            return None
+        
+        return {"columns": columns}
+    
+    def _compose_page_text(self, processed_regions: list[Region]) -> str:
+        """Compose page-level raw text from processed regions in reading order.
+
+        Reading order: Uses reading_order_rank if available, otherwise top-to-bottom (y),
+        then left-to-right (x). Includes text-like regions only and preserves internal
+        newlines within each region's text.
+        
+        Args:
+            processed_regions: List of processed regions with text content
+            
+        Returns:
+            Composed text in natural reading order
+        """
+        if not isinstance(processed_regions, list):
+            return ""
+            
+        text_like_types = {"plain text", "text", "title", "list"}
+        sortable_regions: list[tuple[int, int, str, int | None]] = []
+        
+        for region in processed_regions:
+            if not isinstance(region, dict):
+                continue
+            region_type = region.get("type")
+            if region_type not in text_like_types:
+                continue
+            coords = region.get("coords") or [0, 0, 0, 0]
+            try:
+                x, y = int(coords[0]), int(coords[1])
+            except Exception:
+                x, y = 0, 0
+            text_value = region.get("text")
+            if isinstance(text_value, str) and text_value.strip():
+                # Keep internal newlines; trim outer whitespace only
+                order_rank = region.get("reading_order_rank")
+                sortable_regions.append((y, x, text_value.strip(), order_rank))
+                
+        # Sort by reading order rank if available, otherwise by y then x
+        if sortable_regions:
+            if any(item[3] is not None for item in sortable_regions):
+                sortable_regions.sort(
+                    key=lambda item: (
+                        0 if item[3] is not None else 1,
+                        item[3] if item[3] is not None else item[0],
+                        item[0],
+                        item[1],
+                    )
+                )
+            else:
+                sortable_regions.sort(key=lambda item: (item[0], item[1]))
+
+        # Join with a blank line between regions to separate blocks
+        return "\n\n".join(item[2] for item in sortable_regions)
 
     def _save_results(self, result: dict[str, Any], output_path: Path) -> None:
         """Save processing results to JSON file."""
