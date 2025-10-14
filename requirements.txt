@@ -2,7 +2,7 @@
 torch==2.0.1
 torchvision==0.15.2
 numpy==1.26.4
-opencv-python==4.7.0.72
+opencv-python-headless==4.7.0.72  # Headless version for server environments (no GUI dependencies)
 Pillow==9.4.0
 
 # Document Processing
@@ -38,3 +38,4 @@ python-dotenv
 ruff==0.13.1
 pytest==8.2.0
 Levenshtein==0.25.0
+opencv-stubs==0.1.0  # Type stubs for OpenCV (pyright/mypy support)

@@ -17,7 +17,6 @@ try:
 except ImportError:
     pass
 
-from .conversion.converter import DocumentConverter
 from .layout.detection import create_detector as create_detector_impl
 from .layout.ordering import create_sorter as create_sorter_impl, validate_combination
 from .misc import tz_now
@@ -124,7 +123,7 @@ class Pipeline:
         self._setup_directories()
 
         # Initialize components using new factory system
-        self.converter = DocumentConverter(temp_dir=self.temp_dir)
+        # Note: Converter is now function-based, no instance needed
 
         # Create detector
         detector_kwargs = {}
@@ -219,7 +218,9 @@ class Pipeline:
         logger.info("Processing image: %s", image_path)
 
         # Stage 1: Load image
-        image_np = self.converter.load_image(image_path)
+        from .conversion.input import image as image_loader
+
+        image_np = image_loader.load_image(image_path)
 
         # Stage 2: Detect layout regions (new detector interface)
         regions: list[Region] = self.detector.detect(image_np) if self.detector else []
@@ -271,12 +272,15 @@ class Pipeline:
         """
         logger.info("Processing PDF: %s", pdf_path)
 
+        # Import PDF converter functions
+        from .conversion.input import pdf as pdf_converter
+
         # Get PDF info
-        pdf_info = self.converter.get_pdf_info(pdf_path)
+        pdf_info = pdf_converter.get_pdf_info(pdf_path)
         total_pages = pdf_info["Pages"]
 
         # Determine which pages to process
-        pages_to_process = self.converter.determine_pages_to_process(total_pages, max_pages, page_range, pages)
+        pages_to_process = pdf_converter.determine_pages_to_process(total_pages, max_pages, page_range, pages)
 
         logger.info("Processing %d pages: %s", len(pages_to_process), pages_to_process)
 
@@ -304,7 +308,9 @@ class Pipeline:
         processed_pages: list[dict[str, Any]] = []
         processing_stopped = False
 
-        pymupdf_doc = self.converter.open_pymupdf_document(pdf_path) if self.enable_multi_column_ordering else None
+        from .conversion.input import pdf as pdf_converter
+
+        pymupdf_doc = pdf_converter.open_pymupdf_document(pdf_path) if self.enable_multi_column_ordering else None
         disable_multi_column = False
 
         for page_num in pages_to_process:
@@ -353,7 +359,11 @@ class Pipeline:
 
         try:
             # Stage 1: Convert PDF page to image
-            page_image, temp_image_path = self.converter.render_pdf_page(pdf_path, page_num)
+            from .conversion.input import pdf as pdf_converter
+
+            page_image, temp_image_path = pdf_converter.render_pdf_page(
+                pdf_path, page_num, temp_dir=self.temp_dir
+            )
 
             # Stage 2: Detect layout regions (new detector interface)
             regions: list[Region] = self.detector.detect(page_image) if self.detector else []

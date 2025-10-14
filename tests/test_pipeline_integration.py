@@ -9,7 +9,6 @@ import numpy as np
 import pytest
 
 from pipeline import Pipeline
-from pipeline.conversion.converter import DocumentConverter
 from pipeline.layout.detection import LayoutDetector
 from pipeline.recognition import TextRecognizer
 from pipeline.recognition.cache import RecognitionCache
@@ -82,7 +81,7 @@ def pipeline_fixture(tmp_path):
         directory.mkdir(parents=True, exist_ok=True)
 
     # Initialize components
-    pipeline.converter = DocumentConverter(temp_dir=pipeline.temp_dir)
+    # Note: converter is now function-based, no instance needed
     pipeline.detector = LayoutDetector.__new__(LayoutDetector)
     pipeline.recognizer = TextRecognizer.__new__(TextRecognizer)
 
@@ -157,8 +156,8 @@ def test_process_pdf_integration(monkeypatch, pipeline_fixture, sample_regions, 
         cv2.imwrite(str(temp_image_path), image)
         return image, temp_image_path
 
-    monkeypatch.setattr("pipeline.conversion.converter.pdfinfo_from_path", fake_pdfinfo)
-    monkeypatch.setattr("pipeline.conversion.DocumentConverter.render_pdf_page", fake_render_pdf_page)
+    monkeypatch.setattr("pipeline.conversion.input.pdf.pdfinfo_from_path", fake_pdfinfo)
+    monkeypatch.setattr("pipeline.conversion.input.pdf.render_pdf_page", fake_render_pdf_page)
 
     summary = pipeline_fixture.process_pdf(pdf_path)
 

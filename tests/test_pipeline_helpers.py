@@ -1,9 +1,8 @@
-from pathlib import Path
 
 import pytest
 
 from pipeline import Pipeline
-from pipeline.conversion.converter import DocumentConverter
+from pipeline.conversion.input import pdf as pdf_converter
 from pipeline.layout.ordering import ReadingOrderAnalyzer
 
 
@@ -40,13 +39,12 @@ def test_compose_page_raw_text_skips_invalid_entries():
 
 
 def test_determine_pages_to_process_honors_priority_and_bounds():
-    converter = DocumentConverter(temp_dir=Path(".tmp"))
     total_pages = 10
 
-    result_specific = converter.determine_pages_to_process(total_pages, pages=[5, 1, 12, 0])
-    result_range = converter.determine_pages_to_process(total_pages, page_range=(0, 12))
-    result_max = converter.determine_pages_to_process(total_pages, max_pages=3)
-    result_all = converter.determine_pages_to_process(total_pages)
+    result_specific = pdf_converter.determine_pages_to_process(total_pages, pages=[5, 1, 12, 0])
+    result_range = pdf_converter.determine_pages_to_process(total_pages, page_range=(0, 12))
+    result_max = pdf_converter.determine_pages_to_process(total_pages, max_pages=3)
+    result_all = pdf_converter.determine_pages_to_process(total_pages)
 
     assert result_specific == [1, 5]
     assert result_range == list(range(1, 11))

@@ -44,7 +44,7 @@ class RecognitionCache:
             MD5 hash of the resized image
         """
         small_img = cv2.resize(image, (32, 32))
-        success, encoded = cv2.imencode(".jpg", small_img, [cv2.IMWRITE_JPEG_QUALITY, 50])
+        success, encoded = cv2.imencode(".jpg", small_img, (cv2.IMWRITE_JPEG_QUALITY, 50))
         if not success:
             raise ValueError("Failed to encode image for hashing")
         image_hash = hashlib.md5(encoded.tobytes()).hexdigest()

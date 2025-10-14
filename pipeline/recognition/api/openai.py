@@ -11,21 +11,11 @@ import io
 import json
 import logging
 import os
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any
 
 import cv2
 import numpy as np
-
-# The OpenAI client class is dynamically provided by the SDK; import lazily.
-try:  # pragma: no cover - runtime import for actual usage
-    from openai import OpenAI as _OpenAI  # pyright: ignore[reportAttributeAccessIssue]
-except ImportError:  # pragma: no cover - allows type checking without dependency
-    _OpenAI = None  # type: ignore[assignment]
-
-if TYPE_CHECKING:
-    OpenAIClientType = Any
-else:  # pragma: no cover - used only at runtime
-    OpenAIClientType = Any
+from openai import OpenAI
 from PIL import Image
 
 logger = logging.getLogger(__name__)
@@ -56,9 +46,9 @@ class OpenAIClient:
             if not self.api_key:
                 self.api_key = os.environ.get("OPENROUTER_API_KEY")
 
-        self.client = self._setup_openai_client()
+        self.client: Any = self._setup_openai_client()  # Use Any to avoid strict type checking
 
-    def _setup_openai_client(self) -> OpenAIClientType | None:
+    def _setup_openai_client(self) -> OpenAI | None:
         """Setup OpenAI API client"""
         try:
             if not self.api_key:
@@ -69,12 +59,7 @@ class OpenAIClient:
             if self.base_url:
                 client_kwargs["base_url"] = self.base_url
 
-            if _OpenAI is None:
-                logger.warning("OpenAI SDK not available; client not initialized")
-                return None
-
-            client_cls = cast(type[OpenAIClientType], _OpenAI)
-            client = client_cls(**client_kwargs)
+            client = OpenAI(**client_kwargs)  # type: ignore[arg-type]
             logger.info("OpenAI API client initialized successfully (base_url: %s)", self.base_url or "default")
             return client
         except Exception as e:
