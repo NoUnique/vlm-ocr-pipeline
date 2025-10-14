@@ -29,7 +29,7 @@ class TestBBoxFormatConversions:
         bbox = BBox.from_mineru_bbox(mineru_coords)
 
         # Convert to DocLayout: [x, y, w, h]
-        doclayout_coords = bbox.to_list_xywh()
+        doclayout_coords = bbox.to_xywh_list()
 
         assert doclayout_coords == [100, 50, 200, 150]
 
@@ -53,4 +53,3 @@ class TestBBoxFormatConversions:
 
         anchor = bbox.to_olmocr_anchor("table")
         assert anchor == "[Table 100x50 to 300x200]"
-

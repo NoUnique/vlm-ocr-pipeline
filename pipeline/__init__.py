@@ -35,7 +35,7 @@ except Exception:  # pragma: no cover - optional dependency guard
 
 class Pipeline:
     """Unified VLM OCR processing pipeline with integrated text correction.
-    
+
     This pipeline orchestrates four main stages:
     1. Document Conversion: Convert PDFs/images to processable format
     2. Layout Detection: Identify regions (text, tables, figures, etc.)
@@ -102,14 +102,12 @@ class Pipeline:
         is_valid, message = validate_combination(detector, sorter)
         if not is_valid:
             raise ValueError(f"Invalid detector/sorter combination: {message}")
-        
+
         logger.info("Pipeline combination: %s", message)
 
         # Check PyMuPDF availability for pymupdf sorter
         if sorter == "pymupdf" and fitz is None:
-            logger.warning(
-                "PyMuPDF is not installed. Falling back to sorter='mineru-xycut'"
-            )
+            logger.warning("PyMuPDF is not installed. Falling back to sorter='mineru-xycut'")
             sorter = "mineru-xycut"
             self.sorter_name = "mineru-xycut"
 
@@ -127,7 +125,7 @@ class Pipeline:
 
         # Initialize components using new factory system
         self.converter = DocumentConverter(temp_dir=self.temp_dir)
-        
+
         # Create detector
         detector_kwargs = {}
         if detector == "doclayout-yolo":
@@ -141,10 +139,10 @@ class Pipeline:
                 "backend": mineru_backend,
                 "detection_only": (sorter != "mineru-vlm"),  # Full pipeline if using mineru-vlm sorter
             }
-        
+
         # Create detector
         self.detector = create_detector_impl(detector, **detector_kwargs)
-        
+
         # Create sorter
         sorter_kwargs = {}
         if sorter == "olmocr-vlm":
@@ -152,9 +150,9 @@ class Pipeline:
                 "model": olmocr_model or "allenai/olmOCR-7B-0825-FP8",
                 "use_anchoring": True,
             }
-        
+
         self.sorter = create_sorter_impl(sorter, **sorter_kwargs)
-        
+
         # Recognizer (for traditional pipeline)
         self.recognizer = TextRecognizer(
             cache_dir=self.cache_dir,
@@ -189,13 +187,13 @@ class Pipeline:
         pages: list[int] | None = None,
     ) -> dict[str, Any]:
         """Process single image or PDF.
-        
+
         Args:
             image_path: Path to image or PDF file
             max_pages: Maximum number of pages to process (PDF only)
             page_range: Range of pages to process (PDF only)
             pages: Specific pages to process (PDF only)
-            
+
         Returns:
             Processing results
         """
@@ -211,10 +209,10 @@ class Pipeline:
 
     def process_single_image(self, image_path: Path) -> dict[str, Any]:
         """Process a single image file.
-        
+
         Args:
             image_path: Path to image file
-            
+
         Returns:
             Processing results with regions and extracted text
         """
@@ -261,13 +259,13 @@ class Pipeline:
         pages: list[int] | None = None,
     ) -> dict[str, Any]:
         """Process PDF file with page limiting options.
-        
+
         Args:
             pdf_path: Path to PDF file
             max_pages: Maximum number of pages to process
             page_range: Range of pages to process (start, end)
             pages: Specific list of page numbers to process
-            
+
         Returns:
             Summary of PDF processing results
         """
@@ -278,9 +276,7 @@ class Pipeline:
         total_pages = pdf_info["Pages"]
 
         # Determine which pages to process
-        pages_to_process = self.converter.determine_pages_to_process(
-            total_pages, max_pages, page_range, pages
-        )
+        pages_to_process = self.converter.determine_pages_to_process(total_pages, max_pages, page_range, pages)
 
         logger.info("Processing %d pages: %s", len(pages_to_process), pages_to_process)
 
@@ -291,9 +287,7 @@ class Pipeline:
             pdf_path, pages_to_process, total_pages, output_dir
         )
 
-        summary = self._create_pdf_summary(
-            pdf_path, total_pages, processed_pages, processing_stopped, output_dir
-        )
+        summary = self._create_pdf_summary(pdf_path, total_pages, processed_pages, processing_stopped, output_dir)
 
         logger.info("PDF processing complete: %s -> %s", pdf_path, output_dir)
 
@@ -366,13 +360,11 @@ class Pipeline:
 
             # Stage 3: Sort regions by reading order (new sorter interface)
             if self.sorter:
-                sorted_regions: list[Region] = self.sorter.sort(
-                    regions, page_image, pymupdf_page=pymupdf_page
-                )
+                sorted_regions: list[Region] = self.sorter.sort(regions, page_image, pymupdf_page=pymupdf_page)
             else:
                 # No sorting - keep original order
                 sorted_regions = regions
-            
+
             # Extract column layout info if available (for output compatibility)
             column_layout = self._extract_column_layout(sorted_regions)
 
@@ -390,7 +382,7 @@ class Pipeline:
 
             # Compose page-level text
             raw_text = self._compose_page_text(processed_regions)
-            
+
             # Correct text
             corrected_text, correction_confidence, stop_due_to_correction = self._perform_page_correction(
                 raw_text, page_num
@@ -430,9 +422,7 @@ class Pipeline:
                 del page_image
             gc.collect()
 
-    def _perform_page_correction(
-        self, raw_text: str, page_num: int
-    ) -> tuple[str, float, bool]:
+    def _perform_page_correction(self, raw_text: str, page_num: int) -> tuple[str, float, bool]:
         """Perform page-level text correction."""
         correction_result = self.recognizer.correct_text(raw_text)
 
@@ -701,25 +691,25 @@ class Pipeline:
 
     def _extract_column_layout(self, regions: list[Region]) -> dict[str, Any] | None:
         """Extract column layout information from sorted regions.
-        
+
         Args:
             regions: Sorted regions (may have column_index)
-            
+
         Returns:
             Column layout dict or None
         """
         # Check if any regions have column_index
         has_columns = any(r.column_index is not None for r in regions)
-        
+
         if not has_columns:
             return None
-        
+
         # Extract unique columns
         column_indices = {r.column_index for r in regions if r.column_index is not None}
-        
+
         if not column_indices:
             return None
-        
+
         # Build column layout info (filter out None values)
         columns = []
         for col_idx in sorted(column_indices):
@@ -729,52 +719,50 @@ class Pipeline:
                 first_region = col_regions[0]
                 if first_region.bbox:
                     bbox = first_region.bbox
-                    columns.append({
-                        "index": col_idx,
-                        "x0": int(bbox.x0),
-                        "x1": int(bbox.x1),
-                        "center": bbox.center[0],
-                        "width": bbox.width,
-                    })
-        
+                    columns.append(
+                        {
+                            "index": col_idx,
+                            "x0": int(bbox.x0),
+                            "x1": int(bbox.x1),
+                            "center": bbox.center[0],
+                            "width": bbox.width,
+                        }
+                    )
+
         if not columns:
             return None
-        
+
         return {"columns": columns}
-    
+
     def _compose_page_text(self, processed_regions: Sequence[Region]) -> str:
         """Compose page-level raw text from processed regions in reading order.
 
         Reading order: Uses reading_order_rank if available, otherwise top-to-bottom (y),
         then left-to-right (x). Includes text-like regions only and preserves internal
         newlines within each region's text.
-        
+
         Args:
             processed_regions: List of processed regions with text content
-            
+
         Returns:
             Composed text in natural reading order
         """
         if not processed_regions:
             return ""
-            
+
         text_like_types = {"plain text", "text", "title", "list"}
         sortable_regions: list[tuple[int, int, str, int | None]] = []
-        
+
         for region in processed_regions:
             if region.type not in text_like_types:
                 continue
-            coords = region.coords
-            try:
-                x, y = int(coords[0]), int(coords[1])
-            except Exception:
-                x, y = 0, 0
+            x, y = region.bbox.x0, region.bbox.y0
             text_value = region.text
             if text_value and text_value.strip():
                 # Keep internal newlines; trim outer whitespace only
                 order_rank = region.reading_order_rank
                 sortable_regions.append((y, x, text_value.strip(), order_rank))
-                
+
         # Sort by reading order rank if available, otherwise by y then x
         if sortable_regions:
             if any(item[3] is not None for item in sortable_regions):

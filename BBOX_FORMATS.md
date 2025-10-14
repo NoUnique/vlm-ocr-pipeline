@@ -8,7 +8,8 @@ All frameworks use **Top-Left origin (0,0)** except PyPDF.
 
 | Framework | Format | Example | Notes |
 |-----------|--------|---------|-------|
-| **This Project** | `[x, y, w, h]` | `[100, 50, 200, 150]` | Position + Size |
+| **This Project (Internal)** | `BBox(x0, y0, x1, y1)` | `BBox(100, 50, 300, 200)` | Integer coordinates, xyxy corners |
+| **This Project (JSON)** | `[x, y, w, h]` | `[100, 50, 200, 150]` | Position + Size (human-readable) |
 | **YOLO** | `[x1, y1, x2, y2]` | `[100, 50, 300, 200]` | Top-Left + Bottom-Right |
 | **MinerU** | `[x0, y0, x1, y1]` | `[100, 50, 300, 200]` | Top-Left + Bottom-Right |
 | **PyMuPDF** | `Rect(x0, y0, x1, y1)` | `Rect(100, 50, 300, 200)` | Top-Left + Bottom-Right |
@@ -85,38 +86,76 @@ anchor = f"[Table {x0:.0f}x{y0:.0f} to {x1:.0f}x{y1:.0f}]"
 
 ## BBox Class Usage
 
-Our `BBox` class handles all conversions automatically:
+Our `BBox` class handles all conversions automatically with **integer coordinates**:
 
 ```python
 from pipeline.types import BBox
 
-# Create from any format
-bbox = BBox.from_xywh(100, 50, 200, 150)      # This project
-bbox = BBox.from_xyxy(100, 50, 300, 200)      # YOLO/MinerU
+# Create from any format (accepts float, converts to int)
+bbox = BBox.from_xywh(100, 50, 200, 150)      # xywh format
+bbox = BBox.from_xyxy(100, 50, 300, 200)      # xyxy format (corners)
+bbox = BBox.from_cxcywh(200, 125, 200, 150)   # Center format (YOLO training)
 bbox = BBox.from_mineru_bbox([100, 50, 300, 200])
 bbox = BBox.from_pymupdf_rect(rect)
 bbox = BBox.from_pypdf_rect([100, 592, 300, 742], page_height=792)
 
 # Convert to any format
-coords = bbox.to_list_xywh()          # [100, 50, 200, 150]
-coords = bbox.to_list_xyxy()          # [100, 50, 300, 200]
-coords = bbox.to_mineru_bbox()        # [100, 50, 300, 200]
-coords = bbox.to_pypdf_rect(792)      # [100, 592, 300, 742]
-anchor = bbox.to_olmocr_anchor("image")  # "[Image 100x50 to 300x200]"
+coords = bbox.to_xywh_list()          # [100, 50, 200, 150] (for JSON)
+coords = bbox.to_list()                # [100, 50, 300, 200] (xyxy)
+coords = bbox.to_dict()                # {"x0": 100, "y0": 50, "x1": 300, "y1": 200}
+cx, cy, w, h = bbox.to_cxcywh()        # Center format
+coords = bbox.to_mineru_bbox()         # [100, 50, 300, 200]
+coords = bbox.to_pypdf_rect(792)       # [100, 592, 300, 742]
+anchor = bbox.to_olmocr_anchor("image") # "[Image 100x50 to 300x200]"
 
-# Geometric operations
-center_x, center_y = bbox.center
-area = bbox.area
-width = bbox.width
-height = bbox.height
-overlap = bbox1.intersect(bbox2)
-iou = bbox1.iou(bbox2)
+# Geometric operations (integer results)
+center_x, center_y = bbox.center  # (float, float)
+area = bbox.area                  # int
+width = bbox.width                # int
+height = bbox.height              # int
+overlap = bbox1.intersect(bbox2)  # int
+iou = bbox1.iou(bbox2)            # float
+
+# Clear aliases
+left = bbox.left     # = bbox.x0
+top = bbox.top       # = bbox.y0
+right = bbox.right   # = bbox.x1
+bottom = bbox.bottom # = bbox.y1
+
+# NumPy convenience
+cropped = bbox.crop(image, padding=5)  # Direct image cropping
+```
+
+## Region Structure
+
+The `Region` dataclass represents detected document regions:
+
+```python
+from pipeline.types import Region, BBox
+
+region = Region(
+    type="text",
+    bbox=BBox(100, 50, 300, 200),  # Required, always present
+    confidence=0.95,
+    # Optional fields
+    reading_order_rank=0,
+    column_index=1,
+    text="Extracted text...",
+)
+
+# Serialize to JSON (bbox → xywh format for readability)
+data = region.to_dict()
+# {"type": "text", "bbox": [100, 50, 200, 150], "confidence": 0.95}
+
+# Deserialize from JSON (supports xywh)
+region = Region.from_dict(data)
 ```
 
 ## Key Points
 
-1. **Most frameworks use the same internal format**: `[x0, y0, x1, y1]` with Top-Left origin
-2. **Only PyPDF is different**: Bottom-Left origin requires Y-axis flip
-3. **This project uses**: `[x, y, w, h]` for compatibility with DocLayout-YOLO output
-4. **BBox class**: Unified internal format `(x0, y0, x1, y1)` with Top-Left origin
+1. **Internal representation**: `BBox(x0, y0, x1, y1)` with **integer coordinates** (xyxy format)
+2. **JSON output**: `[x, y, w, h]` (xywh format) for human readability
+3. **Most frameworks use the same internal format**: `[x0, y0, x1, y1]` with Top-Left origin
+4. **Only PyPDF is different**: Bottom-Left origin requires Y-axis flip
+5. **Region.bbox is always present**: No longer optional (required field)
 

@@ -95,7 +95,7 @@ def pipeline_fixture(tmp_path):
     cast(Any, pipeline.recognizer).gemini_client = fake_ai_client
     cast(Any, pipeline.recognizer).openai_client = fake_ai_client
     cast(Any, pipeline.recognizer).cache = RecognitionCache(pipeline.cache_dir, use_cache=False)
-    
+
     cast(Any, pipeline)._test_ai_client = fake_ai_client
     return pipeline
 

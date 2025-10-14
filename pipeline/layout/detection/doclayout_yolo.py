@@ -26,7 +26,7 @@ class DocLayoutYOLODetector:
 
     This detector wraps the existing DocLayoutYOLO model and provides
     output in the unified Region format.
-    
+
     BBox Format: [x, y, width, height] - Top-Left origin
     """
 
@@ -70,26 +70,24 @@ class DocLayoutYOLODetector:
         """
         raw_results = self.model.predict(image, conf=self.confidence_threshold)
         logger.debug("Detected %d regions with DocLayout-YOLO", len(raw_results))
-        
+
         return [self._to_region(r) for r in raw_results]
-    
+
     def _to_region(self, raw_data: dict) -> Region:
         """Convert DocLayout-YOLO result to unified Region format.
-        
+
         Args:
             raw_data: {"type": str, "coords": [x, y, w, h], "confidence": float}
-            
+
         Returns:
             Unified Region dataclass instance with BBox
         """
         coords = raw_data["coords"]
-        bbox = BBox.from_list(coords, coord_format="xywh")
+        bbox = BBox.from_xywh(*coords[:4])
 
         return Region(
             type=raw_data["type"],
-            coords=coords,
-            confidence=float(raw_data["confidence"]),
             bbox=bbox,
+            confidence=float(raw_data["confidence"]),
             source="doclayout-yolo",
         )
-

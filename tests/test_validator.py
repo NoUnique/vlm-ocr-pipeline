@@ -13,7 +13,7 @@ def test_validate_combination_valid():
         valid = True
     except ValueError:
         valid = False
-    
+
     assert valid is True
 
 
@@ -26,7 +26,7 @@ def test_validate_combination_invalid_detector():
     except ValueError as e:
         raised = True
         assert "detector" in str(e).lower()
-    
+
     assert raised is True
 
 
@@ -39,6 +39,5 @@ def test_validate_combination_incompatible():
         passed = True
     except Exception:
         passed = False
-    
-    assert passed is True
 
+    assert passed is True

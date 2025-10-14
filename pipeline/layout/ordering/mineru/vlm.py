@@ -76,13 +76,9 @@ class MinerUVLMSorter:
 
     def _fallback_sort(self, regions: list[Region]) -> list[Region]:
         """Fallback to simple geometric sorting."""
-        from pipeline.types import ensure_bbox_in_region
-
-        regions = [ensure_bbox_in_region(r) for r in regions]
-        sorted_regions = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0) if r.bbox else (0, 0))
+        sorted_regions = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0))
 
         for rank, region in enumerate(sorted_regions):
             region.reading_order_rank = rank
 
         return sorted_regions
-

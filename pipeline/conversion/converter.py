@@ -20,7 +20,7 @@ except Exception:  # pragma: no cover - optional dependency guard
 
 class DocumentConverter:
     """Handles conversion of document files to images.
-    
+
     This class is responsible for:
     - Converting PDF pages to images
     - Loading and processing image files
@@ -30,7 +30,7 @@ class DocumentConverter:
 
     def __init__(self, temp_dir: Path):
         """Initialize the document converter.
-        
+
         Args:
             temp_dir: Directory for temporary files
         """
@@ -39,10 +39,10 @@ class DocumentConverter:
 
     def get_pdf_info(self, pdf_path: Path) -> dict[str, Any]:
         """Get PDF document information.
-        
+
         Args:
             pdf_path: Path to the PDF file
-            
+
         Returns:
             Dictionary containing PDF metadata including page count
         """
@@ -50,12 +50,12 @@ class DocumentConverter:
 
     def render_pdf_page(self, pdf_path: Path, page_num: int, dpi: int = 200) -> tuple[np.ndarray, Path]:
         """Render a PDF page to an image.
-        
+
         Args:
             pdf_path: Path to the PDF file
             page_num: Page number to render (1-indexed)
             dpi: DPI for rendering
-            
+
         Returns:
             Tuple of (image array, temporary file path)
         """
@@ -70,10 +70,10 @@ class DocumentConverter:
 
     def open_pymupdf_document(self, pdf_path: Path) -> Any | None:
         """Open a PDF document using PyMuPDF.
-        
+
         Args:
             pdf_path: Path to the PDF file
-            
+
         Returns:
             PyMuPDF document object or None if PyMuPDF is not available
         """
@@ -97,13 +97,13 @@ class DocumentConverter:
         pages: list[int] | None = None,
     ) -> list[int]:
         """Determine which pages to process based on limiting options.
-        
+
         Args:
             total_pages: Total number of pages in the document
             max_pages: Maximum number of pages to process
             page_range: Range of pages to process (start, end)
             pages: Specific list of page numbers to process
-            
+
         Returns:
             List of page numbers to process
         """
@@ -132,13 +132,13 @@ class DocumentConverter:
 
     def load_image(self, image_path: Path) -> np.ndarray:
         """Load an image file.
-        
+
         Args:
             image_path: Path to the image file
-            
+
         Returns:
             Image as numpy array
-            
+
         Raises:
             ValueError: If image cannot be loaded
         """
@@ -146,4 +146,3 @@ class DocumentConverter:
         if image_np is None:
             raise ValueError(f"Could not load image: {image_path}")
         return image_np
-

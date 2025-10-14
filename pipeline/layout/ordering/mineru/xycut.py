@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from pipeline.types import Region, ensure_bbox_in_region
+from pipeline.types import Region
 
 if TYPE_CHECKING:
     import numpy as np
@@ -61,13 +61,11 @@ class MinerUXYCutSorter:
         if not regions:
             return regions
 
-        regions = [ensure_bbox_in_region(r) for r in regions]
-
         try:
             import numpy as np
 
             bboxes = np.array(
-                [[r.bbox.x0, r.bbox.y0, r.bbox.x1, r.bbox.y1] for r in regions if r.bbox],
+                [[r.bbox.x0, r.bbox.y0, r.bbox.x1, r.bbox.y1] for r in regions],
                 dtype=int,
             )
 
@@ -88,9 +86,7 @@ class MinerUXYCutSorter:
             logger.error("XY-Cut sorting failed: %s, falling back to simple sort", e)
             return self._fallback_sort(regions)
 
-    def _recursive_xy_cut(
-        self, boxes: np.ndarray, indices: list[int], result: list[int]
-    ) -> None:
+    def _recursive_xy_cut(self, boxes: np.ndarray, indices: list[int], result: list[int]) -> None:
         """Recursive XY-Cut algorithm.
 
         Adapted from MinerU's implementation.
@@ -210,11 +206,9 @@ class MinerUXYCutSorter:
         if not regions:
             return regions
 
-        regions = [ensure_bbox_in_region(r) for r in regions]
-        sorted_regions = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0) if r.bbox else (0, 0))
+        sorted_regions = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0))
 
         for rank, region in enumerate(sorted_regions):
             region.reading_order_rank = rank
 
         return sorted_regions
-

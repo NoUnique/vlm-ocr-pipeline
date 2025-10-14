@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class RecognitionCache:
     """Manages caching of recognition results.
-    
+
     This class handles:
     - Image hashing for cache keys
     - Reading and writing cached results
@@ -25,7 +25,7 @@ class RecognitionCache:
 
     def __init__(self, cache_dir: Path, use_cache: bool = True):
         """Initialize the recognition cache.
-        
+
         Args:
             cache_dir: Directory for cache files
             use_cache: Whether caching is enabled
@@ -36,10 +36,10 @@ class RecognitionCache:
 
     def calculate_image_hash(self, image: np.ndarray) -> str:
         """Calculate hash for image caching.
-        
+
         Args:
             image: Input image
-            
+
         Returns:
             MD5 hash of the resized image
         """
@@ -53,11 +53,11 @@ class RecognitionCache:
 
     def get_cached_result(self, image_hash: str, cache_type: str) -> dict[str, Any] | None:
         """Get cached result if exists.
-        
+
         Args:
             image_hash: Hash of the image
             cache_type: Type of cache (e.g., 'gemini_ocr', 'table')
-            
+
         Returns:
             Cached result or None if not found
         """
@@ -79,7 +79,7 @@ class RecognitionCache:
 
     def save_to_cache(self, image_hash: str, cache_type: str, result: dict[str, Any]) -> None:
         """Save result to cache.
-        
+
         Args:
             image_hash: Hash of the image
             cache_type: Type of cache
@@ -99,4 +99,3 @@ class RecognitionCache:
             logger.debug("Cached result for %s: %s", cache_type, image_hash)
         except Exception as e:
             logger.warning("Failed to save cache file %s: %s", cache_file, e)
-

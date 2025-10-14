@@ -164,9 +164,7 @@ class RateLimitManager:
         self.current_model = data.get("current_model", data.get("model", self.current_model))
         self.model = self.current_model
 
-    def _load_models_state_from_new_format(
-        self, models_data: dict[str, Any], now: float, today: date
-    ) -> None:
+    def _load_models_state_from_new_format(self, models_data: dict[str, Any], now: float, today: date) -> None:
         for model_name, model_data in models_data.items():
             state = self._build_model_state(model_data, now, today)
             self.model_states[model_name] = state
@@ -182,19 +180,13 @@ class RateLimitManager:
     def _build_model_state(self, model_data: dict[str, Any], now: float, today: date) -> dict[str, Any]:
         daily_requests = model_data.get("daily_requests", 0)
         saved_date_value = model_data.get("last_reset_date")
-        last_reset_date, daily_requests = self._resolve_last_reset_date(
-            saved_date_value, daily_requests, today
-        )
+        last_reset_date, daily_requests = self._resolve_last_reset_date(saved_date_value, daily_requests, today)
 
         request_times = model_data.get("request_times", [])
-        valid_request_times = deque(
-            t for t in request_times if now - t <= REQUEST_WINDOW_SECONDS
-        )
+        valid_request_times = deque(t for t in request_times if now - t <= REQUEST_WINDOW_SECONDS)
 
         token_usage = model_data.get("token_usage", [])
-        valid_token_usage = deque(
-            (t, tokens) for t, tokens in token_usage if now - t <= REQUEST_WINDOW_SECONDS
-        )
+        valid_token_usage = deque((t, tokens) for t, tokens in token_usage if now - t <= REQUEST_WINDOW_SECONDS)
 
         return {
             "request_times": valid_request_times,

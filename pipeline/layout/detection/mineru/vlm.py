@@ -100,9 +100,7 @@ class MinerUVLMDetector:
         if self.detection_only:
             # TODO: MinerU doesn't expose step 1 (detection only) separately
             # For now, use two-step and remove ordering info
-            logger.warning(
-                "MinerU VLM detection_only mode: using two-step extract but ignoring ordering"
-            )
+            logger.warning("MinerU VLM detection_only mode: using two-step extract but ignoring ordering")
             results = self.vlm.batch_two_step_extract(images=[pil_image])
             raw_blocks = results[0]
 
@@ -116,24 +114,22 @@ class MinerUVLMDetector:
         logger.debug("Detected %d regions with MinerU VLM", len(raw_blocks))
 
         return [self._to_region(block) for block in raw_blocks]
-    
+
     def _to_region(self, block: dict[str, Any]) -> Region:
         """Convert MinerU block to unified Region format.
-        
+
         Args:
             block: {"type": str, "bbox": [x0, y0, x1, y1], "text": str (optional), "index": int (optional)}
-            
+
         Returns:
             Unified Region dataclass instance with BBox
         """
         bbox = BBox.from_mineru_bbox(block["bbox"])
-        x, y, w, h = bbox.to_xywh()
 
         region = Region(
             type=block["type"],
-            coords=[x, y, w, h],
-            confidence=float(block.get("confidence", 1.0)),
             bbox=bbox,
+            confidence=float(block.get("confidence", 1.0)),
             source="mineru-vlm",
             text=block.get("text"),
             index=block.get("index"),
@@ -141,4 +137,3 @@ class MinerUVLMDetector:
         )
 
         return region
-

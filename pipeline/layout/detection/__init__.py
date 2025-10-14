@@ -39,18 +39,18 @@ if MinerUDocLayoutYOLODetector is not None:
 
 def create_detector(name: str, **kwargs: Any) -> Any:
     """Create a detector instance.
-    
+
     Args:
         name: Detector name
         **kwargs: Arguments for detector
-        
+
     Returns:
         Detector instance
     """
     if name not in _DETECTOR_REGISTRY:
         available = ", ".join(_DETECTOR_REGISTRY.keys())
         raise ValueError(f"Unknown detector: {name}. Available: {available}")
-    
+
     return _DETECTOR_REGISTRY[name](**kwargs)
 
 

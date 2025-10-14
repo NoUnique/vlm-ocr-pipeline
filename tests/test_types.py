@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from pipeline.types import BBox, Region, ensure_bbox_in_region, regions_to_olmocr_anchor_text
+from pipeline.types import BBox, Region, regions_to_olmocr_anchor_text
 
 
 class TestBBoxCreation:
@@ -84,17 +84,17 @@ class TestBBoxConversion:
         assert x1 == 300
         assert y1 == 200
 
-    def test_to_list_xywh(self):
-        """Test BBox conversion to list xywh."""
+    def test_to_xywh_list(self):
+        """Test BBox conversion to xywh list."""
         bbox = BBox(100, 50, 300, 200)
-        coords = bbox.to_list_xywh()
+        coords = bbox.to_xywh_list()
 
         assert coords == [100, 50, 200, 150]
 
-    def test_to_list_xyxy(self):
-        """Test BBox conversion to list xyxy."""
+    def test_to_list(self):
+        """Test BBox conversion to xyxy list."""
         bbox = BBox(100, 50, 300, 200)
-        coords = bbox.to_list_xyxy()
+        coords = bbox.to_list()
 
         assert coords == [100, 50, 300, 200]
 
@@ -243,7 +243,7 @@ class TestBBoxRoundTrip:
         """Test xywh → BBox → xywh."""
         original = [100, 50, 200, 150]
         bbox = BBox.from_list(original, coord_format="xywh")
-        converted = bbox.to_list_xywh()
+        converted = bbox.to_xywh_list()
 
         assert converted == original
 
@@ -251,7 +251,7 @@ class TestBBoxRoundTrip:
         """Test xyxy → BBox → xyxy."""
         original = [100, 50, 300, 200]
         bbox = BBox.from_list(original, coord_format="xyxy")
-        converted = bbox.to_list_xyxy()
+        converted = bbox.to_list()
 
         assert converted == original
 
@@ -267,55 +267,23 @@ class TestBBoxRoundTrip:
 class TestRegionUtilities:
     """Test Region utility functions."""
 
-    def test_ensure_bbox_in_region(self):
-        """Test ensure_bbox_in_region adds bbox from coords."""
-        region = Region(
-            type="text",
-            coords=[100, 50, 200, 150],
-            confidence=0.9,
-        )
-
-        region = ensure_bbox_in_region(region)
-
-        assert region.bbox is not None
-        assert region.bbox.x0 == 100
-        assert region.bbox.y0 == 50
-        assert region.bbox.x1 == 300
-        assert region.bbox.y1 == 200
-
-    def test_ensure_bbox_idempotent(self):
-        """Test ensure_bbox_in_region is idempotent."""
-        bbox_obj = BBox(100, 50, 300, 200)
-        region = Region(
-            type="text",
-            coords=[100, 50, 200, 150],
-            confidence=0.9,
-            bbox=bbox_obj,
-        )
-
-        region = ensure_bbox_in_region(region)
-
-        # Should keep the same bbox object
-        assert region.bbox is not None
-        assert region.bbox is bbox_obj
-
     def test_regions_to_olmocr_anchor_text(self):
         """Test regions to olmOCR anchor text conversion."""
         regions: list[Region] = [
             Region(
                 type="title",
-                coords=[100, 50, 200, 30],
+                bbox=BBox(100, 50, 300, 80),
                 confidence=0.9,
                 text="Chapter 1",
             ),
             Region(
                 type="figure",
-                coords=[100, 100, 200, 150],
+                bbox=BBox(100, 100, 300, 250),
                 confidence=0.95,
             ),
             Region(
                 type="plain text",
-                coords=[100, 300, 400, 50],
+                bbox=BBox(100, 300, 500, 350),
                 confidence=0.9,
                 text="Content here with some long text that might be truncated",
             ),
@@ -324,7 +292,7 @@ class TestRegionUtilities:
         anchor_text = regions_to_olmocr_anchor_text(regions, 800, 600)
 
         # Check header
-        assert "Page dimensions: 800.0x600.0" in anchor_text
+        assert "Page dimensions: 800x600" in anchor_text
 
         # Check text region (with partial content)
         assert "[100x50]Chapter 1" in anchor_text
@@ -341,7 +309,7 @@ class TestRegionUtilities:
         regions: list[Region] = [
             Region(
                 type="text",
-                coords=[i * 10, i * 10, 100, 20],
+                bbox=BBox(i * 10, i * 10, i * 10 + 100, i * 10 + 20),
                 confidence=0.9,
             )
             for i in range(100)
@@ -421,4 +389,3 @@ class TestBBoxImmutability:
 
         # bbox1 and bbox2 are equal, so set should have 2 elements
         assert len(bbox_set) == 2
-

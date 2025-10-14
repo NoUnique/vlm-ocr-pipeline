@@ -29,11 +29,7 @@ class ReadingOrderAnalyzer:
         # Filter text-like regions (excludes table, figure, equation, etc.)
         text_like_types = {"plain text", "text", "title", "list"}
         text_regions = [
-            r
-            for r in processed_regions
-            if isinstance(r, dict)
-            and r.get("type") in text_like_types
-            and r.get("text")
+            r for r in processed_regions if isinstance(r, dict) and r.get("type") in text_like_types and r.get("text")
         ]
 
         if not text_regions:
@@ -75,4 +71,3 @@ class ColumnOrderingInfo:
         """
         self.column_count = column_count
         self.column_boundaries = column_boundaries or []
-

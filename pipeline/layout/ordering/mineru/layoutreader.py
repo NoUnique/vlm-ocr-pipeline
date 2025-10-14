@@ -14,7 +14,7 @@ import logging
 import statistics
 from typing import TYPE_CHECKING, Any
 
-from pipeline.types import Region, ensure_bbox_in_region
+from pipeline.types import Region
 
 if TYPE_CHECKING:
     import numpy as np
@@ -51,8 +51,7 @@ class MinerULayoutReaderSorter:
             from mineru.utils.block_sort import ModelSingleton
         except ImportError as e:
             raise ImportError(
-                "MinerU LayoutReader dependencies not available. "
-                "Install with: pip install torch transformers"
+                "MinerU LayoutReader dependencies not available. Install with: pip install torch transformers"
             ) from e
 
         self.device = device
@@ -80,22 +79,17 @@ class MinerULayoutReaderSorter:
         if not regions:
             return regions
 
-        regions = [ensure_bbox_in_region(r) for r in regions]
         page_height, page_width = image.shape[:2]
 
         line_height = self._estimate_line_height(regions)
         lines_data = self._split_regions_into_lines(regions, line_height, page_width, page_height)
 
         if len(lines_data) > MAX_LINES:
-            logger.warning(
-                "Too many lines (%d > %d), falling back to simple sort", len(lines_data), MAX_LINES
-            )
+            logger.warning("Too many lines (%d > %d), falling back to simple sort", len(lines_data), MAX_LINES)
             return self._fallback_sort(regions)
 
         try:
-            sorted_line_indices = self._sort_lines_with_layoutreader(
-                lines_data, page_width, page_height
-            )
+            sorted_line_indices = self._sort_lines_with_layoutreader(lines_data, page_width, page_height)
         except Exception as e:
             logger.error("LayoutReader failed: %s, falling back to simple sort", e)
             return self._fallback_sort(regions)
@@ -138,7 +132,7 @@ class MinerULayoutReaderSorter:
             bbox = region.bbox
             if bbox is None:
                 continue  # Skip regions without bbox
-                
+
             region_type = region.type
 
             if region_type in {"plain text", "text", "title"}:
@@ -265,11 +259,9 @@ class MinerULayoutReaderSorter:
 
     def _fallback_sort(self, regions: list[Region]) -> list[Region]:
         """Fallback to simple geometric sorting."""
-        regions = [ensure_bbox_in_region(r) for r in regions]
-        sorted_regions = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0) if r.bbox else (0, 0))
+        sorted_regions = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0))
 
         for rank, region in enumerate(sorted_regions):
             region.reading_order_rank = rank
 
         return sorted_regions
-

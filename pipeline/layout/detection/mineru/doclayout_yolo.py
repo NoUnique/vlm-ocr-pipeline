@@ -27,10 +27,10 @@ logger = logging.getLogger(__name__)
 
 class MinerUDocLayoutYOLODetector:
     """Detector using MinerU's DocLayout-YOLO implementation.
-    
+
     This uses MinerU's DocLayoutYOLOModel which may have different
     model weights or configurations compared to the main project's version.
-    
+
     BBox Format: poly [x1,y1,x2,y2,x3,y3,x4,y4] → simplified to [xmin,ymin,xmax,ymax]
     """
 
@@ -91,7 +91,7 @@ class MinerUDocLayoutYOLODetector:
             raw_data: {"category_id": int, "poly": [8 points], "score": float}
 
         Returns:
-            Unified Region dict with BBox
+            Unified Region with BBox
         """
         poly = raw_data["poly"]
         xmin = min(poly[0], poly[2], poly[4], poly[6])
@@ -100,16 +100,14 @@ class MinerUDocLayoutYOLODetector:
         ymax = max(poly[1], poly[3], poly[5], poly[7])
 
         bbox = BBox.from_xyxy(xmin, ymin, xmax, ymax)
-        x, y, w, h = bbox.to_xywh()
 
         category_id = raw_data["category_id"]
         region_type = self._category_to_type(category_id)
 
         return Region(
             type=region_type,
-            coords=[x, y, w, h],
-            confidence=float(raw_data["score"]),
             bbox=bbox,
+            confidence=float(raw_data["score"]),
             source="mineru-doclayout-yolo",
         )
 
@@ -128,4 +126,3 @@ class MinerUDocLayoutYOLODetector:
             9: "formula_caption",
         }
         return category_map.get(category_id, "unknown")
-

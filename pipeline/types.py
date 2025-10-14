@@ -1,47 +1,54 @@
 """Unified type definitions for the VLM OCR pipeline.
 
 This module provides:
-- BBox: Unified bounding box with format conversions
-- Region: TypedDict for document regions
+- BBox: Integer-based bounding box (internal: xyxy, JSON: xywh)
+- Region: Document region with required bbox field
 - Detector/Sorter: Protocol interfaces
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     import numpy as np
 
+# ==================== Constants ====================
+
+RGB_IMAGE_NDIM = 3  # RGB image has 3 dimensions (H, W, C)
 
 # ==================== BBox Format Definitions ====================
 
 """
 BBox formats used by different frameworks:
 
-1. Current project (DocLayout-YOLO output):
-   coords: [x, y, width, height]
+1. Internal representation (this project):
+   BBox(x0, y0, x1, y1) - integers, xyxy format
+   Example: BBox(100, 50, 300, 200) - top-left to bottom-right corners
+
+2. JSON output (this project):
+   [x, y, width, height] - xywh format for human readability
    Example: [100, 50, 200, 150]
 
-2. YOLO internal (xyxy):
-   [x1, y1, x2, y2]
-   Example: [100, 50, 300, 200] - top-left to bottom-right
+3. YOLO internal:
+   [x1, y1, x2, y2] - xyxy format
+   Example: [100, 50, 300, 200]
 
-3. PyMuPDF Rect:
+4. PyMuPDF Rect:
    Rect(x0, y0, x1, y1)
    Example: Rect(100, 50, 300, 200)
 
-4. MinerU blocks:
+5. MinerU blocks:
    bbox: [x0, y0, x1, y1]
    Example: [100, 50, 300, 200]
 
-5. PyPDF (bottom-left origin!):
+6. PyPDF (bottom-left origin!):
    [x0, y0, x1, y1] - Y-axis is inverted
    Example: [100, 642, 300, 742] when page height is 792
 
-6. olmOCR anchor text:
+7. olmOCR anchor text:
    - Text: "[x, y]text"
    - Image: "[Image x0, y0 to x1, y1]"
    Example: "[100x50]Chapter 1" or "[Image 100x50 to 300x200]"
@@ -50,19 +57,20 @@ BBox formats used by different frameworks:
 
 @dataclass(frozen=True)
 class BBox:
-    """Unified bounding box representation with format conversions.
+    """Pixel-based bounding box with integer coordinates.
 
-    Internal format: (x0, y0, x1, y1) - Top-left and bottom-right corners
+    Internal format: (x0, y0, x1, y1) - Top-left and bottom-right corners (xyxy)
     Origin: Top-left corner of image (0, 0) - standard computer vision convention
+    Coordinates: Integer pixel values (not normalized)
 
     This class provides conversion methods to/from all major bbox formats
     used in document processing frameworks.
     """
 
-    x0: float
-    y0: float
-    x1: float
-    y1: float
+    x0: int
+    y0: int
+    x1: int
+    y1: int
 
     # ==================== FROM Conversions (Format → BBox) ====================
 
@@ -71,23 +79,28 @@ class BBox:
         """Create from (x, y, width, height) format.
 
         Format: [x, y, width, height]
-        Used by: Current project (DocLayout-YOLO output)
+        Used by: JSON output, detection models
 
         Args:
-            x: Left x coordinate
-            y: Top y coordinate
-            w: Width
-            h: Height
+            x: Left x coordinate (will be rounded to int)
+            y: Top y coordinate (will be rounded to int)
+            w: Width (will be rounded to int)
+            h: Height (will be rounded to int)
 
         Returns:
-            Unified BBox object
+            BBox object with integer coordinates
 
         Example:
-            >>> bbox = BBox.from_xywh(100, 50, 200, 150)
+            >>> bbox = BBox.from_xywh(100.5, 50.2, 200.1, 150.8)
             >>> bbox.x0, bbox.y0, bbox.x1, bbox.y1
-            (100, 50, 300, 200)
+            (100, 50, 301, 201)
         """
-        return cls(x0=x, y0=y, x1=x + w, y1=y + h)
+        return cls(
+            x0=round(x),
+            y0=round(y),
+            x1=round(x + w),
+            y1=round(y + h),
+        )
 
     @classmethod
     def from_xyxy(cls, x0: float, y0: float, x1: float, y1: float) -> BBox:
@@ -97,20 +110,25 @@ class BBox:
         Used by: YOLO internal, MinerU, PyMuPDF
 
         Args:
-            x0: Left x coordinate
-            y0: Top y coordinate
-            x1: Right x coordinate
-            y1: Bottom y coordinate
+            x0: Left x coordinate (will be rounded to int)
+            y0: Top y coordinate (will be rounded to int)
+            x1: Right x coordinate (will be rounded to int)
+            y1: Bottom y coordinate (will be rounded to int)
 
         Returns:
-            Unified BBox object
+            BBox object with integer coordinates
 
         Example:
-            >>> bbox = BBox.from_xyxy(100, 50, 300, 200)
-            >>> bbox.width, bbox.height
-            (200, 150)
+            >>> bbox = BBox.from_xyxy(100.5, 50.2, 300.8, 200.1)
+            >>> bbox.x0, bbox.y0, bbox.x1, bbox.y1
+            (100, 50, 301, 200)
         """
-        return cls(x0=x0, y0=y0, x1=x1, y1=y1)
+        return cls(
+            x0=round(x0),
+            y0=round(y0),
+            x1=round(x1),
+            y1=round(y1),
+        )
 
     @classmethod
     def from_list(cls, coords: Sequence[float], coord_format: str = "xywh") -> BBox:
@@ -148,14 +166,21 @@ class BBox:
             rect: PyMuPDF Rect or IRect object
 
         Returns:
-            Unified BBox object
+            BBox object with integer coordinates
 
         Example:
             >>> import fitz
-            >>> rect = fitz.Rect(100, 50, 300, 200)
+            >>> rect = fitz.Rect(100.5, 50.2, 300.8, 200.1)
             >>> bbox = BBox.from_pymupdf_rect(rect)
+            >>> bbox.x0, bbox.y0, bbox.x1, bbox.y1
+            (100, 50, 301, 200)
         """
-        return cls(x0=float(rect.x0), y0=float(rect.y0), x1=float(rect.x1), y1=float(rect.y1))
+        return cls(
+            x0=round(rect.x0),
+            y0=round(rect.y0),
+            x1=round(rect.x1),
+            y1=round(rect.y1),
+        )
 
     @classmethod
     def from_mineru_bbox(cls, bbox: Sequence[float]) -> BBox:
@@ -168,10 +193,12 @@ class BBox:
             bbox: MinerU bbox list
 
         Returns:
-            Unified BBox object
+            BBox object with integer coordinates
 
         Example:
-            >>> bbox = BBox.from_mineru_bbox([100, 50, 300, 200])
+            >>> bbox = BBox.from_mineru_bbox([100.5, 50.2, 300.8, 200.1])
+            >>> bbox.x0, bbox.y0, bbox.x1, bbox.y1
+            (100, 50, 301, 200)
         """
         return cls.from_xyxy(*bbox[:4])
 
@@ -188,7 +215,7 @@ class BBox:
             page_height: Page height for Y-axis conversion
 
         Returns:
-            Unified BBox object with top-left origin
+            BBox object with top-left origin and integer coordinates
 
         Example:
             >>> # Page height: 792, PyPDF rect at bottom
@@ -200,7 +227,12 @@ class BBox:
         # Y-axis flip: bottom-left → top-left
         y0_top = page_height - y1_bottom
         y1_top = page_height - y0_bottom
-        return cls(x0=x0, y0=y0_top, x1=x1, y1=y1_top)
+        return cls(
+            x0=round(x0),
+            y0=round(y0_top),
+            x1=round(x1),
+            y1=round(y1_top),
+        )
 
     @classmethod
     def from_olmocr_anchor_coords(cls, x: float, y: float) -> BBox:
@@ -210,18 +242,20 @@ class BBox:
         Used by: olmOCR anchor text for text elements
 
         Args:
-            x: X coordinate
-            y: Y coordinate
+            x: X coordinate (will be rounded to int)
+            y: Y coordinate (will be rounded to int)
 
         Returns:
             BBox representing a point (x0=x1, y0=y1)
 
         Example:
-            >>> bbox = BBox.from_olmocr_anchor_coords(100, 50)
+            >>> bbox = BBox.from_olmocr_anchor_coords(100.5, 50.2)
             >>> bbox.x0, bbox.y0
             (100, 50)
         """
-        return cls(x0=x, y0=y, x1=x, y1=y)
+        x_int = round(x)
+        y_int = round(y)
+        return cls(x0=x_int, y0=y_int, x1=x_int, y1=y_int)
 
     @classmethod
     def from_olmocr_anchor_box(cls, x0: float, y0: float, x1: float, y1: float) -> BBox:
@@ -231,27 +265,61 @@ class BBox:
         Used by: olmOCR anchor text for images/tables
 
         Args:
-            x0, y0: Top-left coordinates
-            x1, y1: Bottom-right coordinates
+            x0, y0: Top-left coordinates (will be rounded to int)
+            x1, y1: Bottom-right coordinates (will be rounded to int)
 
         Returns:
-            Unified BBox object
+            BBox object with integer coordinates
 
         Example:
-            >>> bbox = BBox.from_olmocr_anchor_box(100, 50, 300, 200)
+            >>> bbox = BBox.from_olmocr_anchor_box(100.5, 50.2, 300.8, 200.1)
+            >>> bbox.x0, bbox.y0, bbox.x1, bbox.y1
+            (100, 50, 301, 200)
         """
         return cls.from_xyxy(x0, y0, x1, y1)
 
-    # ==================== TO Conversions (BBox → Format) ====================
+    @classmethod
+    def from_cxcywh(cls, cx: float, cy: float, w: float, h: float) -> BBox:
+        """Create from center coordinates format.
 
-    def to_xywh(self) -> tuple[float, float, float, float]:
-        """Convert to (x, y, width, height) format.
+        Format: [center_x, center_y, width, height]
+        Used by: YOLO training, Anchor boxes
 
-        Format: [x, y, width, height]
-        Used by: Current project output
+        Args:
+            cx: Center x coordinate (will be rounded to int)
+            cy: Center y coordinate (will be rounded to int)
+            w: Width (will be rounded to int)
+            h: Height (will be rounded to int)
 
         Returns:
-            Tuple of (x, y, width, height)
+            BBox object with integer coordinates
+
+        Example:
+            >>> bbox = BBox.from_cxcywh(200, 125, 200, 150)
+            >>> bbox.x0, bbox.y0, bbox.x1, bbox.y1
+            (100, 50, 300, 200)
+        """
+        x0 = cx - w / 2
+        y0 = cy - h / 2
+        x1 = cx + w / 2
+        y1 = cy + h / 2
+        return cls(
+            x0=round(x0),
+            y0=round(y0),
+            x1=round(x1),
+            y1=round(y1),
+        )
+
+    # ==================== TO Conversions (BBox → Format) ====================
+
+    def to_xywh(self) -> tuple[int, int, int, int]:
+        """Convert to (x, y, width, height) format.
+
+        Format: (x, y, width, height)
+        Used by: JSON serialization, display
+
+        Returns:
+            Tuple of (x, y, width, height) as integers
 
         Example:
             >>> bbox = BBox(100, 50, 300, 200)
@@ -260,14 +328,14 @@ class BBox:
         """
         return (self.x0, self.y0, self.x1 - self.x0, self.y1 - self.y0)
 
-    def to_xyxy(self) -> tuple[float, float, float, float]:
+    def to_xyxy(self) -> tuple[int, int, int, int]:
         """Convert to (x0, y0, x1, y1) format.
 
-        Format: [x0, y0, x1, y1] - corners
-        Used by: MinerU, YOLO, PyMuPDF
+        Format: (x0, y0, x1, y1) - corners
+        Used by: Internal operations
 
         Returns:
-            Tuple of (x0, y0, x1, y1)
+            Tuple of (x0, y0, x1, y1) as integers
 
         Example:
             >>> bbox = BBox(100, 50, 300, 200)
@@ -276,34 +344,87 @@ class BBox:
         """
         return (self.x0, self.y0, self.x1, self.y1)
 
-    def to_list_xywh(self) -> list[float]:
-        """Convert to [x, y, w, h] list.
+    def to_cxcywh(self) -> tuple[float, float, int, int]:
+        """Convert to center format.
+
+        Format: (center_x, center_y, width, height)
+        Used by: YOLO training, Anchor boxes
 
         Returns:
-            List of [x, y, width, height]
-        """
-        return list(self.to_xywh())
+            Tuple of (cx, cy, width, height) - center is float, size is int
 
-    def to_list_xyxy(self) -> list[float]:
-        """Convert to [x0, y0, x1, y1] list.
+        Example:
+            >>> bbox = BBox(100, 50, 300, 200)
+            >>> bbox.to_cxcywh()
+            (200.0, 125.0, 200, 150)
+        """
+        cx = (self.x0 + self.x1) / 2
+        cy = (self.y0 + self.y1) / 2
+        w = self.x1 - self.x0
+        h = self.y1 - self.y0
+        return (cx, cy, w, h)
+
+    def to_list(self) -> list[int]:
+        """Convert to list in internal format (xyxy).
 
         Returns:
-            List of [x0, y0, x1, y1]
-        """
-        return list(self.to_xyxy())
+            List [x0, y0, x1, y1]
 
-    def to_mineru_bbox(self) -> list[float]:
+        Example:
+            >>> bbox = BBox(100, 50, 300, 200)
+            >>> bbox.to_list()
+            [100, 50, 300, 200]
+        """
+        return [self.x0, self.y0, self.x1, self.y1]
+
+    def to_dict(self) -> dict[str, int]:
+        """Convert to dict with explicit keys.
+
+        Returns:
+            Dict with keys x0, y0, x1, y1
+
+        Example:
+            >>> bbox = BBox(100, 50, 300, 200)
+            >>> bbox.to_dict()
+            {'x0': 100, 'y0': 50, 'x1': 300, 'y1': 200}
+        """
+        return {
+            "x0": self.x0,
+            "y0": self.y0,
+            "x1": self.x1,
+            "y1": self.y1,
+        }
+
+    def to_xywh_list(self) -> list[int]:
+        """Convert to [x, y, w, h] list (for JSON serialization).
+
+        Returns:
+            List [x, y, width, height]
+
+        Example:
+            >>> bbox = BBox(100, 50, 300, 200)
+            >>> bbox.to_xywh_list()
+            [100, 50, 200, 150]
+        """
+        return [self.x0, self.y0, self.x1 - self.x0, self.y1 - self.y0]
+
+    def to_mineru_bbox(self) -> list[int]:
         """Convert to MinerU bbox format.
 
         Format: [x0, y0, x1, y1]
         Used by: MinerU blocks
 
         Returns:
-            List of [x0, y0, x1, y1]
-        """
-        return self.to_list_xyxy()
+            List [x0, y0, x1, y1]
 
-    def to_pypdf_rect(self, page_height: float) -> list[float]:
+        Example:
+            >>> bbox = BBox(100, 50, 300, 200)
+            >>> bbox.to_mineru_bbox()
+            [100, 50, 300, 200]
+        """
+        return self.to_list()
+
+    def to_pypdf_rect(self, page_height: float) -> list[int]:
         """Convert to PyPDF rect format (requires Y-axis flip).
 
         Format: [x0, y0, x1, y1] with bottom-left origin
@@ -313,16 +434,16 @@ class BBox:
             page_height: Page height for Y-axis conversion
 
         Returns:
-            List of [x0, y0, x1, y1] with bottom-left origin
+            List [x0, y0, x1, y1] with bottom-left origin
 
         Example:
             >>> bbox = BBox(100, 50, 300, 200)
             >>> bbox.to_pypdf_rect(page_height=792)
-            [100, 592, 300, 742]  # Y-axis flipped
+            [100, 592, 300, 742]
         """
         # Y-axis flip: top-left → bottom-left
-        y0_bottom = page_height - self.y1
-        y1_bottom = page_height - self.y0
+        y0_bottom = round(page_height - self.y1)
+        y1_bottom = round(page_height - self.y0)
         return [self.x0, y0_bottom, self.x1, y1_bottom]
 
     def to_olmocr_anchor(self, content_type: str = "text", text_content: str = "") -> str:
@@ -362,6 +483,42 @@ class BBox:
     # ==================== Properties ====================
 
     @property
+    def left(self) -> int:
+        """Get left x coordinate (alias for x0).
+
+        Returns:
+            Left x coordinate
+        """
+        return self.x0
+
+    @property
+    def top(self) -> int:
+        """Get top y coordinate (alias for y0).
+
+        Returns:
+            Top y coordinate
+        """
+        return self.y0
+
+    @property
+    def right(self) -> int:
+        """Get right x coordinate (alias for x1).
+
+        Returns:
+            Right x coordinate
+        """
+        return self.x1
+
+    @property
+    def bottom(self) -> int:
+        """Get bottom y coordinate (alias for y1).
+
+        Returns:
+            Bottom y coordinate
+        """
+        return self.y1
+
+    @property
     def center(self) -> tuple[float, float]:
         """Get center point (cx, cy).
 
@@ -376,11 +533,11 @@ class BBox:
         return ((self.x0 + self.x1) / 2, (self.y0 + self.y1) / 2)
 
     @property
-    def width(self) -> float:
+    def width(self) -> int:
         """Get width.
 
         Returns:
-            Width of the bounding box
+            Width of the bounding box (integer)
 
         Example:
             >>> bbox = BBox(100, 50, 300, 200)
@@ -390,11 +547,11 @@ class BBox:
         return self.x1 - self.x0
 
     @property
-    def height(self) -> float:
+    def height(self) -> int:
         """Get height.
 
         Returns:
-            Height of the bounding box
+            Height of the bounding box (integer)
 
         Example:
             >>> bbox = BBox(100, 50, 300, 200)
@@ -404,11 +561,11 @@ class BBox:
         return self.y1 - self.y0
 
     @property
-    def area(self) -> float:
+    def area(self) -> int:
         """Get bbox area.
 
         Returns:
-            Area of the bounding box
+            Area of the bounding box (integer)
 
         Example:
             >>> bbox = BBox(100, 50, 300, 200)
@@ -419,20 +576,20 @@ class BBox:
 
     # ==================== Geometric Operations ====================
 
-    def intersect(self, other: BBox) -> float:
+    def intersect(self, other: BBox) -> int:
         """Calculate intersection area with another bbox.
 
         Args:
             other: Another BBox object
 
         Returns:
-            Intersection area
+            Intersection area (integer)
 
         Example:
             >>> bbox1 = BBox(100, 50, 300, 200)
             >>> bbox2 = BBox(200, 100, 400, 250)
             >>> bbox1.intersect(bbox2)
-            5000.0
+            5000
         """
         x_left = max(self.x0, other.x0)
         y_top = max(self.y0, other.y0)
@@ -440,7 +597,7 @@ class BBox:
         y_bottom = min(self.y1, other.y1)
 
         if x_right < x_left or y_bottom < y_top:
-            return 0.0
+            return 0
 
         return (x_right - x_left) * (y_bottom - y_top)
 
@@ -493,11 +650,11 @@ class BBox:
         """
         return self.x0 <= x <= self.x1 and self.y0 <= y <= self.y1
 
-    def expand(self, padding: float) -> BBox:
+    def expand(self, padding: int) -> BBox:
         """Expand bbox by padding.
 
         Args:
-            padding: Padding to add on all sides
+            padding: Padding to add on all sides (integer pixels)
 
         Returns:
             New expanded BBox
@@ -515,7 +672,7 @@ class BBox:
             y1=self.y1 + padding,
         )
 
-    def clip(self, max_width: float, max_height: float) -> BBox:
+    def clip(self, max_width: int, max_height: int) -> BBox:
         """Clip bbox to image boundaries.
 
         Args:
@@ -538,84 +695,188 @@ class BBox:
             y1=min(max_height, self.y1),
         )
 
+    def crop(self, image: np.ndarray, padding: int = 0) -> np.ndarray:
+        """Crop this bbox region from an image with optional padding.
+
+        Args:
+            image: Input image as numpy array (H, W, C) or (H, W)
+            padding: Padding to add on all sides (default: 0)
+
+        Returns:
+            Cropped region as numpy array
+
+        Example:
+            >>> import numpy as np
+            >>> image = np.zeros((600, 800, 3), dtype=np.uint8)
+            >>> bbox = BBox(100, 50, 300, 200)
+            >>> cropped = bbox.crop(image, padding=5)
+            >>> cropped.shape
+            (160, 210, 3)
+        """
+        # Apply padding
+        x0 = max(0, self.x0 - padding)
+        y0 = max(0, self.y0 - padding)
+        x1 = min(image.shape[1], self.x1 + padding)
+        y1 = min(image.shape[0], self.y1 + padding)
+
+        # Validate
+        if x1 <= x0 or y1 <= y0:
+            # Return small empty image if invalid
+            if image.ndim == RGB_IMAGE_NDIM:
+                return np.zeros((1, 1, image.shape[2]), dtype=image.dtype)
+            else:
+                return np.zeros((1, 1), dtype=image.dtype)
+
+        # Crop using NumPy slicing
+        return image[y0:y1, x0:x1]
+
 
 # ==================== Region TypedDict ====================
 
+
 @dataclass
 class Region:
-    """Unified region format used throughout the pipeline.
+    """Document region with bounding box.
 
-    This dataclass provides type safety and better IDE support while
-    supporting dynamic field updates throughout the pipeline.
+    This dataclass provides type safety and better IDE support for
+    region data throughout the pipeline.
 
-    Standard fields:
+    Core fields:
     - type: Region type (e.g., "plain text", "title", "figure", "table")
-    - coords: [x, y, w, h] - Legacy format for backward compatibility
+    - bbox: BBox object (required, always present)
     - confidence: Detection confidence (0.0 to 1.0)
 
     Optional fields added by various pipeline stages:
-    - bbox: Unified BBox object (for type-safe operations)
     - reading_order_rank: Added by sorters
     - column_index: Added by multi-column sorters
     - text: Added by recognizers
     - corrected_text: Added by text correction
     - source: Which detector/sorter produced this region
+    - index: Internal index (MinerU VLM)
     """
 
-    # Core fields (always present after detection)
+    # Core fields (always present)
     type: str
-    coords: list[float]  # [x, y, w, h] - legacy format
+    bbox: BBox  # Required, no longer optional
     confidence: float
 
-    # Optional bbox object (for type-safe operations)
-    bbox: BBox | None = None
-
-    # Added by sorters
+    # Optional fields added by pipeline stages
     reading_order_rank: int | None = None
     column_index: int | None = None
 
-    # Added by recognizers
+    # Text content
     text: str | None = None
     corrected_text: str | None = None
 
     # Metadata
     source: str | None = None  # "doclayout-yolo", "mineru-vlm", etc.
     index: int | None = None  # MinerU VLM internal index
-    
+
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for JSON serialization."""
-        result = asdict(self)
-        # Remove None values for cleaner output
-        return {k: v for k, v in result.items() if v is not None}
-    
+        """Convert to JSON-serializable dict.
+
+        Bbox is serialized as xywh list for human readability.
+
+        Returns:
+            Dict with bbox in [x, y, w, h] format
+
+        Example:
+            >>> region = Region(type="text", bbox=BBox(100, 50, 300, 200), confidence=0.95)
+            >>> region.to_dict()
+            {'type': 'text', 'bbox': [100, 50, 200, 150], 'confidence': 0.95}
+        """
+        result = {
+            "type": self.type,
+            "bbox": self.bbox.to_xywh_list(),  # Serialize as xywh for readability
+            "confidence": self.confidence,
+        }
+
+        # Add optional fields (only if not None)
+        if self.reading_order_rank is not None:
+            result["reading_order_rank"] = self.reading_order_rank
+        if self.column_index is not None:
+            result["column_index"] = self.column_index
+        if self.text is not None:
+            result["text"] = self.text
+        if self.corrected_text is not None:
+            result["corrected_text"] = self.corrected_text
+        if self.source is not None:
+            result["source"] = self.source
+        if self.index is not None:
+            result["index"] = self.index
+
+        return result
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Region:
-        """Create Region from dictionary."""
-        # Handle bbox field separately if it's a dict
-        if "bbox" in data and isinstance(data["bbox"], dict):
-            data = data.copy()
-            bbox_data = data.pop("bbox")
-            if bbox_data:
-                data["bbox"] = BBox(**bbox_data) if not isinstance(bbox_data, BBox) else bbox_data
-        
-        # Filter only known fields
-        known_fields = {
-            "type", "coords", "confidence", "bbox", 
-            "reading_order_rank", "column_index", 
-            "text", "corrected_text", "source", "index"
-        }
-        filtered_data = {k: v for k, v in data.items() if k in known_fields}
-        
-        return cls(**filtered_data)
+        """Create Region from dict (supports multiple formats).
+
+        Supports:
+        - "bbox": [x, y, w, h] (xywh format - default for JSON)
+        - "bbox": [x0, y0, x1, y1] (xyxy format)
+        - "bbox": {"x0": 10, "y0": 20, ...} (dict format)
+        - "coords": [x, y, w, h] (legacy xywh format)
+
+        Args:
+            data: Dictionary with region data
+
+        Returns:
+            Region object
+
+        Example:
+            >>> data = {"type": "text", "bbox": [100, 50, 200, 150], "confidence": 0.95}
+            >>> region = Region.from_dict(data)
+            >>> region.bbox
+            BBox(x0=100, y0=50, x1=300, y1=200)
+        """
+        data = data.copy()  # Don't modify original
+
+        # Parse bbox
+        if "bbox" in data:
+            bbox_value = data.pop("bbox")
+
+            if isinstance(bbox_value, BBox):
+                # Already a BBox object
+                bbox = bbox_value
+            elif isinstance(bbox_value, dict):
+                # Dict format: {"x0": 10, "y0": 20, ...}
+                bbox = BBox(**bbox_value)
+            elif isinstance(bbox_value, (list, tuple)):
+                # List format - default to xywh (JSON standard)
+                bbox = BBox.from_xywh(*bbox_value[:4])
+            else:
+                raise ValueError(f"Invalid bbox type: {type(bbox_value)}")
+
+        # Legacy: handle "coords" field (always xywh)
+        elif "coords" in data:
+            coords = data.pop("coords")
+            bbox = BBox.from_xywh(*coords[:4])
+
+        else:
+            raise ValueError("Region dict must have 'bbox' or 'coords' field")
+
+        # Build Region with remaining fields
+        return cls(
+            type=data.get("type", "unknown"),
+            bbox=bbox,
+            confidence=data.get("confidence", 1.0),
+            reading_order_rank=data.get("reading_order_rank"),
+            column_index=data.get("column_index"),
+            text=data.get("text"),
+            corrected_text=data.get("corrected_text"),
+            source=data.get("source"),
+            index=data.get("index"),
+        )
 
 
 # ==================== Protocol Interfaces ====================
+
 
 class Detector(Protocol):
     """Layout detection interface.
 
     All detectors must implement this interface and return regions
-    in the unified Region format with coords and bbox fields.
+    in the unified Region format with bbox field.
     """
 
     def detect(self, image: np.ndarray) -> list[Region]:
@@ -625,15 +886,15 @@ class Detector(Protocol):
             image: Input image as numpy array (H, W, C)
 
         Returns:
-            List of detected regions in unified format
+            List of detected Region objects with bbox
 
         Example:
             >>> detector = DocLayoutYOLODetector()
             >>> regions = detector.detect(image)
-            >>> regions[0]["type"]
+            >>> regions[0].type
             'plain text'
-            >>> regions[0]["coords"]
-            [100, 50, 200, 150]
+            >>> regions[0].bbox
+            BBox(x0=100, y0=50, x1=300, y1=200)
         """
         ...
 
@@ -649,7 +910,7 @@ class Sorter(Protocol):
         """Sort regions by reading order.
 
         Args:
-            regions: Detected regions in unified format
+            regions: Detected regions with bbox
             image: Page image for analysis (H, W, C)
             **kwargs: Additional context (e.g., pymupdf_page, pdf_path)
 
@@ -659,34 +920,13 @@ class Sorter(Protocol):
         Example:
             >>> sorter = PyMuPDFSorter()
             >>> sorted_regions = sorter.sort(regions, image, pymupdf_page=page)
-            >>> sorted_regions[0]["reading_order_rank"]
+            >>> sorted_regions[0].reading_order_rank
             0
         """
         ...
 
 
 # ==================== Utility Functions ====================
-
-def ensure_bbox_in_region(region: Region) -> Region:
-    """Ensure region has bbox field populated from coords.
-
-    This function is idempotent and safe to call multiple times.
-
-    Args:
-        region: Region instance (may or may not have bbox)
-
-    Returns:
-        Region with bbox field added
-
-    Example:
-        >>> region = Region(type="text", coords=[100, 50, 200, 150], confidence=0.9)
-        >>> region = ensure_bbox_in_region(region)
-        >>> region.bbox
-        BBox(x0=100, y0=50, x1=300, y1=200)
-    """
-    if region.bbox is None:
-        region.bbox = BBox.from_list(region.coords, coord_format="xywh")
-    return region
 
 
 def regions_to_olmocr_anchor_text(
@@ -698,7 +938,7 @@ def regions_to_olmocr_anchor_text(
     """Convert regions to olmOCR anchor text format.
 
     Args:
-        regions: List of Region instances with bbox information
+        regions: List of Region instances with bbox
         page_width: Page width in pixels
         page_height: Page height in pixels
         max_length: Maximum anchor text length (approximate)
@@ -708,25 +948,20 @@ def regions_to_olmocr_anchor_text(
 
     Example:
         >>> regions = [
-        ...     Region(type="title", coords=[100, 50, 200, 30], confidence=0.9),
-        ...     Region(type="figure", coords=[100, 100, 200, 150], confidence=0.95),
+        ...     Region(type="title", bbox=BBox(100, 50, 300, 80), confidence=0.9),
+        ...     Region(type="figure", bbox=BBox(100, 100, 300, 250), confidence=0.95),
         ... ]
         >>> anchor = regions_to_olmocr_anchor_text(regions, 800, 600)
         >>> print(anchor)
-        Page dimensions: 800.0x600.0
+        Page dimensions: 800x600
         [100x50]
         [Image 100x100 to 300x250]
     """
-    # Ensure all regions have bbox
-    regions_with_bbox = [ensure_bbox_in_region(r) for r in regions]
-
     # Header
-    lines = [f"Page dimensions: {page_width:.1f}x{page_height:.1f}"]
+    lines = [f"Page dimensions: {page_width}x{page_height}"]
 
     # Convert each region
-    for region in regions_with_bbox:
-        if region.bbox is None:
-            continue
+    for region in regions:
         bbox = region.bbox
         text_content = (region.text or "")[:50] if region.type in ["text", "title"] else ""
         anchor_line = bbox.to_olmocr_anchor(content_type=region.type, text_content=text_content)
@@ -738,37 +973,3 @@ def regions_to_olmocr_anchor_text(
             break
 
     return "\n".join(lines)
-
-
-def normalize_region_coords(region: dict[str, Any]) -> dict[str, Any]:
-    """Normalize a region dict to ensure it has proper coords and bbox.
-
-    Handles various input formats and ensures consistent output.
-
-    Args:
-        region: Region dict with various possible formats
-
-    Returns:
-        Normalized Region with coords and bbox
-
-    Example:
-        >>> raw = {"type": "text", "bbox": [100, 50, 300, 200], "confidence": 0.9}
-        >>> normalized = normalize_region_coords(raw)
-        >>> normalized["coords"]
-        [100, 50, 200, 150]
-    """
-    # If has coords, use it
-    if "coords" in region:
-        coords = region["coords"]
-        if "bbox" not in region:
-            region["bbox"] = BBox.from_list(coords, coord_format="xywh")
-    # If has bbox field (MinerU format), convert to coords
-    elif "bbox" in region and isinstance(region["bbox"], (list, tuple)):
-        bbox = BBox.from_list(region["bbox"], coord_format="xyxy")
-        region["coords"] = bbox.to_list_xywh()
-        region["bbox"] = bbox
-    else:
-        raise ValueError("Region must have either 'coords' or 'bbox' field")
-
-    return region  # type: ignore[return-value]
-

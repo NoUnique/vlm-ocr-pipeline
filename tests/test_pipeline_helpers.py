@@ -43,15 +43,9 @@ def test_determine_pages_to_process_honors_priority_and_bounds():
     converter = DocumentConverter(temp_dir=Path(".tmp"))
     total_pages = 10
 
-    result_specific = converter.determine_pages_to_process(
-        total_pages, pages=[5, 1, 12, 0]
-    )
-    result_range = converter.determine_pages_to_process(
-        total_pages, page_range=(0, 12)
-    )
-    result_max = converter.determine_pages_to_process(
-        total_pages, max_pages=3
-    )
+    result_specific = converter.determine_pages_to_process(total_pages, pages=[5, 1, 12, 0])
+    result_range = converter.determine_pages_to_process(total_pages, page_range=(0, 12))
+    result_max = converter.determine_pages_to_process(total_pages, max_pages=3)
     result_all = converter.determine_pages_to_process(total_pages)
 
     assert result_specific == [1, 5]

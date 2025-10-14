@@ -76,9 +76,7 @@ class TextRecognizer:
             use_cache,
         )
 
-    def process_regions(
-        self, image: np.ndarray, regions: Sequence[Region]
-    ) -> list[Region]:
+    def process_regions(self, image: np.ndarray, regions: Sequence[Region]) -> list[Region]:
         """Process all regions to extract text.
 
         Args:
@@ -96,9 +94,7 @@ class TextRecognizer:
 
         return processed_regions
 
-    def _process_single_region(
-        self, image: np.ndarray, region: Region
-    ) -> Region:
+    def _process_single_region(self, image: np.ndarray, region: Region) -> Region:
         """Process a single region to extract text.
 
         Args:
@@ -140,31 +136,13 @@ class TextRecognizer:
 
         Args:
             image: Full page image
-            region: Region with coords
+            region: Region with bbox
 
         Returns:
             Cropped region image
         """
-        coords = region.coords
-        x, y, w, h = coords
-
-        # Convert to corners
-        x1, y1 = int(x), int(y)
-        x2, y2 = int(x + w), int(y + h)
-
-        # Add padding
-        padding = 5
-        x1 = max(0, x1 - padding)
-        y1 = max(0, y1 - padding)
-        x2 = min(image.shape[1], x2 + padding)
-        y2 = min(image.shape[0], y2 + padding)
-
-        # Validate
-        if x2 <= x1 or y2 <= y1:
-            logger.warning("Invalid region coordinates")
-            return np.zeros((1, 1, 3), dtype=np.uint8)
-
-        return image[y1:y2, x1:x2]
+        # Use BBox.crop() method with padding
+        return region.bbox.crop(image, padding=5)
 
     def _get_prompt_for_region_type(self, region_type: str) -> str:
         """Get prompt for specific region type.
@@ -204,5 +182,3 @@ class TextRecognizer:
         except Exception as e:
             logger.error("Text correction failed: %s", e)
             return {"error": "correction_failed", "original_text": text}
-
-

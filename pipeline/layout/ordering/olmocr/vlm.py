@@ -66,10 +66,7 @@ class OlmOCRVLMSorter:
                 "This requires setting up vLLM server or transformers client."
             )
         except ImportError as e:
-            raise ImportError(
-                "olmOCR VLM dependencies not available. "
-                "Please install vllm or transformers."
-            ) from e
+            raise ImportError("olmOCR VLM dependencies not available. Please install vllm or transformers.") from e
 
     def sort(self, regions: list[Region], image: np.ndarray, **kwargs: Any) -> list[Region]:
         """Sort regions using olmOCR VLM.
@@ -107,9 +104,8 @@ class OlmOCRVLMSorter:
 
             result_region = Region(
                 type="text",
-                coords=[0, 0, float(page_width), float(page_height)],
-                confidence=1.0,
                 bbox=BBox(0, 0, page_width, page_height),
+                confidence=1.0,
                 source="olmocr-vlm",
                 text=response.get("natural_text", ""),
                 reading_order_rank=0,
@@ -145,16 +141,12 @@ class OlmOCRVLMSorter:
 
     def _fallback_sort(self, regions: list[Region]) -> list[Region]:
         """Fallback to simple geometric sorting."""
-        from pipeline.types import ensure_bbox_in_region
-
         if not regions:
             return regions
 
-        regions = [ensure_bbox_in_region(r) for r in regions]
-        sorted_regions = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0) if r.bbox else (0, 0))
+        sorted_regions = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0))
 
         for rank, region in enumerate(sorted_regions):
             region.reading_order_rank = rank
 
         return sorted_regions
-

@@ -23,4 +23,3 @@ class LayoutDetector:
             List of detected regions
         """
         raise NotImplementedError("Subclasses must implement detect()")
-

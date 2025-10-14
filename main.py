@@ -136,12 +136,8 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         help="Detection confidence threshold (default: 0.5)",
     )
     parser.add_argument("--no-cache", action="store_true", help="Disable caching (default: caching enabled)")
-    parser.add_argument(
-        "--cache-dir", type=str, default=".cache", help="Cache directory path (default: ./.cache)"
-    )
-    parser.add_argument(
-        "--temp-dir", type=str, default=".tmp", help="Temporary files directory path (default: ./.tmp)"
-    )
+    parser.add_argument("--cache-dir", type=str, default=".cache", help="Cache directory path (default: ./.cache)")
+    parser.add_argument("--temp-dir", type=str, default=".tmp", help="Temporary files directory path (default: ./.tmp)")
     parser.add_argument(
         "--backend",
         choices=["openai", "gemini"],
@@ -195,7 +191,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
             "LEGACY: Use --sorter pymupdf instead."
         ),
     )
-    
+
     # New modular detector/sorter options
     parser.add_argument(
         "--detector",
@@ -215,7 +211,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
             "mineru-xycut (XY-Cut algorithm, default), mineru-vlm (VLM ordering), olmocr-vlm (VLM full-page)."
         ),
     )
-    
+
     # MinerU options
     mineru_group = parser.add_argument_group("MinerU options")
     mineru_group.add_argument(
@@ -228,14 +224,14 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         default="transformers",
         help="MinerU VLM backend (default: transformers)",
     )
-    
+
     # olmOCR options
     olmocr_group = parser.add_argument_group("olmOCR options")
     olmocr_group.add_argument(
         "--olmocr-model",
         help="olmOCR model path (for --sorter olmocr-vlm)",
     )
-    
+
     parser.add_argument(
         "--rate-limit-status",
         action="store_true",
@@ -245,9 +241,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _execute_command(
-    args: argparse.Namespace, parser: argparse.ArgumentParser, logger: logging.Logger
-) -> int:
+def _execute_command(args: argparse.Namespace, parser: argparse.ArgumentParser, logger: logging.Logger) -> int:
     if _handle_rate_limit_status(args):
         return 0
 

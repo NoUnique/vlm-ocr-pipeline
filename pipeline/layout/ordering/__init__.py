@@ -23,7 +23,7 @@ __all__ = [
     "ReadingOrderAnalyzer",
     "MultiColumnSorter",
     "MinerULayoutReaderSorter",
-    "MinerUXYCutSorter", 
+    "MinerUXYCutSorter",
     "MinerUVLMSorter",
     "OlmOCRVLMSorter",
     "create_sorter",
@@ -50,18 +50,18 @@ if OlmOCRVLMSorter is not None:
 
 def create_sorter(name: str, **kwargs: Any) -> Any:
     """Create a sorter instance.
-    
+
     Args:
         name: Sorter name
         **kwargs: Arguments for sorter
-        
+
     Returns:
         Sorter instance
     """
     if name not in _SORTER_REGISTRY:
         available = ", ".join(_SORTER_REGISTRY.keys())
         raise ValueError(f"Unknown sorter: {name}. Available: {available}")
-    
+
     return _SORTER_REGISTRY[name](**kwargs)
 
 
@@ -89,7 +89,7 @@ REQUIRED_COMBINATIONS = {
 
 def validate_combination(detector: str, sorter: str) -> tuple[bool, str]:
     """Validate detector + sorter combination.
-    
+
     Returns:
         (is_valid, message)
     """
@@ -97,16 +97,16 @@ def validate_combination(detector: str, sorter: str) -> tuple[bool, str]:
         required_detector = REQUIRED_COMBINATIONS[sorter]
         if detector != required_detector:
             return False, f"Sorter '{sorter}' requires detector '{required_detector}' (tightly coupled)"
-    
+
     if detector not in VALID_COMBINATIONS:
         return False, f"Unknown detector: {detector}"
-    
+
     if sorter not in VALID_COMBINATIONS[detector]:
         valid = ", ".join(VALID_COMBINATIONS[detector])
         return False, f"Invalid combination. {detector} supports: {valid}"
-    
+
     if (detector, sorter) in RECOMMENDED_COMBINATIONS:
         msg = RECOMMENDED_COMBINATIONS[(detector, sorter)]
         return True, f"✨ {msg}"
-    
+
     return True, f"Valid: {detector} + {sorter}"

@@ -10,7 +10,7 @@ A unified OCR processing pipeline that leverages Vision Language Models (VLMs) f
 - **Multi-VLM Backend Support**: Support for OpenAI, OpenRouter, and Gemini VLM APIs for text extraction and processing
 - **Modular Detection & Ordering**: Flexible detector and sorter combinations (DocLayout-YOLO, MinerU, olmOCR)
 - **Advanced Ordering Algorithms**: Support for multi-column, LayoutReader (LayoutLMv3), XY-Cut, and VLM-based ordering
-- **Unified BBox System**: Automatic conversion between 6+ different bbox formats (YOLO, MinerU, PyMuPDF, PyPDF, olmOCR)
+- **Unified BBox System**: Integer-based bounding box (internal: xyxy, JSON: xywh) with automatic conversion between 6+ different formats (YOLO, MinerU, PyMuPDF, PyPDF, olmOCR)
 - **VLM-Powered Text Extraction**: Advanced text extraction using Vision Language Models with intelligent context understanding
 - **Multi-Language Support**: Supports English, Korean, and Japanese text extraction
 - **AI-Powered Correction**: Intelligent text correction and content analysis
@@ -27,7 +27,7 @@ vlm-ocr-pipeline/
 ├── main.py                     # CLI entry point
 ├── pipeline/                   # Modular VLM OCR Pipeline
 │   ├── __init__.py            # Main Pipeline class
-│   ├── types.py               # Unified BBox and Region types
+│   ├── types.py               # Integer-based BBox and Region types
 │   ├── constants.py
 │   ├── misc.py
 │   ├── prompt.py
@@ -88,7 +88,8 @@ This project integrates multiple frameworks (DocLayout-YOLO, MinerU, PyMuPDF, Py
 
 | Framework | Format | Coordinate Order | Origin | Example |
 |-----------|--------|------------------|--------|---------|
-| **Current Project** | `[x, y, w, h]` | Top-Left + Size | Top-Left (0,0) | `[100, 50, 200, 150]` |
+| **Current Project (Internal)** | `BBox(x0, y0, x1, y1)` | Top-Left + Bottom-Right (int) | Top-Left (0,0) | `BBox(100, 50, 300, 200)` |
+| **Current Project (JSON)** | `[x, y, w, h]` | Top-Left + Size | Top-Left (0,0) | `[100, 50, 200, 150]` |
 | **YOLO** | `[x1, y1, x2, y2]` | Top-Left + Bottom-Right | Top-Left (0,0) | `[100, 50, 300, 200]` |
 | **MinerU** | `[x0, y0, x1, y1]` | Top-Left + Bottom-Right | Top-Left (0,0) | `[100, 50, 300, 200]` |
 | **PyMuPDF** | `Rect(x0, y0, x1, y1)` | Top-Left + Bottom-Right | Top-Left (0,0) | `Rect(100, 50, 300, 200)` |
@@ -96,25 +97,35 @@ This project integrates multiple frameworks (DocLayout-YOLO, MinerU, PyMuPDF, Py
 | **olmOCR** | `"[x, y]text"` | Text format | Top-Left (0,0) | `"[100x50]Chapter 1"` |
 
 **Key Points:**
+- ✅ **Internal representation**: `BBox(x0, y0, x1, y1)` with integer coordinates (xyxy)
+- ✅ **JSON output**: `[x, y, w, h]` (xywh) for human readability
 - ✅ Most frameworks use **Top-Left origin** (like images)
 - ⚠️ **PyPDF uses Bottom-Left origin** (traditional PDF coordinate system)
 - 📦 Our **BBox class** handles all conversions automatically
 
 **Example Conversion:**
 ```python
-from pipeline.types import BBox
+from pipeline.types import BBox, Region
 
-# Current project → MinerU
-bbox = BBox.from_xywh(100, 50, 200, 150)  # [x, y, w, h]
-mineru = bbox.to_mineru_bbox()             # [100, 50, 300, 200]
+# Create bbox (accepts float, converts to int)
+bbox = BBox.from_xywh(100, 50, 200, 150)  # [x, y, w, h] → BBox(100, 50, 300, 200)
+bbox = BBox.from_xyxy(100, 50, 300, 200)  # [x0, y0, x1, y1] → BBox(100, 50, 300, 200)
+bbox = BBox.from_cxcywh(200, 125, 200, 150)  # Center format
 
-# MinerU → olmOCR anchor
-bbox = BBox.from_mineru_bbox([100, 50, 300, 200])
-anchor = bbox.to_olmocr_anchor("image")    # "[Image 100x50 to 300x200]"
+# Internal: integer xyxy
+print(bbox.x0, bbox.y0, bbox.x1, bbox.y1)  # 100 50 300 200
 
-# PyPDF → Current (Y-axis flip!)
-bbox = BBox.from_pypdf_rect([100, 592, 300, 742], page_height=792)
-coords = bbox.to_list_xywh()               # [100, 50, 200, 150]
+# Convert to formats
+mineru = bbox.to_mineru_bbox()      # [100, 50, 300, 200] (xyxy)
+json_bbox = bbox.to_xywh_list()     # [100, 50, 200, 150] (xywh for JSON)
+anchor = bbox.to_olmocr_anchor("image")  # "[Image 100x50 to 300x200]"
+
+# Direct image cropping
+cropped = bbox.crop(image, padding=5)
+
+# Region usage
+region = Region(type="text", bbox=bbox, confidence=0.95)
+data = region.to_dict()  # {"type": "text", "bbox": [100, 50, 200, 150], ...}
 ```
 
 For detailed format specifications and conversion examples, see [BBOX_FORMATS.md](BBOX_FORMATS.md).

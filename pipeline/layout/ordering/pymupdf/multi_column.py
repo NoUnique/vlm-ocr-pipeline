@@ -306,6 +306,7 @@ COLUMN_ORDER_EPSILON = 1e-6
 
 class ColumnInfo(TypedDict):
     """Column information for ordering."""
+
     index: int
     bbox: Any  # BBox from types module
     center: float
@@ -314,115 +315,113 @@ class ColumnInfo(TypedDict):
 
 class MultiColumnSorter:
     """Multi-column aware reading order sorter using PyMuPDF.
-    
+
     Detects columns using PyMuPDF text block extraction (column_boxes),
     then sorts regions by column-aware reading order:
     left column top-to-bottom, then right column top-to-bottom.
     """
-    
+
     def __init__(self) -> None:
         """Initialize PyMuPDF sorter."""
         if fitz is None:
-            raise ImportError(
-                "PyMuPDF (fitz) is required for PyMuPDF sorter. "
-                "Install with: pip install pymupdf"
-            )
+            raise ImportError("PyMuPDF (fitz) is required for PyMuPDF sorter. Install with: pip install pymupdf")
         logger.info("PyMuPDF sorter initialized")
-    
+
     def sort(self, regions: list[Any], image: np.ndarray, **kwargs: Any) -> list[Any]:
         """Sort regions using PyMuPDF multi-column detection.
-        
+
         Args:
             regions: Detected regions in unified format
             image: Page image for dimension reference
             **kwargs: Required context:
                 - pymupdf_page: PyMuPDF page object for column detection
-                
+
         Returns:
             Sorted regions with reading_order_rank and column_index added
         """
-        
+
         pymupdf_page = kwargs.get("pymupdf_page")
-        
+
         if not pymupdf_page:
             logger.warning("PyMuPDF page not provided, falling back to simple ordering")
             return self._fallback_sort(regions)
-        
+
         column_layout = self._detect_column_layout(pymupdf_page, image)
-        
+
         if not column_layout:
             logger.debug("No multi-column layout detected, using simple ordering")
             return self._fallback_sort(regions)
-        
+
         columns = column_layout["columns"]
-        
+
         if len(columns) <= 1:
             logger.debug("Single column detected, using simple ordering")
             return self._fallback_sort(regions)
-        
+
         sorted_regions = self._sort_by_columns(regions, columns)
         logger.debug("Sorted %d regions by %d columns", len(sorted_regions), len(columns))
-        
+
         return sorted_regions
-    
+
     def _detect_column_layout(self, pymupdf_page: Any, page_image: np.ndarray) -> dict[str, Any] | None:
         """Detect column layout using column_boxes utility function."""
         from pipeline.types import BBox
-        
+
         try:
             detected_boxes = column_boxes(pymupdf_page)
         except Exception as exc:
             logger.debug("PyMuPDF column detection failed: %s", exc)
             return None
-        
+
         if not detected_boxes:
             return None
-        
+
         page_rect = pymupdf_page.rect
         if page_rect.width == 0 or page_rect.height == 0:
             return None
-        
+
         image_height, image_width = page_image.shape[:2]
         scale_x = image_width / float(page_rect.width)
         scale_y = image_height / float(page_rect.height)
-        
+
         column_regions = []
         for rect in detected_boxes:
             x0 = rect.x0 * scale_x
             y0 = rect.y0 * scale_y
             x1 = rect.x1 * scale_x
             y1 = rect.y1 * scale_y
-            
+
             bbox = BBox.from_xyxy(x0, y0, x1, y1)
             column_regions.append({"bbox": bbox})
-        
+
         columns = self._merge_column_boxes(column_regions, image_width)
-        
+
         if len(columns) <= 1:
             return None
-        
+
         return {"columns": columns, "scale": {"x": scale_x, "y": scale_y}}
-    
+
     def _merge_column_boxes(self, column_boxes: list[dict[str, Any]], page_width: int) -> list[ColumnInfo]:
         """Merge column boxes with similar horizontal centers."""
         if not column_boxes:
             return []
-        
+
         columns: list[dict[str, Any]] = []
         grouping_threshold = max(int(page_width * 0.05), 25)
-        
+
         for box in column_boxes:
             bbox = box["bbox"]
             center_x = bbox.center[0]
             added = False
-            
+
             for column in columns:
                 col_center = column["center"]
                 col_width = column["width"]
                 threshold = max(grouping_threshold, col_width)
-                
+
                 if abs(center_x - col_center) <= threshold:
                     from pipeline.types import BBox
+
                     column["bbox"] = BBox(
                         x0=min(column["bbox"].x0, bbox.x0),
                         y0=min(column["bbox"].y0, bbox.y0),
@@ -434,88 +433,85 @@ class MultiColumnSorter:
                     column["width"] = column["bbox"].width
                     added = True
                     break
-            
+
             if not added:
-                columns.append({
-                    "bbox": bbox,
-                    "centers": [center_x],
-                    "center": center_x,
-                    "width": bbox.width,
-                })
-        
+                columns.append(
+                    {
+                        "bbox": bbox,
+                        "centers": [center_x],
+                        "center": center_x,
+                        "width": bbox.width,
+                    }
+                )
+
         columns.sort(key=lambda col: col["bbox"].x0)
-        
+
         column_infos: list[ColumnInfo] = []
         for idx, col in enumerate(columns):
-            column_infos.append({
-                "index": idx,
-                "bbox": col["bbox"],
-                "center": col["center"],
-                "width": col["width"],
-            })
-        
+            column_infos.append(
+                {
+                    "index": idx,
+                    "bbox": col["bbox"],
+                    "center": col["center"],
+                    "width": col["width"],
+                }
+            )
+
         return column_infos
-    
+
     def _sort_by_columns(self, regions: list[Any], columns: list[ColumnInfo]) -> list[Any]:
         """Sort regions by column-aware reading order."""
-        from pipeline.types import ensure_bbox_in_region
-        
         if not regions:
             return regions
-        
-        regions = [ensure_bbox_in_region(r) for r in regions]
+
         keyed_regions: list[tuple[tuple[float, float, float], Any, int]] = []
-        
+
         for region in regions:
             bbox = region.bbox
             region_center_x, _ = bbox.center
-            
+
             best_col_idx = 0
             best_overlap = 0.0
             best_distance = float("inf")
-            
+
             for col in columns:
                 col_bbox = col["bbox"]
                 overlap = bbox.intersect(col_bbox)
                 overlap_ratio = overlap / bbox.area if bbox.area > 0 else 0.0
                 distance = abs(region_center_x - col["center"])
-                
+
                 if overlap_ratio > best_overlap or (
-                    abs(overlap_ratio - best_overlap) <= COLUMN_ORDER_EPSILON
-                    and distance < best_distance
+                    abs(overlap_ratio - best_overlap) <= COLUMN_ORDER_EPSILON and distance < best_distance
                 ):
                     best_overlap = overlap_ratio
                     best_distance = distance
                     best_col_idx = col["index"]
-            
+
             if best_overlap <= 0:
                 nearest_col = min(columns, key=lambda c: abs(region_center_x - c["center"]))
                 best_col_idx = nearest_col["index"]
-            
+
             sort_key = (float(best_col_idx), bbox.y0, bbox.x0)
             keyed_regions.append((sort_key, region, best_col_idx))
-        
+
         keyed_regions.sort(key=lambda item: item[0])
-        
+
         sorted_regions = []
         for rank, (_, region, col_idx) in enumerate(keyed_regions):
             region.reading_order_rank = rank
             region.column_index = col_idx
             sorted_regions.append(region)
-        
+
         return sorted_regions
-    
+
     def _fallback_sort(self, regions: list[Any]) -> list[Any]:
         """Fallback to simple geometric sorting."""
-        from pipeline.types import ensure_bbox_in_region
-        
         if not regions:
             return regions
-        
-        regions = [ensure_bbox_in_region(r) for r in regions]
-        sorted_regions = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0) if r.bbox else (0, 0))
-        
+
+        sorted_regions = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0))
+
         for rank, region in enumerate(sorted_regions):
             region.reading_order_rank = rank
-        
+
         return sorted_regions
