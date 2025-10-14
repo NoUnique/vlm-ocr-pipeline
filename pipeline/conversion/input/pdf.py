@@ -113,6 +113,87 @@ def open_pymupdf_document(pdf_path: Path) -> Any | None:
         return None
 
 
+def extract_text_spans_from_pdf(
+    pdf_path: Path,
+    page_num: int,
+) -> list[dict[str, Any]]:
+    """Extract text spans with font information from a PDF page.
+
+    This function uses PyMuPDF to parse the PDF and extract actual text objects
+    (spans) with their font properties. Uses PyMuPDF terminology.
+
+    Args:
+        pdf_path: Path to the PDF file
+        page_num: Page number (1-indexed)
+
+    Returns:
+        List of text spans with bbox, text, size, font (PyMuPDF terminology)
+
+    Example:
+        >>> spans = extract_text_spans_from_pdf(Path("doc.pdf"), page_num=1)
+        >>> spans[0]
+        {
+            'bbox': [100, 50, 300, 80],
+            'text': 'Chapter 1',
+            'size': 24.0,  # PyMuPDF uses 'size'
+            'font': 'Times-Bold'  # PyMuPDF uses 'font'
+        }
+    """
+    if fitz is None:
+        logger.warning("PyMuPDF (fitz) not available - cannot extract text spans")
+        return []
+
+    try:
+        doc = fitz.open(str(pdf_path))
+        if page_num < 1 or page_num > doc.page_count:
+            logger.error("Invalid page number: %d (total pages: %d)", page_num, doc.page_count)
+            doc.close()
+            return []
+
+        page = doc.load_page(page_num - 1)  # 0-indexed in PyMuPDF
+        text_spans: list[dict[str, Any]] = []
+
+        # Get text with detailed formatting information (PyMuPDF's dict format)
+        text_dict = page.get_text("dict")  # type: ignore[attr-defined]
+        blocks = text_dict["blocks"]
+
+        for block in blocks:
+            # Skip image blocks (type 0 = text, type 1 = image)
+            if block.get("type") != 0:
+                continue
+
+            for line in block.get("lines", []):
+                for span in line.get("spans", []):
+                    text = span.get("text", "").strip()
+                    if not text:
+                        continue
+
+                    # Get font information (PyMuPDF keys)
+                    size = span.get("size", 12.0)  # PyMuPDF uses 'size'
+                    font = span.get("font", "Unknown")  # PyMuPDF uses 'font'
+
+                    # Get bounding box (PyMuPDF uses xyxy format)
+                    bbox_tuple = span.get("bbox", (0, 0, 0, 0))
+                    x0, y0, x1, y1 = bbox_tuple
+
+                    text_spans.append(
+                        {
+                            "bbox": [int(x0), int(y0), int(x1), int(y1)],
+                            "text": text,
+                            "size": float(size),  # PyMuPDF terminology
+                            "font": font,  # PyMuPDF terminology
+                        }
+                    )
+
+        doc.close()
+        logger.info("Extracted %d text spans from page %d", len(text_spans), page_num)
+        return text_spans
+
+    except Exception as exc:
+        logger.error("Failed to extract text spans: %s", exc)
+        return []
+
+
 def determine_pages_to_process(
     total_pages: int,
     max_pages: int | None = None,

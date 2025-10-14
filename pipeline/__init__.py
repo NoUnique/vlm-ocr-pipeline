@@ -401,6 +401,9 @@ class Pipeline:
             if stop_due_to_correction:
                 return None, True
 
+            # Extract auxiliary info (text spans with font info for markdown conversion)
+            auxiliary_info = self._extract_auxiliary_info(pdf_path, page_num)
+
             # Build result
             page_result = self._build_page_result(
                 pdf_path,
@@ -412,6 +415,7 @@ class Pipeline:
                 corrected_text,
                 correction_confidence,
                 column_layout,
+                auxiliary_info,
             )
 
             self._save_page_output(page_output_dir, page_num, page_result)
@@ -452,6 +456,32 @@ class Pipeline:
 
         return corrected_text, 1.0, False
 
+    def _extract_auxiliary_info(self, pdf_path: Path, page_num: int) -> dict[str, Any] | None:
+        """Extract auxiliary information from PDF page.
+
+        This includes text spans with font information for pymupdf4llm-style
+        markdown conversion. Uses PyMuPDF terminology.
+
+        Args:
+            pdf_path: Path to PDF file
+            page_num: Page number (1-indexed)
+
+        Returns:
+            Dictionary with auxiliary info or None if extraction fails
+        """
+        try:
+            from .conversion.input.pdf import extract_text_spans_from_pdf
+
+            text_spans = extract_text_spans_from_pdf(pdf_path, page_num)
+            if text_spans:
+                return {
+                    "text_spans": text_spans,  # PyMuPDF spans with size, font
+                }
+            return None
+        except Exception as exc:
+            logger.warning("Failed to extract auxiliary info from page %d: %s", page_num, exc)
+            return None
+
     def _build_page_result(
         self,
         pdf_path: Path,
@@ -463,8 +493,25 @@ class Pipeline:
         corrected_text: str,
         correction_confidence: float,
         column_layout: dict[str, Any] | None,
+        auxiliary_info: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Build page result dictionary."""
+        """Build page result dictionary.
+
+        Args:
+            pdf_path: Path to PDF file
+            page_num: Page number
+            page_image: Page image array
+            regions: Detected regions
+            processed_regions: Regions with extracted text
+            raw_text: Raw extracted text
+            corrected_text: VLM-corrected text
+            correction_confidence: Correction confidence score
+            column_layout: Column layout information
+            auxiliary_info: Auxiliary information (e.g., text_spans with font info)
+
+        Returns:
+            Page result dictionary with auxiliary_info if available
+        """
         page_height, page_width = page_image.shape[0], page_image.shape[1]
 
         page_result = {
@@ -482,6 +529,10 @@ class Pipeline:
 
         if column_layout is not None:
             page_result["column_layout"] = column_layout
+
+        # Add auxiliary info (contains text_spans with font info) if available
+        if auxiliary_info is not None:
+            page_result["auxiliary_info"] = auxiliary_info
 
         return page_result
 

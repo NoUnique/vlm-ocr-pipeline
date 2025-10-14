@@ -379,6 +379,93 @@ PDF runs emit a summary file alongside the page outputs: `summary.json` (all pag
 }
 ```
 
+### Markdown Conversion
+
+Convert JSON output to Markdown format using two conversion strategies:
+
+#### 1. Region Type-Based (Default - `__init__.py`)
+
+Simple and fast conversion using pre-classified region types:
+
+```python
+from pipeline.conversion.output.markdown import json_to_markdown
+
+regions = [
+    {"type": "title", "text": "Document Title"},
+    {"type": "subtitle", "text": "Section 1"},
+    {"type": "text", "text": "Content here."},
+]
+md = json_to_markdown(regions)
+# # Document Title
+#
+# ## Section 1
+#
+# Content here.
+```
+
+**Features:**
+- ✅ Fast (no PDF processing required)
+- ✅ Region type → Markdown header mapping
+- ✅ Automatic reading order sorting
+- ✅ Special type handling (tables, figures, equations)
+
+#### 2. Font Size-Based (PyMuPDF4LLM Style - `pymupdf4llm.py`)
+
+Advanced conversion using font size information from PDF text spans (PyMuPDF parser):
+
+```python
+import json
+from pathlib import Path
+from pipeline.conversion.output.markdown.pymupdf4llm import to_markdown
+
+# Load page result with auxiliary_info
+with open("output/model/document/page_1.json") as f:
+    page_result = json.load(f)
+
+# page_result contains:
+# {
+#   "processed_regions": [...],
+#   "auxiliary_info": {
+#     "text_spans": [  # PDF text objects with font info
+#       {"bbox": [100, 50, 300, 80], "text": "Chapter 1", "size": 24.0, "font": "Times-Bold"}
+#     ]
+#   }
+# }
+
+# Auto-detect headers from font sizes and convert
+md = to_markdown(page_result, auto_detect_headers=True)
+# # Chapter 1         ← 24pt → H1 (largest)
+#
+# ## Section 1.1     ← 18pt → H2 (2nd largest)
+#
+# Body text.         ← 12pt → body text
+```
+
+**Key Concepts:**
+- 🔄 **Separation of Concerns**: Regions (layout detection) vs Text Spans (PDF parser)
+- 📊 **Auxiliary Info**: Font information stored separately in `auxiliary_info.text_spans`
+- 🔗 **Late Binding**: Matching happens at conversion time using IoU
+- 📖 **PyMuPDF Terminology**: Uses `size` and `font` (not `font_size`, `font_name`)
+
+**How It Works:**
+
+```
+1. PDF → Detector → Regions (layout detection from image)
+2. PDF → PyMuPDF Parser → Text Spans (font info from digital document)
+3. Both saved separately in JSON (auxiliary_info)
+4. Markdown conversion → IoU matching → Font-based headers
+```
+
+**Comparison:**
+
+| Feature | Region Type-Based | Font Size-Based |
+|---------|-------------------|-----------------|
+| Speed | ⚡ Fast | 🐌 Slower (PDF parsing) |
+| Accuracy | Layout detection dependent | Font size dependent |
+| Dependencies | None | PyMuPDF (fitz) |
+| Data Source | Region classification | PDF text spans |
+| Use Case | Default, quick conversion | Precise header detection |
+
 ## Text Extraction
 
 All text extraction is performed by the configured VLM backend (Gemini by default, or OpenAI/OpenRouter if selected). The model receives both rendered page images and prompt instructions tailored to the backend. Rate limiting and caching ensure the pipeline stays within API quotas while avoiding repeated work on identical regions.

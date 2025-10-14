@@ -21,7 +21,8 @@ __pycache__/
 typings/
 
 # Output directories
-output/
+/output/
+examples/
 
 # IDE and editor files
 .vscode/

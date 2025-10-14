@@ -963,7 +963,7 @@ def regions_to_olmocr_anchor_text(
     # Convert each region
     for region in regions:
         bbox = region.bbox
-        text_content = (region.text or "")[:50] if region.type in ["text", "title"] else ""
+        text_content = (region.text or "")[:50] if region.type in ["text", "title", "plain text"] else ""
         anchor_line = bbox.to_olmocr_anchor(content_type=region.type, text_content=text_content)
         lines.append(anchor_line)
 
