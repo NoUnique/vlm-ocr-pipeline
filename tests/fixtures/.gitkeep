@@ -1,0 +1,6 @@
+# This directory contains ground truth data for OCR accuracy tests
+# 
+# Files in this directory:
+# - 98A-004_page1_expected.json: Expected JSON output for first page
+# - 98A-004_page1_expected.md: Expected Markdown output for first page (future)
+
