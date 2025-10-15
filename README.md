@@ -140,8 +140,8 @@ For detailed format specifications and conversion examples, see [BBOX_FORMATS.md
 # Clone or download the project
 cd vlm-ocr-pipeline
 
-# Create virtual environment (recommended with Python 3.10 for best compatibility)
-uv venv --python 3.10 .venv
+# Create virtual environment (recommended with Python 3.11 for best compatibility)
+uv venv --python 3.11 .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies
