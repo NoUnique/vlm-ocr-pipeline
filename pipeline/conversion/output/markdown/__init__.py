@@ -18,11 +18,15 @@ class RegionTypeHeaderIdentifier:
 
     This is the default header identifier that uses region type classification
     from layout detection to determine Markdown header levels.
+
+    Note: Only "title" is actively used by detectors. Other mappings are
+    reserved for future use or custom detectors.
     """
 
     # Region type to header level mapping
     HEADER_MAPPING: dict[str, int] = {
-        "title": 1,  # #
+        "title": 1,  # # - Used by all detectors
+        # Reserved for future use:
         "heading": 1,  # #
         "section_header": 1,  # #
         "subtitle": 2,  # ##
@@ -71,11 +75,13 @@ class RegionTypeHeaderIdentifier:
         return "#" * level + " "
 
 
-def region_to_markdown(  # noqa: PLR0911
+def region_to_markdown(  # noqa: PLR0911, PLR0912, PLR0915
     region: dict[str, Any],
     header_identifier: RegionTypeHeaderIdentifier | None = None,
 ) -> str:
     """Convert a single region to Markdown format using region type.
+
+    Supports all MinerU 2.5 VLM region types (25+ types) plus legacy types.
 
     Args:
         region: Region dictionary with 'type', 'text', etc.
@@ -103,30 +109,108 @@ def region_to_markdown(  # noqa: PLR0911
     if header_prefix:
         return f"{header_prefix}{text}"
 
-    # Handle special types
+    # ==================== Content Types ====================
+    if region_type in ["text", "plain text"]:
+        return text
+
+    # ==================== List Types ====================
     if region_type in ["list", "list_item"]:
         # Ensure proper list formatting
-        if not text.startswith(("-", "*")):
+        if not text.startswith(("-", "*", "1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9.")):
             return f"- {text}"
         return text
 
-    if region_type == "table":
+    # ==================== Table Types ====================
+    if region_type in ["table", "table_body"]:
         # Table regions might already contain markdown table or need formatting
         if "|" in text:  # Already markdown table
             return text
         return f"**Table:**\n\n{text}"
 
-    if region_type in ["figure", "image"]:
+    if region_type == "table_caption":
+        return f"**Table:** {text}"
+
+    if region_type == "table_footnote":
+        return f"*{text}*"
+
+    # ==================== Figure/Image Types ====================
+    if region_type in ["figure", "image", "image_body"]:
         # Image descriptions
         return f"**Figure:** {text}"
 
-    if region_type == "equation":
-        # Math equations
+    if region_type == "image_caption":
+        return f"**Figure:** {text}"
+
+    if region_type == "image_footnote":
+        return f"*{text}*"
+
+    # ==================== Equation Types ====================
+    if region_type in ["equation", "interline_equation"]:
+        # Display equations (on their own line)
         if text.startswith(("$$", "$")):
             return text
         return f"$${text}$$"
 
-    # Default: plain text
+    if region_type == "inline_equation":
+        # Inline equations
+        if text.startswith("$") and text.endswith("$"):
+            return text
+        return f"${text}$"
+
+    # Legacy MinerU DocLayoutYOLO types
+    if region_type == "isolate_formula":
+        if text.startswith(("$$", "$")):
+            return text
+        return f"$${text}$$"
+
+    if region_type == "formula_caption":
+        return f"*Formula: {text}*"
+
+    if region_type == "figure_caption":
+        return f"**Figure:** {text}"
+
+    # ==================== Code Types ====================
+    if region_type in ["code", "code_body", "algorithm"]:
+        # Code blocks
+        if text.startswith("```") and text.endswith("```"):
+            return text
+        # Try to detect language from first line
+        lines = text.split("\n", 1)
+        if len(lines) == 1:
+            return f"```\n{text}\n```"
+        return f"```\n{text}\n```"
+
+    if region_type == "code_caption":
+        return f"**Code:** {text}"
+
+    # ==================== Page Elements (Skip) ====================
+    if region_type in ["header", "footer", "page_number"]:
+        # Skip page headers/footers/numbers - they're not content
+        return ""
+
+    # ==================== Reference/Metadata Types ====================
+    if region_type == "ref_text":
+        # References - render as normal text
+        return text
+
+    if region_type in ["phonetic", "aside_text"]:
+        # Side notes - render in italics
+        return f"*{text}*"
+
+    if region_type == "page_footnote":
+        # Footnotes - render in italics
+        return f"*{text}*"
+
+    if region_type == "index":
+        # Index entries - render as normal text or skip
+        return text
+
+    # ==================== Discarded Types ====================
+    if region_type in ["discarded", "abandon"]:
+        # Skip discarded content
+        return ""
+
+    # ==================== Default: Plain Text ====================
     return text
 
 

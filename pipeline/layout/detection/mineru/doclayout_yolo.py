@@ -17,7 +17,7 @@ from mineru.model.layout.doclayoutyolo import DocLayoutYOLOModel
 from mineru.utils.enum_class import ModelPath
 from mineru.utils.models_download_utils import auto_download_and_get_model_root_path
 
-from ....types import BBox, Region
+from ....types import BBox, Region, RegionTypeMapper
 
 if TYPE_CHECKING:
     import numpy as np
@@ -91,7 +91,7 @@ class MinerUDocLayoutYOLODetector:
             raw_data: {"category_id": int, "poly": [8 points], "score": float}
 
         Returns:
-            Unified Region with BBox
+            Unified Region with BBox and standardized type
         """
         poly = raw_data["poly"]
         xmin = min(poly[0], poly[2], poly[4], poly[6])
@@ -102,10 +102,13 @@ class MinerUDocLayoutYOLODetector:
         bbox = BBox.from_xyxy(xmin, ymin, xmax, ymax)
 
         category_id = raw_data["category_id"]
-        region_type = self._category_to_type(category_id)
+        original_type = self._category_to_type(category_id)
+
+        # Map to standardized type
+        standardized_type = RegionTypeMapper.map_type(original_type, "mineru-doclayout-yolo")
 
         return Region(
-            type=region_type,
+            type=standardized_type,
             bbox=bbox,
             confidence=float(raw_data["score"]),
             source="mineru-doclayout-yolo",

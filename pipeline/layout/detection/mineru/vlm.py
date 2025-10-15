@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from mineru.backend.vlm.vlm_analyze import ModelSingleton
 
-from ....types import BBox, Region
+from ....types import BBox, Region, RegionTypeMapper
 
 if TYPE_CHECKING:
     import numpy as np
@@ -122,12 +122,17 @@ class MinerUVLMDetector:
             block: {"type": str, "bbox": [x0, y0, x1, y1], "text": str (optional), "index": int (optional)}
 
         Returns:
-            Unified Region dataclass instance with BBox
+            Unified Region dataclass instance with BBox and standardized type
         """
         bbox = BBox.from_mineru_bbox(block["bbox"])
 
+        # Map to standardized type (MinerU VLM already uses standardized types,
+        # but we apply the mapper for consistency and future-proofing)
+        original_type = block["type"]
+        standardized_type = RegionTypeMapper.map_type(original_type, "mineru-vlm")
+
         region = Region(
-            type=block["type"],
+            type=standardized_type,
             bbox=bbox,
             confidence=float(block.get("confidence", 1.0)),
             source="mineru-vlm",

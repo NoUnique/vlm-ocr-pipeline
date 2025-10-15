@@ -19,6 +19,173 @@ if TYPE_CHECKING:
 
 RGB_IMAGE_NDIM = 3  # RGB image has 3 dimensions (H, W, C)
 
+
+# ==================== Standardized Region Types ====================
+# Based on MinerU 2.5 VLM (most comprehensive type system)
+
+class RegionType:
+    """Standardized region types based on MinerU 2.5 VLM.
+
+    This provides a canonical set of region types that all detectors
+    should map to for consistent processing throughout the pipeline.
+    """
+
+    # Content
+    TEXT = "text"
+    TITLE = "title"
+
+    # Figures
+    IMAGE = "image"
+    IMAGE_BODY = "image_body"
+    IMAGE_CAPTION = "image_caption"
+    IMAGE_FOOTNOTE = "image_footnote"
+
+    # Tables
+    TABLE = "table"
+    TABLE_BODY = "table_body"
+    TABLE_CAPTION = "table_caption"
+    TABLE_FOOTNOTE = "table_footnote"
+
+    # Equations
+    EQUATION = "equation"  # Alias for interline_equation
+    INTERLINE_EQUATION = "interline_equation"
+    INLINE_EQUATION = "inline_equation"
+
+    # Code
+    CODE = "code"
+    CODE_BODY = "code_body"
+    CODE_CAPTION = "code_caption"
+    ALGORITHM = "algorithm"
+
+    # Lists
+    LIST = "list"
+
+    # Page Elements
+    HEADER = "header"  # Page header (not heading)
+    FOOTER = "footer"
+    PAGE_NUMBER = "page_number"
+    PAGE_FOOTNOTE = "page_footnote"
+
+    # References
+    REF_TEXT = "ref_text"
+    PHONETIC = "phonetic"
+    ASIDE_TEXT = "aside_text"
+    INDEX = "index"
+
+    # Special
+    DISCARDED = "discarded"
+    ABANDON = "abandon"  # MinerU DocLayoutYOLO legacy
+
+    # Aliases for backward compatibility
+    PLAIN_TEXT = "plain text"  # Legacy type
+    FIGURE = "figure"  # Alias for image
+    ISOLATE_FORMULA = "isolate_formula"  # MinerU DocLayoutYOLO legacy
+    FORMULA_CAPTION = "formula_caption"  # MinerU DocLayoutYOLO legacy
+    FIGURE_CAPTION = "figure_caption"  # MinerU DocLayoutYOLO legacy
+    LIST_ITEM = "list_item"  # Project-specific type
+
+
+# Type mapping dictionaries for each detector
+class RegionTypeMapper:
+    """Maps detector-specific region types to standardized types."""
+
+    # DocLayout-YOLO (this project) - model-dependent, these are common mappings
+    DOCLAYOUT_YOLO_MAP: dict[str, str] = {
+        "title": RegionType.TITLE,
+        "plain text": RegionType.TEXT,
+        "text": RegionType.TEXT,
+        "figure": RegionType.IMAGE,
+        "image": RegionType.IMAGE,
+        "table": RegionType.TABLE,
+        "equation": RegionType.INTERLINE_EQUATION,
+        "list": RegionType.LIST,
+        "list_item": RegionType.LIST,
+    }
+
+    # MinerU DocLayout-YOLO (fixed mapping)
+    MINERU_DOCLAYOUT_YOLO_MAP: dict[str, str] = {
+        "title": RegionType.TITLE,
+        "plain text": RegionType.TEXT,
+        "abandon": RegionType.DISCARDED,
+        "figure": RegionType.IMAGE,
+        "figure_caption": RegionType.IMAGE_CAPTION,
+        "table": RegionType.TABLE,
+        "table_caption": RegionType.TABLE_CAPTION,
+        "table_footnote": RegionType.TABLE_FOOTNOTE,
+        "isolate_formula": RegionType.INTERLINE_EQUATION,
+        "formula_caption": RegionType.IMAGE_CAPTION,  # Treat as caption
+    }
+
+    # MinerU VLM 2.5 (already standardized, identity mapping)
+    MINERU_VLM_MAP: dict[str, str] = {
+        "text": RegionType.TEXT,
+        "title": RegionType.TITLE,
+        "image": RegionType.IMAGE,
+        "image_body": RegionType.IMAGE_BODY,
+        "image_caption": RegionType.IMAGE_CAPTION,
+        "image_footnote": RegionType.IMAGE_FOOTNOTE,
+        "table": RegionType.TABLE,
+        "table_body": RegionType.TABLE_BODY,
+        "table_caption": RegionType.TABLE_CAPTION,
+        "table_footnote": RegionType.TABLE_FOOTNOTE,
+        "interline_equation": RegionType.INTERLINE_EQUATION,
+        "inline_equation": RegionType.INLINE_EQUATION,
+        "code": RegionType.CODE,
+        "code_body": RegionType.CODE_BODY,
+        "code_caption": RegionType.CODE_CAPTION,
+        "algorithm": RegionType.ALGORITHM,
+        "list": RegionType.LIST,
+        "header": RegionType.HEADER,
+        "footer": RegionType.FOOTER,
+        "page_number": RegionType.PAGE_NUMBER,
+        "page_footnote": RegionType.PAGE_FOOTNOTE,
+        "ref_text": RegionType.REF_TEXT,
+        "phonetic": RegionType.PHONETIC,
+        "aside_text": RegionType.ASIDE_TEXT,
+        "index": RegionType.INDEX,
+        "discarded": RegionType.DISCARDED,
+    }
+
+    # olmOCR VLM (always returns "text")
+    OLMOCR_VLM_MAP: dict[str, str] = {
+        "text": RegionType.TEXT,
+    }
+
+    @classmethod
+    def map_type(cls, region_type: str, detector_name: str) -> str:
+        """Map a detector-specific type to standardized type.
+
+        Args:
+            region_type: Original region type from detector
+            detector_name: Name of detector ("doclayout-yolo", "mineru-doclayout-yolo",
+                          "mineru-vlm", "olmocr-vlm")
+
+        Returns:
+            Standardized region type (falls back to original if no mapping found)
+
+        Example:
+            >>> RegionTypeMapper.map_type("plain text", "doclayout-yolo")
+            'text'
+            >>> RegionTypeMapper.map_type("abandon", "mineru-doclayout-yolo")
+            'discarded'
+        """
+        mapping_dict: dict[str, str] | None = None
+
+        if detector_name == "doclayout-yolo":
+            mapping_dict = cls.DOCLAYOUT_YOLO_MAP
+        elif detector_name == "mineru-doclayout-yolo":
+            mapping_dict = cls.MINERU_DOCLAYOUT_YOLO_MAP
+        elif detector_name == "mineru-vlm":
+            mapping_dict = cls.MINERU_VLM_MAP
+        elif detector_name == "olmocr-vlm":
+            mapping_dict = cls.OLMOCR_VLM_MAP
+
+        if mapping_dict:
+            return mapping_dict.get(region_type.lower(), region_type)
+
+        # No mapping found - return original
+        return region_type
+
 # ==================== BBox Format Definitions ====================
 
 """
@@ -742,7 +909,10 @@ class Region:
     region data throughout the pipeline.
 
     Core fields:
-    - type: Region type (e.g., "plain text", "title", "figure", "table")
+    - type: Region type string. Should use standardized types from RegionType class
+            (e.g., "text", "title", "image", "table", "code", etc.)
+            Detectors may use detector-specific types which should be mapped using
+            RegionTypeMapper.map_type() before further processing.
     - bbox: BBox object (required, always present)
     - confidence: Detection confidence (0.0 to 1.0)
 
@@ -753,10 +923,15 @@ class Region:
     - corrected_text: Added by text correction
     - source: Which detector/sorter produced this region
     - index: Internal index (MinerU VLM)
+
+    Note:
+        Region types should ideally use the standardized types defined in RegionType.
+        Use RegionTypeMapper.map_type(region.type, detector_name) to normalize
+        detector-specific types to standardized types.
     """
 
     # Core fields (always present)
-    type: str
+    type: str  # Ideally from RegionType constants
     bbox: BBox  # Required, no longer optional
     confidence: float
 

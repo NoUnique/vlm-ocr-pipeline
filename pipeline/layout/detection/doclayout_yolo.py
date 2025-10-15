@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ...types import BBox, Region
+from ...types import BBox, Region, RegionTypeMapper
 
 if TYPE_CHECKING:
     import numpy as np
@@ -80,13 +80,17 @@ class DocLayoutYOLODetector:
             raw_data: {"type": str, "coords": [x, y, w, h], "confidence": float}
 
         Returns:
-            Unified Region dataclass instance with BBox
+            Unified Region dataclass instance with BBox and standardized type
         """
         coords = raw_data["coords"]
         bbox = BBox.from_xywh(*coords[:4])
 
+        # Map detector-specific type to standardized type
+        original_type = raw_data["type"]
+        standardized_type = RegionTypeMapper.map_type(original_type, "doclayout-yolo")
+
         return Region(
-            type=raw_data["type"],
+            type=standardized_type,
             bbox=bbox,
             confidence=float(raw_data["confidence"]),
             source="doclayout-yolo",
