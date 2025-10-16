@@ -39,3 +39,4 @@ ruff==0.13.1
 pytest==8.2.0
 Levenshtein==0.25.0
 opencv-stubs==0.1.0  # Type stubs for OpenCV (pyright/mypy support)
+accelerate==1.10.1

@@ -1044,6 +1044,181 @@ class Region:
         )
 
 
+# ==================== Page and Document Types ====================
+
+
+@dataclass
+class Page:
+    """Single page processing result.
+
+    Represents the result of processing one page, containing detected regions
+    and associated metadata. This provides type safety for page-level operations.
+
+    Core fields:
+    - page_num: Page number (1-indexed)
+    - regions: List of detected Region objects
+
+    Optional metadata fields:
+    - image_path: Path to rendered page image
+    - auxiliary_info: Additional info (e.g., text spans for markdown conversion)
+    - status: Processing status ("completed", "failed", etc.)
+    - processed_at: ISO timestamp
+    - page_path: Path to saved JSON output
+    """
+
+    # Core fields
+    page_num: int
+    regions: list[Region]
+
+    # Optional metadata
+    image_path: str | None = None
+    auxiliary_info: dict[str, Any] | None = None
+    status: str = "completed"
+    processed_at: str | None = None
+    page_path: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to JSON-serializable dict.
+
+        Returns:
+            Dict with regions converted to dicts
+
+        Example:
+            >>> page = Page(page_num=1, regions=[...])
+            >>> page.to_dict()
+            {'page_num': 1, 'regions': [...], 'status': 'completed'}
+        """
+        result: dict[str, Any] = {
+            "page_num": self.page_num,
+            "regions": [r.to_dict() for r in self.regions],
+        }
+
+        # Add optional fields (only if not None or non-default)
+        if self.image_path is not None:
+            result["image_path"] = self.image_path
+        if self.auxiliary_info is not None:
+            result["auxiliary_info"] = self.auxiliary_info
+        if self.status != "completed":
+            result["status"] = self.status
+        if self.processed_at is not None:
+            result["processed_at"] = self.processed_at
+        if self.page_path is not None:
+            result["page_path"] = self.page_path
+
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Page:
+        """Create Page from dict.
+
+        Args:
+            data: Dictionary with page data
+
+        Returns:
+            Page object
+
+        Example:
+            >>> data = {"page_num": 1, "regions": [...]}
+            >>> page = Page.from_dict(data)
+        """
+        return cls(
+            page_num=data["page_num"],
+            regions=[Region.from_dict(r) for r in data.get("regions", [])],
+            image_path=data.get("image_path"),
+            auxiliary_info=data.get("auxiliary_info"),
+            status=data.get("status", "completed"),
+            processed_at=data.get("processed_at"),
+            page_path=data.get("page_path"),
+        )
+
+
+@dataclass
+class Document:
+    """Multi-page document processing result.
+
+    Represents the complete result of processing a PDF or multi-page document.
+    This provides type safety for document-level operations.
+
+    Core fields:
+    - pdf_name: Document name (without extension)
+    - pdf_path: Full path to source PDF
+    - num_pages: Total number of pages in document
+    - processed_pages: Number of pages actually processed
+    - pages: List of Page objects
+
+    Optional metadata fields:
+    - output_directory: Directory where results are saved
+    - processed_at: ISO timestamp
+    - status_summary: Count of pages by status
+    """
+
+    # Core fields
+    pdf_name: str
+    pdf_path: str
+    num_pages: int
+    processed_pages: int
+    pages: list[Page]
+
+    # Optional metadata
+    output_directory: str | None = None
+    processed_at: str | None = None
+    status_summary: dict[str, int] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to JSON-serializable dict.
+
+        Returns:
+            Dict with pages converted to dicts
+
+        Example:
+            >>> doc = Document(pdf_name="test", pdf_path="/test.pdf", ...)
+            >>> doc.to_dict()
+            {'pdf_name': 'test', 'pdf_path': '/test.pdf', ...}
+        """
+        result: dict[str, Any] = {
+            "pdf_name": self.pdf_name,
+            "pdf_path": self.pdf_path,
+            "num_pages": self.num_pages,
+            "processed_pages": self.processed_pages,
+            "pages": [p.to_dict() for p in self.pages],
+        }
+
+        # Add optional fields (only if not None)
+        if self.output_directory is not None:
+            result["output_directory"] = self.output_directory
+        if self.processed_at is not None:
+            result["processed_at"] = self.processed_at
+        if self.status_summary is not None:
+            result["status_summary"] = self.status_summary
+
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Document:
+        """Create Document from dict.
+
+        Args:
+            data: Dictionary with document data
+
+        Returns:
+            Document object
+
+        Example:
+            >>> data = {"pdf_name": "test", "pdf_path": "/test.pdf", ...}
+            >>> doc = Document.from_dict(data)
+        """
+        return cls(
+            pdf_name=data["pdf_name"],
+            pdf_path=data["pdf_path"],
+            num_pages=data["num_pages"],
+            processed_pages=data["processed_pages"],
+            pages=[Page.from_dict(p) for p in data.get("pages", [])],
+            output_directory=data.get("output_directory"),
+            processed_at=data.get("processed_at"),
+            status_summary=data.get("status_summary"),
+        )
+
+
 # ==================== Protocol Interfaces ====================
 
 

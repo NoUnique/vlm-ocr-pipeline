@@ -200,47 +200,56 @@ def test_json_output_comparison(
     tmp_path: Path,
 ) -> None:
     """Test OCR by comparing full JSON output structure.
-    
+
     This test:
-    1. Processes the first page of the sample PDF
+    1. Processes the first page of the sample PDF using MinerU 2.5 VLM + Gemini 2.5 Flash
     2. Compares the JSON output with expected JSON
     3. Reports differences in structure and content
     """
     # Skip if sample file doesn't exist
     if not sample_pdf_path.exists():
         pytest.skip(f"Sample PDF not found: {sample_pdf_path}")
-    
+
     # Skip if expected JSON doesn't exist
     if not expected_json_path.exists():
         pytest.skip(
             f"Expected JSON not found: {expected_json_path}\n"
             f"Run test_json_baseline first to generate ground truth."
         )
-    
-    # Initialize pipeline
+
+    # Use tests/output instead of tmp_path for persistent storage
+    test_output_dir = Path("tests/output")
+    test_output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Initialize pipeline with MinerU 2.5 VLM + Gemini 2.5 Flash
     pipeline = Pipeline(
         use_cache=False,
-        cache_dir=tmp_path / "cache",
-        output_dir=tmp_path / "output",
-        temp_dir=tmp_path / "tmp",
-        backend="openai",
+        cache_dir=test_output_dir / "cache",
+        output_dir=test_output_dir,
+        temp_dir=test_output_dir / "tmp",
+        backend="gemini",  # ✅ Use Gemini backend for text correction
         model="gemini-2.5-flash",
+        gemini_tier="free",  # Adjust based on your tier
+        detector="mineru-vlm",  # ✅ MinerU 2.5 VLM detector (1.2B model)
+        sorter="mineru-vlm",    # ✅ MinerU VLM sorter
+        # mineru_model defaults to "opendatalab/MinerU2.5-2509-1.2B"
+        mineru_backend="transformers",  # or "vllm-engine" for 20-30x speedup
     )
-    
+
     # Process first page
     result = pipeline.process_pdf(sample_pdf_path, max_pages=1)
-    
+
     # Load expected JSON
     with expected_json_path.open("r", encoding="utf-8") as f:
         expected_json = json.load(f)
-    
+
     # Normalize both JSONs for comparison
     result_normalized = normalize_json(result)
     expected_normalized = normalize_json(expected_json)
-    
+
     # Save normalized results for debugging
-    result_file = tmp_path / "result_normalized.json"
-    expected_file = tmp_path / "expected_normalized.json"
+    result_file = test_output_dir / "result_normalized.json"
+    expected_file = test_output_dir / "expected_normalized.json"
     
     result_file.write_text(json.dumps(result_normalized, indent=2, ensure_ascii=False))
     expected_file.write_text(json.dumps(expected_normalized, indent=2, ensure_ascii=False))
@@ -342,7 +351,6 @@ def _compare_json_deep(expected: Any, actual: Any, path: str = "root") -> list[s
 
 @pytest.mark.integration
 @pytest.mark.slow
-@pytest.mark.skip(reason="Markdown conversion logic not implemented yet")
 def test_markdown_output_comparison(
     sample_pdf_path: Path,
     expected_markdown_path: Path,
@@ -350,35 +358,84 @@ def test_markdown_output_comparison(
     tmp_path: Path,
 ) -> None:
     """Test OCR by comparing Markdown output.
-    
-    This test will be implemented after markdown conversion logic is added.
-    
-    Future implementation:
-    1. Process the first page of the sample PDF
-    2. Convert OCR result to Markdown format
-    3. Compare with expected Markdown using Levenshtein distance
-    4. Fail if accuracy is below threshold
+
+    This test:
+    1. Processes the first page of the sample PDF using MinerU 2.5 VLM + Gemini 2.5 Flash
+    2. Converts OCR result to Markdown format using region type-based conversion
+    3. Compares with expected Markdown using Levenshtein distance
+    4. Fails if accuracy is below threshold (90% by default)
     """
     # Skip if sample file doesn't exist
     if not sample_pdf_path.exists():
         pytest.skip(f"Sample PDF not found: {sample_pdf_path}")
-    
+
     # Skip if expected markdown doesn't exist
     if not expected_markdown_path.exists():
         pytest.skip(
             f"Expected Markdown not found: {expected_markdown_path}\n"
             f"Run test_markdown_baseline first to generate ground truth."
         )
-    
-    # TODO: Implement after markdown conversion logic is added
-    # pipeline = Pipeline(...)
-    # result = pipeline.process_pdf(sample_pdf_path, max_pages=1)
-    # markdown_output = convert_to_markdown(result)  # To be implemented
-    # expected_markdown = expected_markdown_path.read_text(encoding="utf-8")
-    # metrics = calculate_accuracy(markdown_output, expected_markdown)
-    # assert metrics["accuracy"] >= accuracy_threshold
-    
-    pytest.fail("Markdown conversion logic not implemented yet")
+
+    from pipeline.conversion.output.markdown import document_dict_to_markdown
+
+    # Initialize pipeline with MinerU 2.5 VLM + Gemini 2.5 Flash
+    pipeline = Pipeline(
+        use_cache=False,
+        cache_dir=tmp_path / "cache",
+        output_dir=tmp_path / "output",
+        temp_dir=tmp_path / "tmp",
+        backend="gemini",  # ✅ Use Gemini backend
+        model="gemini-2.5-flash",
+        gemini_tier="free",  # Adjust based on your tier
+        detector="mineru-vlm",  # ✅ MinerU 2.5 VLM detector
+        sorter="mineru-vlm",    # ✅ MinerU VLM sorter
+        mineru_model="opendatalab/PDF-Extract-Kit-1.0",  # MinerU model
+        mineru_backend="transformers",  # or "vllm-engine" if available
+    )
+
+    # Process first page
+    result = pipeline.process_pdf(sample_pdf_path, max_pages=1)
+
+    # Convert to Markdown
+    markdown_output = document_dict_to_markdown(result)
+
+    # Load expected Markdown
+    expected_markdown = expected_markdown_path.read_text(encoding="utf-8")
+
+    # Normalize whitespace for comparison (collapse multiple spaces/newlines)
+    markdown_normalized = " ".join(markdown_output.split())
+    expected_normalized = " ".join(expected_markdown.split())
+
+    # Calculate accuracy
+    metrics = calculate_accuracy(markdown_normalized, expected_normalized)
+
+    # Save outputs for debugging
+    output_file = tmp_path / "markdown_output.md"
+    output_file.write_text(markdown_output, encoding="utf-8")
+
+    expected_file = tmp_path / "markdown_expected.md"
+    expected_file.write_text(expected_markdown, encoding="utf-8")
+
+    print(f"\n{'=' * 60}")
+    print("Markdown Accuracy Results:")
+    print(f"{'=' * 60}")
+    print(f"Output saved to: {output_file}")
+    print(f"Expected saved to: {expected_file}")
+    print(f"\nAccuracy: {metrics['accuracy']:.2f}%")
+    print(f"Levenshtein Distance: {metrics['distance']}")
+    print(f"Similarity: {metrics['similarity']:.2%}")
+    print(f"Threshold: {accuracy_threshold}%")
+    print(f"\nLengths:")
+    print(f"  Output: {metrics['predicted_length']} characters")
+    print(f"  Expected: {metrics['expected_length']} characters")
+    print(f"{'=' * 60}")
+
+    # Assert based on accuracy threshold
+    assert metrics["accuracy"] >= accuracy_threshold, (
+        f"Markdown accuracy ({metrics['accuracy']:.2f}%) is below threshold ({accuracy_threshold}%). "
+        f"Levenshtein distance: {metrics['distance']}. "
+        f"See {output_file} and {expected_file} for details."
+    )
 
 
 # ==================== Baseline Tests ====================
@@ -388,83 +445,167 @@ def test_markdown_output_comparison(
 @pytest.mark.slow
 def test_json_baseline(sample_pdf_path: Path, tmp_path: Path) -> None:
     """Generate baseline JSON output for comparison testing.
-    
+
     This test:
-    1. Processes the first page of the sample PDF
+    1. Processes the first page of the sample PDF using MinerU 2.5 VLM + Gemini 2.5 Flash
     2. Saves the JSON output as a baseline
     3. User should manually verify and move to fixtures directory
-    
+
     Run this first to generate ground truth JSON:
         uv run pytest tests/test_ocr_accuracy.py::test_json_baseline -v -s
-    
+
     Then manually verify the output and save as:
         tests/fixtures/98A-004_page1_expected.json
     """
     # Skip if sample file doesn't exist
     if not sample_pdf_path.exists():
         pytest.skip(f"Sample PDF not found: {sample_pdf_path}")
-    
-    # Initialize pipeline
+
+    # Use tests/output instead of tmp_path for persistent storage
+    test_output_dir = Path("tests/output")
+    test_output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Initialize pipeline with MinerU 2.5 VLM + Gemini 2.5 Flash
     pipeline = Pipeline(
         use_cache=False,
-        cache_dir=tmp_path / "cache",
-        output_dir=tmp_path / "output",
-        temp_dir=tmp_path / "tmp",
-        backend="openai",
+        cache_dir=test_output_dir / "cache",
+        output_dir=test_output_dir,
+        temp_dir=test_output_dir / "tmp",
+        backend="gemini",  # ✅ Use Gemini backend for text correction
         model="gemini-2.5-flash",
+        gemini_tier="free",  # Adjust based on your tier
+        detector="mineru-vlm",  # ✅ MinerU 2.5 VLM detector (1.2B model)
+        sorter="mineru-vlm",    # ✅ MinerU VLM sorter
+        # mineru_model defaults to "opendatalab/MinerU2.5-2509-1.2B"
+        mineru_backend="transformers",  # or "vllm-engine" for 20-30x speedup
     )
-    
+
     # Process only the first page
     result = pipeline.process_pdf(sample_pdf_path, max_pages=1)
-    
+
     # Verify basic processing
     assert result["processed_pages"] == 1
     assert len(result["pages"]) == 1
-    
+
     # Save baseline JSON
-    baseline_file = tmp_path / "baseline_output.json"
+    baseline_file = test_output_dir / "baseline_output.json"
     baseline_file.write_text(json.dumps(result, indent=2, ensure_ascii=False))
-    
+
     # Also save normalized version
     normalized = normalize_json(result)
-    normalized_file = tmp_path / "baseline_output_normalized.json"
+    normalized_file = test_output_dir / "baseline_output_normalized.json"
     normalized_file.write_text(json.dumps(normalized, indent=2, ensure_ascii=False))
-    
+
+    # Read actual page_1.json to get region count
+    output_dir = test_output_dir / "gemini-2.5-flash" / "98A-004"
+    page_json_file = output_dir / "page_1.json"
+
+    if page_json_file.exists():
+        page_data = json.loads(page_json_file.read_text())
+        num_regions = len(page_data.get("regions", []))
+    else:
+        num_regions = 0
+
     print(f"\n{'=' * 60}")
     print("Baseline JSON Output Generated:")
     print(f"{'=' * 60}")
-    print(f"Full output: {baseline_file}")
-    print(f"Normalized: {normalized_file}")
-    print(f"\nPages processed: {result['processed_pages']}")
-    print(f"Regions detected: {len(result['pages'][0]['regions'])}")
+    print(f"Configuration:")
+    print(f"  - Backend: gemini")
+    print(f"  - Model: gemini-2.5-flash")
+    print(f"  - Detector: mineru-vlm")
+    print(f"  - Sorter: mineru-vlm")
+    print(f"\nOutput files:")
+    print(f"  Summary: {baseline_file}")
+    print(f"  Page data: {page_json_file}")
+    print(f"  Normalized: {normalized_file}")
+    print(f"\nResults:")
+    print(f"  Pages processed: {result['processed_pages']}")
+    print(f"  Regions detected: {num_regions}")
     print("\nNext steps:")
     print("1. Manually verify the JSON output")
     print("2. Create fixtures directory: mkdir -p tests/fixtures")
-    print("3. Copy normalized JSON as ground truth:")
-    print(f"   cp {normalized_file} tests/fixtures/98A-004_page1_expected.json")
+    print("3. Copy page JSON as ground truth:")
+    print(f"   cp {page_json_file} tests/fixtures/98A-004_page1_expected.json")
     print("4. Run: uv run pytest tests/test_ocr_accuracy.py::test_json_output_comparison -v")
     print(f"{'=' * 60}")
 
 
 @pytest.mark.integration
 @pytest.mark.slow
-@pytest.mark.skip(reason="Markdown conversion logic not implemented yet")
 def test_markdown_baseline(sample_pdf_path: Path, tmp_path: Path) -> None:
     """Generate baseline Markdown output for comparison testing.
-    
-    This test will be implemented after markdown conversion logic is added.
-    
-    Future implementation:
-    1. Process the first page
-    2. Convert to Markdown
-    3. Save as baseline for manual verification
+
+    This test:
+    1. Processes the first page of the sample PDF using MinerU 2.5 VLM + Gemini 2.5 Flash
+    2. Converts the result to Markdown using region type-based conversion
+    3. Saves as baseline for manual verification
+
+    Run this to generate ground truth Markdown:
+        uv run pytest tests/test_ocr_accuracy.py::test_markdown_baseline -v -s
+
+    Then manually verify the output and save as:
+        tests/fixtures/98A-004_page1_expected.md
     """
     # Skip if sample file doesn't exist
     if not sample_pdf_path.exists():
         pytest.skip(f"Sample PDF not found: {sample_pdf_path}")
-    
-    # TODO: Implement after markdown conversion logic is added
-    pytest.fail("Markdown conversion logic not implemented yet")
+
+    from pipeline.conversion.output.markdown import document_dict_to_markdown
+
+    # Use tests/output instead of tmp_path for persistent storage
+    test_output_dir = Path("tests/output")
+    test_output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Initialize pipeline with MinerU 2.5 VLM + Gemini 2.5 Flash
+    pipeline = Pipeline(
+        use_cache=False,
+        cache_dir=test_output_dir / "cache",
+        output_dir=test_output_dir,
+        temp_dir=test_output_dir / "tmp",
+        backend="gemini",  # ✅ Use Gemini backend
+        model="gemini-2.5-flash",
+        gemini_tier="free",  # Adjust based on your tier
+        detector="mineru-vlm",  # ✅ MinerU 2.5 VLM detector
+        sorter="mineru-vlm",    # ✅ MinerU VLM sorter
+        mineru_model="opendatalab/PDF-Extract-Kit-1.0",  # MinerU model
+        mineru_backend="transformers",  # or "vllm-engine" if available
+    )
+
+    # Process only the first page
+    result = pipeline.process_pdf(sample_pdf_path, max_pages=1)
+
+    # Verify basic processing
+    assert result["processed_pages"] == 1
+    assert len(result["pages"]) == 1
+
+    # Convert to Markdown using the new dict wrapper
+    markdown_output = document_dict_to_markdown(result)
+
+    # Save baseline Markdown
+    baseline_file = test_output_dir / "baseline_output.md"
+    baseline_file.write_text(markdown_output, encoding="utf-8")
+
+    print(f"\n{'=' * 60}")
+    print("Baseline Markdown Output Generated:")
+    print(f"{'=' * 60}")
+    print(f"Configuration:")
+    print(f"  - Backend: gemini")
+    print(f"  - Model: gemini-2.5-flash")
+    print(f"  - Detector: mineru-vlm")
+    print(f"  - Sorter: mineru-vlm")
+    print(f"  - Conversion: Region type-based")
+    print(f"\nOutput file:")
+    print(f"  {baseline_file}")
+    print(f"\nResults:")
+    print(f"  Pages processed: {result['processed_pages']}")
+    print(f"  Regions detected: {len(result['pages'][0]['regions'])}")
+    print(f"  Markdown length: {len(markdown_output)} characters")
+    print("\nNext steps:")
+    print("1. Manually verify the Markdown output")
+    print("2. Copy as ground truth:")
+    print(f"   cp {baseline_file} tests/fixtures/98A-004_page1_expected.md")
+    print("3. Run: uv run pytest tests/test_ocr_accuracy.py::test_markdown_output_comparison -v")
+    print(f"{'=' * 60}")
 
 
 # ==================== Unit Tests ====================

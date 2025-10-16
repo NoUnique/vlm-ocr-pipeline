@@ -56,13 +56,54 @@ class MinerUVLMDetector:
         self.backend = backend
         self.detection_only = detection_only
 
-        model_singleton = ModelSingleton()
-        self.vlm = model_singleton.get_model(
-            backend=backend,
-            model_path=model,
-            server_url=None,
-            **vlm_kwargs,
-        )
+        # WORKAROUND: MinerU's ModelSingleton doesn't pass model_path to MinerUClient
+        # when model/processor are None. We need to pre-load them.
+        if backend == "transformers" and model:
+            try:
+                from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
+                from transformers import __version__ as transformers_version
+                from packaging import version
+
+                # Determine dtype parameter name based on transformers version
+                if version.parse(transformers_version) >= version.parse("4.56.0"):
+                    dtype_key = "dtype"
+                else:
+                    dtype_key = "torch_dtype"
+
+                # Load model and processor with device_map="auto" (requires accelerate)
+                vlm_model = Qwen2VLForConditionalGeneration.from_pretrained(
+                    model,
+                    device_map="auto",
+                    **{dtype_key: "auto"},
+                )
+                vlm_processor = AutoProcessor.from_pretrained(model, use_fast=True)
+
+                # Pass loaded model/processor to avoid model_path issue
+                vlm_kwargs["model"] = vlm_model
+                vlm_kwargs["processor"] = vlm_processor
+
+                logger.info("MinerU VLM model loaded successfully")
+            except Exception as e:
+                logger.warning("Failed to pre-load model, falling back to ModelSingleton: %s", e)
+
+        # WORKAROUND PART 2: ModelSingleton.get_model() has a bug where it doesn't pass
+        # model/processor from kwargs to MinerUClient. Bypass it entirely when we've pre-loaded.
+        if "model" in vlm_kwargs and "processor" in vlm_kwargs:
+            from mineru_vl_utils import MinerUClient
+
+            self.vlm = MinerUClient(
+                backend=backend,
+                model_path=model,
+                **vlm_kwargs,
+            )
+        else:
+            model_singleton = ModelSingleton()
+            self.vlm = model_singleton.get_model(
+                backend=backend,
+                model_path=model,
+                server_url=None,
+                **vlm_kwargs,
+            )
 
         logger.info(
             "MinerU VLM detector initialized (backend=%s, detection_only=%s)",
@@ -97,6 +138,9 @@ class MinerUVLMDetector:
 
         pil_image = PILImage.fromarray(image)
 
+        print(f"[BBOX-DEBUG] Image shape: {image.shape}, PIL size: {pil_image.size}")
+        print(f"[BBOX-DEBUG] detection_only={self.detection_only}")
+
         if self.detection_only:
             # TODO: MinerU doesn't expose step 1 (detection only) separately
             # For now, use two-step and remove ordering info
@@ -111,32 +155,58 @@ class MinerUVLMDetector:
             results = self.vlm.batch_two_step_extract(images=[pil_image])
             raw_blocks = results[0]
 
+        print(f"[BBOX-DEBUG] MinerU returned {len(raw_blocks)} blocks")
+        if raw_blocks:
+            print(f"[BBOX-DEBUG] First raw block: {raw_blocks[0]}")
+            print(f"[BBOX-DEBUG] Second raw block: {raw_blocks[1] if len(raw_blocks) > 1 else 'N/A'}")
+
         logger.debug("Detected %d regions with MinerU VLM", len(raw_blocks))
 
-        return [self._to_region(block) for block in raw_blocks]
+        # Get image dimensions for bbox scaling
+        img_height, img_width = image.shape[:2]
 
-    def _to_region(self, block: dict[str, Any]) -> Region:
+        return [self._to_region(block, img_width, img_height) for block in raw_blocks]
+
+    def _to_region(self, block: dict[str, Any], img_width: int, img_height: int) -> Region:
         """Convert MinerU block to unified Region format.
 
         Args:
             block: {"type": str, "bbox": [x0, y0, x1, y1], "text": str (optional), "index": int (optional)}
+            img_width: Image width in pixels
+            img_height: Image height in pixels
 
         Returns:
             Unified Region dataclass instance with BBox and standardized type
         """
-        bbox = BBox.from_mineru_bbox(block["bbox"])
+        # MinerU returns normalized coordinates (0.0-1.0), convert to pixel coordinates
+        normalized_bbox = block["bbox"]
+        x0_norm, y0_norm, x1_norm, y1_norm = normalized_bbox[:4]
+
+        # Scale to pixel coordinates
+        x0_px = x0_norm * img_width
+        y0_px = y0_norm * img_height
+        x1_px = x1_norm * img_width
+        y1_px = y1_norm * img_height
+
+        print(f"[BBOX-DEBUG] Normalized: {normalized_bbox[:4]} -> Pixel: [{x0_px:.1f}, {y0_px:.1f}, {x1_px:.1f}, {y1_px:.1f}]")
+
+        # Create BBox with pixel coordinates
+        bbox = BBox.from_xyxy(x0_px, y0_px, x1_px, y1_px)
 
         # Map to standardized type (MinerU VLM already uses standardized types,
         # but we apply the mapper for consistency and future-proofing)
         original_type = block["type"]
         standardized_type = RegionTypeMapper.map_type(original_type, "mineru-vlm")
 
+        # MinerU VLM returns 'content' field with OCR text
+        # Note: This text will only be used if no separate recognizer is configured,
+        # or if the recognizer is explicitly set to use detector's content
         region = Region(
             type=standardized_type,
             bbox=bbox,
             confidence=float(block.get("confidence", 1.0)),
             source="mineru-vlm",
-            text=block.get("text"),
+            text=block.get("content"),  # MinerU uses 'content', not 'text'
             index=block.get("index"),
             reading_order_rank=block.get("index"),
         )

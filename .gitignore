@@ -23,6 +23,7 @@ typings/
 
 # Output directories
 /output/
+tests/output/
 examples/
 
 # IDE and editor files
@@ -35,6 +36,7 @@ examples/
 # OS files
 .DS_Store
 Thumbs.db
+.nfs*
 
 # Python virtual environments
 .venv/

@@ -69,7 +69,7 @@ class GeminiClient:
         """
         if not self.is_available():
             logger.warning("Gemini API client not initialized")
-            return {"type": region_info["type"], "coords": region_info["coords"], "text": "", "confidence": 0.0}
+            return {"type": region_info["type"], "bbox": region_info["bbox"], "text": "", "confidence": 0.0}
 
         try:
             # Resize image if too large
@@ -110,7 +110,7 @@ class GeminiClient:
             if not rate_limiter.wait_if_needed(estimated_tokens):
                 return {
                     "type": region_info["type"],
-                    "coords": region_info["coords"],
+                    "bbox": region_info["bbox"],
                     "text": "[DAILY_LIMIT_EXCEEDED]",
                     "confidence": 0.0,
                     "error": "rate_limit_daily",
@@ -123,7 +123,7 @@ class GeminiClient:
                 logger.warning("Gemini API client became unavailable")
                 return {
                     "type": region_info["type"],
-                    "coords": region_info["coords"],
+                    "bbox": region_info["bbox"],
                     "text": "",
                     "confidence": 0.0,
                     "error": "client_unavailable",
@@ -142,7 +142,7 @@ class GeminiClient:
 
             result = {
                 "type": region_info["type"],
-                "coords": region_info["coords"],
+                "bbox": region_info["bbox"],
                 "text": text,
                 "confidence": region_info.get("confidence", 1.0),
             }
@@ -161,7 +161,7 @@ class GeminiClient:
                 logger.error("Rate limit exceeded. Please wait before retrying or check your API quota.")
                 return {
                     "type": region_info["type"],
-                    "coords": region_info["coords"],
+                    "bbox": region_info["bbox"],
                     "text": "[RATE_LIMIT_EXCEEDED]",
                     "confidence": 0.0,
                     "error": "gemini_rate_limit",
@@ -171,7 +171,7 @@ class GeminiClient:
             # Handle other Gemini API errors
             return {
                 "type": region_info["type"],
-                "coords": region_info["coords"],
+                "bbox": region_info["bbox"],
                 "text": "[GEMINI_EXTRACTION_FAILED]",
                 "confidence": 0.0,
                 "error": "gemini_api_error",
@@ -196,7 +196,7 @@ class GeminiClient:
             logger.warning("Gemini API client not initialized")
             return {
                 "type": region_info["type"],
-                "coords": region_info["coords"],
+                "bbox": region_info["bbox"],
                 "content": "Gemini API not available",
                 "analysis": "Client not initialized",
                 "confidence": 0.0,
@@ -241,7 +241,7 @@ class GeminiClient:
             if not rate_limiter.wait_if_needed(estimated_tokens):
                 return {
                     "type": region_info["type"],
-                    "coords": region_info["coords"],
+                    "bbox": region_info["bbox"],
                     "content": "[DAILY_LIMIT_EXCEEDED]",
                     "analysis": "Daily rate limit exceeded",
                     "confidence": 0.0,
@@ -255,7 +255,7 @@ class GeminiClient:
                 logger.warning("Gemini API client became unavailable")
                 return {
                     "type": region_info["type"],
-                    "coords": region_info["coords"],
+                    "bbox": region_info["bbox"],
                     "content": "Gemini API not available",
                     "analysis": "Client not initialized",
                     "confidence": 0.0,
@@ -285,7 +285,7 @@ class GeminiClient:
             if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
                 return {
                     "type": region_info["type"],
-                    "coords": region_info["coords"],
+                    "bbox": region_info["bbox"],
                     "content": "[RATE_LIMIT_EXCEEDED]",
                     "analysis": "Rate limit exceeded",
                     "confidence": 0.0,
@@ -295,7 +295,7 @@ class GeminiClient:
 
             return {
                 "type": region_info["type"],
-                "coords": region_info["coords"],
+                "bbox": region_info["bbox"],
                 "content": "[GEMINI_PROCESSING_FAILED]",
                 "analysis": f"Processing failed: {str(e)}",
                 "confidence": 0.0,
@@ -410,7 +410,7 @@ class GeminiClient:
 
             result = {
                 "type": region_info["type"],
-                "coords": region_info["coords"],
+                "bbox": region_info["bbox"],
                 "confidence": region_info.get("confidence", 1.0),
             }
 
@@ -431,7 +431,7 @@ class GeminiClient:
             logger.warning("Failed to parse Gemini JSON response, using as plain text")
             return {
                 "type": region_info["type"],
-                "coords": region_info["coords"],
+                "bbox": region_info["bbox"],
                 "content": response_text,
                 "analysis": "Direct response (JSON parsing failed)",
                 "confidence": region_info.get("confidence", 1.0),

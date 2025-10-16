@@ -133,8 +133,11 @@ class Pipeline:
                 "confidence_threshold": confidence_threshold,
             }
         elif detector == "mineru-vlm":
+            default_model = "opendatalab/MinerU2.5-2509-1.2B"
+            final_model = mineru_model if mineru_model is not None else default_model
+            print(f"[DEBUG] MinerU VLM detector: mineru_model={mineru_model}, final_model={final_model}")
             detector_kwargs = {
-                "model": mineru_model,
+                "model": final_model,  # MinerU 2.5 VLM (1.2B)
                 "backend": mineru_backend,
                 "detection_only": (sorter != "mineru-vlm"),  # Full pipeline if using mineru-vlm sorter
             }

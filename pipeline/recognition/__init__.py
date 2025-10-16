@@ -97,6 +97,11 @@ class TextRecognizer:
     def _process_single_region(self, image: np.ndarray, region: Region) -> Region:
         """Process a single region to extract text.
 
+        IMPORTANT: This recognizer will ALWAYS extract text using the configured VLM backend,
+        regardless of whether the detector already provided text content. This ensures that
+        when a user selects a specific recognizer (e.g., Gemini), that recognizer is used
+        for text extraction, not the detector's built-in OCR.
+
         Args:
             image: Full page image
             region: Region instance
@@ -105,6 +110,15 @@ class TextRecognizer:
             Region with text extracted
         """
         region_type = region.type
+
+        # Clear any pre-existing text from detector
+        # This ensures we use the recognizer's extraction, not the detector's content
+        if region.text:
+            logger.debug(
+                "Clearing detector-provided text for region (source=%s). Will use recognizer instead.",
+                region.source
+            )
+            region.text = None
 
         # Extract region image
         try:

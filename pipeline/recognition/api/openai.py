@@ -108,7 +108,7 @@ class OpenAIClient:
             logger.warning(
                 "OpenAI API client not initialized (model=%s, base_url=%s)", self.model, self.base_url or "default"
             )
-            return {"type": region_info["type"], "coords": region_info["coords"], "text": "", "confidence": 0.0}
+            return {"type": region_info["type"], "bbox": region_info["bbox"], "text": "", "confidence": 0.0}
 
         try:
             base64_image = self._encode_image(region_img)
@@ -133,7 +133,7 @@ class OpenAIClient:
                     self.model,
                     self.base_url or "default",
                 )
-                return {"type": region_info["type"], "coords": region_info["coords"], "text": "", "confidence": 0.0}
+                return {"type": region_info["type"], "bbox": region_info["bbox"], "text": "", "confidence": 0.0}
 
             response = client.chat.completions.create(
                 model=self.model, messages=messages, max_tokens=2000, temperature=0.1
@@ -143,7 +143,7 @@ class OpenAIClient:
 
             result = {
                 "type": region_info["type"],
-                "coords": region_info["coords"],
+                "bbox": region_info["bbox"],
                 "text": text,
                 "confidence": region_info.get("confidence", 1.0),
             }
@@ -163,7 +163,7 @@ class OpenAIClient:
                 logger.error("Rate limit exceeded. Please wait before retrying or check your API quota.")
                 return {
                     "type": region_info["type"],
-                    "coords": region_info["coords"],
+                    "bbox": region_info["bbox"],
                     "text": "[RATE_LIMIT_EXCEEDED]",
                     "confidence": 0.0,
                     "error": "openai_rate_limit",
@@ -173,7 +173,7 @@ class OpenAIClient:
             # Handle other OpenAI API errors
             return {
                 "type": region_info["type"],
-                "coords": region_info["coords"],
+                "bbox": region_info["bbox"],
                 "text": "[OPENAI_EXTRACTION_FAILED]",
                 "confidence": 0.0,
                 "error": "openai_api_error",
@@ -200,7 +200,7 @@ class OpenAIClient:
             )
             return {
                 "type": region_info["type"],
-                "coords": region_info["coords"],
+                "bbox": region_info["bbox"],
                 "content": "OpenAI API not available",
                 "analysis": "Client not initialized",
                 "confidence": 0.0,
@@ -233,7 +233,7 @@ class OpenAIClient:
                 )
                 return {
                     "type": region_info["type"],
-                    "coords": region_info["coords"],
+                    "bbox": region_info["bbox"],
                     "content": "OpenAI API not available",
                     "analysis": "Client not initialized",
                     "confidence": 0.0,
@@ -260,7 +260,7 @@ class OpenAIClient:
             if "429" in error_str or "rate_limit" in error_str.lower():
                 return {
                     "type": region_info["type"],
-                    "coords": region_info["coords"],
+                    "bbox": region_info["bbox"],
                     "content": "[RATE_LIMIT_EXCEEDED]",
                     "analysis": "Rate limit exceeded",
                     "confidence": 0.0,
@@ -270,7 +270,7 @@ class OpenAIClient:
 
             return {
                 "type": region_info["type"],
-                "coords": region_info["coords"],
+                "bbox": region_info["bbox"],
                 "content": "[OPENAI_PROCESSING_FAILED]",
                 "analysis": f"Processing failed: {str(e)}",
                 "confidence": 0.0,
@@ -382,7 +382,7 @@ class OpenAIClient:
 
             result = {
                 "type": region_info["type"],
-                "coords": region_info["coords"],
+                "bbox": region_info["bbox"],
                 "confidence": region_info.get("confidence", 1.0),
             }
 
@@ -403,7 +403,7 @@ class OpenAIClient:
             logger.warning("Failed to parse OpenAI JSON response, using as plain text")
             return {
                 "type": region_info["type"],
-                "coords": region_info["coords"],
+                "bbox": region_info["bbox"],
                 "content": response_text,
                 "analysis": "Direct response (JSON parsing failed)",
                 "confidence": region_info.get("confidence", 1.0),
