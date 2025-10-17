@@ -59,7 +59,7 @@ def save_pipeline_result_to_json(
         >>> result = {
         ...     "metadata": {"total_pages": 5, "source": "document.pdf"},
         ...     "pages": [
-        ...         {"page_num": 1, "regions": [...]},
+        ...         {"page_num": 1, "blocks": [...]},
         ...     ]
         ... }
         >>> save_pipeline_result_to_json(result, Path("result.json"))

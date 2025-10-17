@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from pipeline.types import BBox, Region, regions_to_olmocr_anchor_text
+from pipeline.types import BBox, Block, blocks_to_olmocr_anchor_text
 
 if TYPE_CHECKING:
     import numpy as np
@@ -68,7 +68,7 @@ class OlmOCRVLMSorter:
         except ImportError as e:
             raise ImportError("olmOCR VLM dependencies not available. Please install vllm or transformers.") from e
 
-    def sort(self, regions: list[Region], image: np.ndarray, **kwargs: Any) -> list[Region]:
+    def sort(self, blocks: list[Block], image: np.ndarray, **kwargs: Any) -> list[Block]:
         """Sort regions using olmOCR VLM.
 
         This sorter processes the entire page with VLM and returns a single
@@ -93,7 +93,7 @@ class OlmOCRVLMSorter:
         page_height, page_width = image.shape[:2]
 
         if self.use_anchoring and regions:
-            anchor_text = regions_to_olmocr_anchor_text(regions, page_width, page_height)
+            anchor_text = blocks_to_olmocr_anchor_text(regions, page_width, page_height)
             prompt = self._build_prompt_with_anchor(anchor_text)
         else:
             prompt = self._build_prompt_no_anchor()
@@ -105,10 +105,10 @@ class OlmOCRVLMSorter:
             result_region = Region(
                 type="text",
                 bbox=BBox(0, 0, page_width, page_height),
-                confidence=1.0,
+                detection_confidence=1.0,
                 source="olmocr-vlm",
                 text=response.get("natural_text", ""),
-                reading_order_rank=0,
+                order=0,
             )
 
             logger.debug("Processed page with olmOCR VLM")
@@ -139,14 +139,14 @@ class OlmOCRVLMSorter:
             "for the primary_language, is_rotation_valid, rotation_correction, is_table, and is_diagram parameters."
         )
 
-    def _fallback_sort(self, regions: list[Region]) -> list[Region]:
+    def _fallback_sort(self, blocks: list[Block]) -> list[Block]:
         """Fallback to simple geometric sorting."""
-        if not regions:
-            return regions
+        if not blocks:
+            return blocks
 
-        sorted_regions = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0))
+        sorted_blocks = sorted(blocks, key=lambda r: (r.bbox.y0, r.bbox.x0))
 
-        for rank, region in enumerate(sorted_regions):
-            region.reading_order_rank = rank
+        for rank, block in enumerate(sorted_blocks):
+            block.order = rank
 
-        return sorted_regions
+        return sorted_blocks

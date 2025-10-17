@@ -127,13 +127,13 @@ def test_process_single_image_integration(pipeline_fixture, sample_regions):
     result = pipeline_fixture.process_single_image(image_path)
 
     assert result["image_path"].endswith("98A-004_origin_page-0001.jpg")
-    assert len(result["regions"]) == EXPECTED_REGION_COUNT
+    assert len(result["blocks"]) == EXPECTED_REGION_COUNT
 
-    plain_text_region = next(r for r in result["regions"] if r["type"] == "plain text")
+    plain_text_region = next(r for r in result["blocks"] if r["type"] == "plain text")
     assert plain_text_region["text"] == "text-plain text"
     assert plain_text_region["corrected_text"] == "corrected-text-plain text"
 
-    table_region = next(r for r in result["regions"] if r["type"] == "table")
+    table_region = next(r for r in result["blocks"] if r["type"] == "table")
     assert table_region["structured_text"] == "structured-table"
     assert "corrected_text" not in table_region
 

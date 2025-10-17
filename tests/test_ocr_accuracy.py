@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -127,18 +128,28 @@ def extract_text_from_result(result: dict[str, Any]) -> str:
         return ""
     
     page_result = result["pages"][0]
-    regions = page_result.get("regions", [])
+    regions = page_result.get("blocks", [])
     
     extracted_texts: list[str] = []
-    for region in regions:
-        if "corrected_text" in region:
-            extracted_texts.append(region["corrected_text"])
-        elif "text" in region:
-            extracted_texts.append(region["text"])
-        elif "structured_text" in region:
-            extracted_texts.append(region["structured_text"])
+    for block in regions:
+        if "corrected_text" in block:
+            extracted_texts.append(block["corrected_text"])
+        elif "text" in block:
+            extracted_texts.append(block["text"])
+        elif "structured_text" in block:
+            extracted_texts.append(block["structured_text"])
     
     return "\n".join(extracted_texts)
+
+
+@pytest.fixture
+def test_output_dir() -> Path:
+    """Create timestamp-based test output directory."""
+    # Use tests/output/<timestamp> for persistent storage with unique runs
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    output_dir = Path("tests/output") / timestamp
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return output_dir
 
 
 @pytest.fixture
@@ -150,7 +161,7 @@ def sample_pdf_path() -> Path:
 
 
 @pytest.fixture
-def expected_json_path(tmp_path: Path) -> Path:
+def expected_json_path(test_output_dir: Path) -> Path:
     """Path to expected JSON output (ground truth).
     
     This file should be created by running the baseline test first,
@@ -162,7 +173,7 @@ def expected_json_path(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def expected_markdown_path(tmp_path: Path) -> Path:
+def expected_markdown_path(test_output_dir: Path) -> Path:
     """Path to expected Markdown output (ground truth).
     
     This file should be created after implementing markdown conversion logic.
@@ -197,7 +208,7 @@ def accuracy_threshold() -> float:
 def test_json_output_comparison(
     sample_pdf_path: Path,
     expected_json_path: Path,
-    tmp_path: Path,
+    test_output_dir: Path,
 ) -> None:
     """Test OCR by comparing full JSON output structure.
 
@@ -216,10 +227,6 @@ def test_json_output_comparison(
             f"Expected JSON not found: {expected_json_path}\n"
             f"Run test_json_baseline first to generate ground truth."
         )
-
-    # Use tests/output instead of tmp_path for persistent storage
-    test_output_dir = Path("tests/output")
-    test_output_dir.mkdir(parents=True, exist_ok=True)
 
     # Initialize pipeline with MinerU 2.5 VLM + Gemini 2.5 Flash
     pipeline = Pipeline(
@@ -355,7 +362,7 @@ def test_markdown_output_comparison(
     sample_pdf_path: Path,
     expected_markdown_path: Path,
     accuracy_threshold: float,
-    tmp_path: Path,
+    test_output_dir: Path,
 ) -> None:
     """Test OCR by comparing Markdown output.
 
@@ -381,9 +388,9 @@ def test_markdown_output_comparison(
     # Initialize pipeline with MinerU 2.5 VLM + Gemini 2.5 Flash
     pipeline = Pipeline(
         use_cache=False,
-        cache_dir=tmp_path / "cache",
-        output_dir=tmp_path / "output",
-        temp_dir=tmp_path / "tmp",
+        cache_dir=test_output_dir / "cache",
+        output_dir=test_output_dir / "output",
+        temp_dir=test_output_dir / "tmp",
         backend="gemini",  # ✅ Use Gemini backend
         model="gemini-2.5-flash",
         gemini_tier="free",  # Adjust based on your tier
@@ -410,10 +417,10 @@ def test_markdown_output_comparison(
     metrics = calculate_accuracy(markdown_normalized, expected_normalized)
 
     # Save outputs for debugging
-    output_file = tmp_path / "markdown_output.md"
+    output_file = test_output_dir / "markdown_output.md"
     output_file.write_text(markdown_output, encoding="utf-8")
 
-    expected_file = tmp_path / "markdown_expected.md"
+    expected_file = test_output_dir / "markdown_expected.md"
     expected_file.write_text(expected_markdown, encoding="utf-8")
 
     print(f"\n{'=' * 60}")
@@ -443,7 +450,7 @@ def test_markdown_output_comparison(
 
 @pytest.mark.integration
 @pytest.mark.slow
-def test_json_baseline(sample_pdf_path: Path, tmp_path: Path) -> None:
+def test_json_baseline(sample_pdf_path: Path, test_output_dir: Path) -> None:
     """Generate baseline JSON output for comparison testing.
 
     This test:
@@ -462,8 +469,8 @@ def test_json_baseline(sample_pdf_path: Path, tmp_path: Path) -> None:
         pytest.skip(f"Sample PDF not found: {sample_pdf_path}")
 
     # Use tests/output instead of tmp_path for persistent storage
-    test_output_dir = Path("tests/output")
-    test_output_dir.mkdir(parents=True, exist_ok=True)
+    # test_output_dir passed as fixture
+    # test_output_dir already created by fixture
 
     # Initialize pipeline with MinerU 2.5 VLM + Gemini 2.5 Flash
     pipeline = Pipeline(
@@ -502,7 +509,7 @@ def test_json_baseline(sample_pdf_path: Path, tmp_path: Path) -> None:
 
     if page_json_file.exists():
         page_data = json.loads(page_json_file.read_text())
-        num_regions = len(page_data.get("regions", []))
+        num_regions = len(page_data.get("blocks", []))
     else:
         num_regions = 0
 
@@ -532,7 +539,7 @@ def test_json_baseline(sample_pdf_path: Path, tmp_path: Path) -> None:
 
 @pytest.mark.integration
 @pytest.mark.slow
-def test_markdown_baseline(sample_pdf_path: Path, tmp_path: Path) -> None:
+def test_markdown_baseline(sample_pdf_path: Path, test_output_dir: Path) -> None:
     """Generate baseline Markdown output for comparison testing.
 
     This test:
@@ -553,8 +560,8 @@ def test_markdown_baseline(sample_pdf_path: Path, tmp_path: Path) -> None:
     from pipeline.conversion.output.markdown import document_dict_to_markdown
 
     # Use tests/output instead of tmp_path for persistent storage
-    test_output_dir = Path("tests/output")
-    test_output_dir.mkdir(parents=True, exist_ok=True)
+    # test_output_dir passed as fixture
+    # test_output_dir already created by fixture
 
     # Initialize pipeline with MinerU 2.5 VLM + Gemini 2.5 Flash
     pipeline = Pipeline(
@@ -661,7 +668,7 @@ def test_normalize_json() -> None:
             {
                 "processed_at": "2024-01-01T00:00:00",
                 "image_path": "/full/path/to/image.jpg",
-                "regions": [],
+                "blocks": [],
             }
         ],
     }

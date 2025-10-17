@@ -14,7 +14,7 @@ import logging
 import statistics
 from typing import TYPE_CHECKING, Any
 
-from pipeline.types import Region
+from pipeline.types import Block
 
 if TYPE_CHECKING:
     import numpy as np
@@ -59,7 +59,7 @@ class MinerULayoutReaderSorter:
 
         logger.info("MinerU LayoutReader sorter initialized")
 
-    def sort(self, regions: list[Region], image: np.ndarray, **kwargs: Any) -> list[Region]:
+    def sort(self, blocks: list[Block], image: np.ndarray, **kwargs: Any) -> list[Block]:
         """Sort regions using LayoutReader model.
 
         Args:
@@ -68,46 +68,46 @@ class MinerULayoutReaderSorter:
             **kwargs: Additional context (unused)
 
         Returns:
-            Sorted regions with reading_order_rank added
+            Sorted blocks with reading_order_rank added
 
         Example:
             >>> sorter = MinerULayoutReaderSorter()
-            >>> sorted_regions = sorter.sort(regions, image)
-            >>> sorted_regions[0]["reading_order_rank"]
+            >>> sorted_blocks = sorter.sort(regions, image)
+            >>> sorted_blocks[0]["reading_order_rank"]
             0
         """
-        if not regions:
-            return regions
+        if not blocks:
+            return blocks
 
         page_height, page_width = image.shape[:2]
 
-        line_height = self._estimate_line_height(regions)
-        lines_data = self._split_regions_into_lines(regions, line_height, page_width, page_height)
+        line_height = self._estimate_line_height(blocks)
+        lines_data = self._split_regions_into_lines(blocks, line_height, page_width, page_height)
 
         if len(lines_data) > MAX_LINES:
             logger.warning("Too many lines (%d > %d), falling back to simple sort", len(lines_data), MAX_LINES)
-            return self._fallback_sort(regions)
+            return self._fallback_sort(blocks)
 
         try:
             sorted_line_indices = self._sort_lines_with_layoutreader(lines_data, page_width, page_height)
         except Exception as e:
             logger.error("LayoutReader failed: %s, falling back to simple sort", e)
-            return self._fallback_sort(regions)
+            return self._fallback_sort(blocks)
 
-        sorted_regions = self._assign_region_ordering(regions, lines_data, sorted_line_indices)
+        sorted_blocks = self._assign_region_ordering(blocks, lines_data, sorted_line_indices)
 
-        logger.debug("Sorted %d regions using LayoutReader", len(sorted_regions))
+        logger.debug("Sorted blocks using LayoutReader", len(sorted_blocks))
 
-        return sorted_regions
+        return sorted_blocks
 
-    def _estimate_line_height(self, regions: list[Region]) -> float:
-        """Estimate typical line height from text regions."""
+    def _estimate_line_height(self, blocks: list[Block]) -> float:
+        """Estimate typical line height from text blocks."""
         text_types = {"plain text", "text", "title"}
         heights = []
 
-        for region in regions:
-            if region.type in text_types and region.bbox is not None:
-                heights.append(region.bbox.height)
+        for block in blocks:
+            if block.type in text_types and block.bbox is not None:
+                heights.append(block.bbox.height)
 
         if heights:
             return statistics.median(heights)
@@ -116,26 +116,26 @@ class MinerULayoutReaderSorter:
 
     def _split_regions_into_lines(
         self,
-        regions: list[Region],
+        blocks: list[Block],
         line_height: float,
         page_width: int,
         page_height: int,
     ) -> list[dict[str, Any]]:
-        """Split regions into line-level boxes.
+        """Split blocks into line-level boxes.
 
         For large text blocks, split into multiple lines.
-        For other regions (images, tables), use as is.
+        For other blocks (images, tables), use as is.
         """
         lines_data = []
 
-        for region_idx, region in enumerate(regions):
-            bbox = region.bbox
+        for block_idx, block in enumerate(blocks):
+            bbox = block.bbox
             if bbox is None:
-                continue  # Skip regions without bbox
+                continue  # Skip blocks without bbox
 
-            region_type = region.type
+            block_type = block.type
 
-            if region_type in {"plain text", "text", "title"}:
+            if block_type in {"plain text", "text", "title"}:
                 block_height = bbox.height
 
                 if block_height > line_height * 2:
@@ -148,14 +148,14 @@ class MinerULayoutReaderSorter:
                         lines_data.append(
                             {
                                 "bbox": [int(bbox.x0), int(y_start), int(bbox.x1), int(y_end)],
-                                "region_idx": region_idx,
+                                "block_idx": block_idx,
                             }
                         )
                 else:
                     lines_data.append(
                         {
                             "bbox": [int(bbox.x0), int(bbox.y0), int(bbox.x1), int(bbox.y1)],
-                            "region_idx": region_idx,
+                            "block_idx": block_idx,
                         }
                     )
             else:
@@ -169,7 +169,7 @@ class MinerULayoutReaderSorter:
                     lines_data.append(
                         {
                             "bbox": [int(bbox.x0), int(y_start), int(bbox.x1), int(y_end)],
-                            "region_idx": region_idx,
+                            "block_idx": block_idx,
                         }
                     )
 
@@ -218,50 +218,50 @@ class MinerULayoutReaderSorter:
 
     def _assign_region_ordering(
         self,
-        regions: list[Region],
+        blocks: list[Block],
         lines_data: list[dict[str, Any]],
         sorted_line_indices: list[int],
-    ) -> list[Region]:
+    ) -> list[Block]:
         """Assign region-level ordering based on line-level ordering.
 
         Each region may have multiple lines. We use the median line index
         as the region's ordering.
         """
-        region_to_line_positions: dict[int, list[int]] = {}
+        block_to_line_positions: dict[int, list[int]] = {}
 
         for line_position, line_idx in enumerate(sorted_line_indices):
             line = lines_data[line_idx]
-            region_idx = line["region_idx"]
+            block_idx = line["block_idx"]
 
-            if region_idx not in region_to_line_positions:
-                region_to_line_positions[region_idx] = []
+            if block_idx not in block_to_line_positions:
+                block_to_line_positions[block_idx] = []
 
-            region_to_line_positions[region_idx].append(line_position)
+            block_to_line_positions[block_idx].append(line_position)
 
-        region_orders = []
-        for region_idx, region in enumerate(regions):
-            if region_idx in region_to_line_positions:
-                line_positions = region_to_line_positions[region_idx]
+        block_orders = []
+        for block_idx, block in enumerate(blocks):
+            if block_idx in block_to_line_positions:
+                line_positions = block_to_line_positions[block_idx]
                 median_position = statistics.median(line_positions)
             else:
                 median_position = float("inf")
 
-            region_orders.append((median_position, region_idx, region))
+            block_orders.append((median_position, block_idx, block))
 
-        region_orders.sort(key=lambda x: x[0])
+        block_orders.sort(key=lambda x: x[0])
 
-        sorted_regions = []
-        for rank, (_, _, region) in enumerate(region_orders):
-            region.reading_order_rank = rank
-            sorted_regions.append(region)
+        sorted_blocks = []
+        for rank, (_, _, block) in enumerate(block_orders):
+            block.order = rank
+            sorted_blocks.append(block)
 
-        return sorted_regions
+        return sorted_blocks
 
-    def _fallback_sort(self, regions: list[Region]) -> list[Region]:
+    def _fallback_sort(self, blocks: list[Block]) -> list[Block]:
         """Fallback to simple geometric sorting."""
-        sorted_regions = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0))
+        sorted_blocks = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0))
 
-        for rank, region in enumerate(sorted_regions):
-            region.reading_order_rank = rank
+        for rank, region in enumerate(sorted_blocks):
+            block.order = rank
 
-        return sorted_regions
+        return sorted_blocks

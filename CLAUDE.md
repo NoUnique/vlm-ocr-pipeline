@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Communication Guidelines
+
+**IMPORTANT: Respond in Korean (한국어) when interacting with users.** Code, documentation, and technical terms should remain in English, but explanations and conversations should be in Korean for consistency and better understanding.
+
 ## Project Overview
 
 VLM OCR Pipeline: A modular document processing system that combines layout detection (DocLayout-YOLO, MinerU, olmOCR) with Vision Language Models (OpenAI, Gemini) for intelligent text extraction and correction. The system processes PDFs and images through a four-stage pipeline: document conversion, layout detection, reading order analysis, and text recognition with VLM-powered correction.

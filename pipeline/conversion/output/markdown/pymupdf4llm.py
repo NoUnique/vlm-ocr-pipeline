@@ -82,7 +82,7 @@ def match_region_with_text_spans(
     Returns:
         Best matching text span or None
     """
-    region_bbox_list = region.get("bbox", [])
+    region_bbox_list = block.get("bbox", [])
     if len(region_bbox_list) < 4:  # noqa: PLR2004 - bbox always needs 4 coordinates
         return None
 
@@ -151,8 +151,8 @@ def region_to_markdown_with_font(  # noqa: PLR0911
     if header_identifier is None:
         header_identifier = FontSizeHeaderIdentifier()
 
-    region_type = region.get("type", "").lower()
-    text = region.get("corrected_text") or region.get("text", "")
+    region_type = block.get("type", "").lower()
+    text = block.get("corrected_text") or block.get("text", "")
 
     if not text:
         return ""
@@ -206,7 +206,7 @@ def regions_to_markdown_with_fonts(
         auxiliary_info: Auxiliary info dict containing 'text_spans'
         header_identifier: Font size-based header identifier
         auto_detect_headers: Auto-detect header levels from font sizes
-        preserve_reading_order: Sort by reading_order_rank
+        preserve_reading_order: Sort by order
         iou_threshold: IoU threshold for region-span matching
 
     Returns:
@@ -236,19 +236,19 @@ def regions_to_markdown_with_fonts(
         header_identifier = FontSizeHeaderIdentifier()
 
     # Sort by reading order if available
-    sorted_regions = regions
+    sorted_blocks = regions
     if preserve_reading_order:
-        ranked = [r for r in regions if r.get("reading_order_rank") is not None]
-        unranked = [r for r in regions if r.get("reading_order_rank") is None]
+        ranked = [r for r in regions if r.get("order") is not None]
+        unranked = [r for r in regions if r.get("order") is None]
 
         if ranked:
-            sorted_regions = sorted(ranked, key=lambda r: r["reading_order_rank"])
-            sorted_regions.extend(unranked)
+            sorted_blocks = sorted(ranked, key=lambda r: r["order"])
+            sorted_blocks.extend(unranked)
 
     lines: list[str] = []
     prev_was_header = False
 
-    for region in sorted_regions:
+    for region in sorted_blocks:
         md_text = region_to_markdown_with_font(region, text_spans, header_identifier, iou_threshold)
 
         if not md_text:
@@ -289,7 +289,7 @@ def to_markdown(
     Example:
         >>> # From page result with auxiliary_info
         >>> page_result = {
-        ...     "processed_regions": [...],
+        ...     "processed_blocks": [...],
         ...     "auxiliary_info": {
         ...         "text_spans": [...]  # PyMuPDF spans with size, font
         ...     }
@@ -310,16 +310,14 @@ def to_markdown(
         # Extract regions and auxiliary_info
         auxiliary_info = json_data.get("auxiliary_info")
 
-        if "processed_regions" in json_data:
-            regions = json_data["processed_regions"]
-        elif "regions" in json_data:
+        if "regions" in json_data:
             regions = json_data["regions"]
         elif "pages" in json_data:
             # Multi-page result - concatenate all regions and auxiliary info
             all_regions = []
             all_text_spans = []
             for page_data in json_data["pages"]:
-                page_regions = page_data.get("processed_regions") or page_data.get("regions", [])
+                page_regions = page_data.get("blocks", [])
                 all_regions.extend(page_regions)
 
                 # Extract text spans from page's auxiliary_info
@@ -330,7 +328,7 @@ def to_markdown(
             regions = all_regions
             auxiliary_info = {"text_spans": all_text_spans} if all_text_spans else None
         else:
-            raise ValueError("Dict must contain 'pages', 'regions', or 'processed_regions' key")
+            raise ValueError("Dict must contain 'pages', 'regions', or 'processed_blocks' key")
 
         return regions_to_markdown_with_fonts(
             regions,

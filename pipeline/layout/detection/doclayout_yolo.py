@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ...types import BBox, Region, RegionTypeMapper
+from ...types import BBox, Block, BlockTypeMapper
 
 if TYPE_CHECKING:
     import numpy as np
@@ -25,7 +25,7 @@ class DocLayoutYOLODetector:
     """Detector using DocLayout-YOLO model.
 
     This detector wraps the existing DocLayoutYOLO model and provides
-    output in the unified Region format.
+    output in the unified Block format.
 
     BBox Format: [x, y, width, height] - Top-Left origin
     """
@@ -49,7 +49,7 @@ class DocLayoutYOLODetector:
 
         logger.info("DocLayout-YOLO detector initialized")
 
-    def detect(self, image: np.ndarray) -> list[Region]:
+    def detect(self, image: np.ndarray) -> list[Block]:
         """Detect layout regions in image.
 
         Args:
@@ -71,27 +71,27 @@ class DocLayoutYOLODetector:
         raw_results = self.model.predict(image, conf=self.confidence_threshold)
         logger.debug("Detected %d regions with DocLayout-YOLO", len(raw_results))
 
-        return [self._to_region(r) for r in raw_results]
+        return [self._to_block(r) for r in raw_results]
 
-    def _to_region(self, raw_data: dict) -> Region:
-        """Convert DocLayout-YOLO result to unified Region format.
+    def _to_block(self, raw_data: dict) -> Block:
+        """Convert DocLayout-YOLO result to unified Block format.
 
         Args:
             raw_data: {"type": str, "coords": [x, y, w, h], "confidence": float}
 
         Returns:
-            Unified Region dataclass instance with BBox and standardized type
+            Unified Block dataclass instance with BBox and standardized type
         """
         coords = raw_data["coords"]
         bbox = BBox.from_xywh(*coords[:4])
 
         # Map detector-specific type to standardized type
         original_type = raw_data["type"]
-        standardized_type = RegionTypeMapper.map_type(original_type, "doclayout-yolo")
+        standardized_type = BlockTypeMapper.map_type(original_type, "doclayout-yolo")
 
-        return Region(
+        return Block(
             type=standardized_type,
             bbox=bbox,
-            confidence=float(raw_data["confidence"]),
+            detection_confidence=float(raw_data["confidence"]),
             source="doclayout-yolo",
         )

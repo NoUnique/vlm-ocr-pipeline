@@ -22,7 +22,7 @@ from .layout.ordering import create_sorter as create_sorter_impl, validate_combi
 from .misc import tz_now
 from .recognition import TextRecognizer
 from .recognition.api.ratelimit import rate_limiter
-from .types import Region
+from .types import Block
 
 logger = logging.getLogger(__name__)
 
@@ -226,30 +226,30 @@ class Pipeline:
         image_np = image_loader.load_image(image_path)
 
         # Stage 2: Detect layout regions (new detector interface)
-        regions: list[Region] = self.detector.detect(image_np) if self.detector else []
+        blocks: list[Block] = self.detector.detect(image_np) if self.detector else []
 
         # Stage 3: Sort regions by reading order (new sorter interface)
         if self.sorter:
-            sorted_regions: list[Region] = self.sorter.sort(regions, image_np)
+            sorted_blocks: list[Block] = self.sorter.sort(blocks, image_np)
         else:
-            sorted_regions = regions
+            sorted_blocks = blocks
 
         # Stage 4: Recognition - extract text from regions
         if self.sorter_name == "olmocr-vlm":
-            processed_regions: list[Region] = sorted_regions
+            processed_blocks: list[Block] = sorted_blocks
         else:
-            processed_regions = self.recognizer.process_regions(image_np, sorted_regions)
+            processed_blocks = self.recognizer.process_regions(image_np, sorted_blocks)
 
         # Correct text for text regions
-        for region in processed_regions:
-            if region.type in ["plain text", "title", "list"] and region.text:
-                corrected = self.recognizer.correct_text(region.text)
+        for block in processed_blocks:
+            if block.type in ["plain text", "title", "list"] and block.text:
+                corrected = self.recognizer.correct_text(block.text)
                 if isinstance(corrected, str):
-                    region.corrected_text = corrected
+                    block.corrected_text = corrected
 
         result = {
             "image_path": str(image_path),
-            "regions": [r.to_dict() for r in processed_regions],
+            "blocks": [b.to_dict() for b in processed_blocks],
             "processed_at": tz_now().isoformat(),
         }
 
@@ -369,32 +369,32 @@ class Pipeline:
             )
 
             # Stage 2: Detect layout regions (new detector interface)
-            regions: list[Region] = self.detector.detect(page_image) if self.detector else []
+            blocks: list[Block] = self.detector.detect(page_image) if self.detector else []
 
             # Stage 3: Sort regions by reading order (new sorter interface)
             if self.sorter:
-                sorted_regions: list[Region] = self.sorter.sort(regions, page_image, pymupdf_page=pymupdf_page)
+                sorted_blocks: list[Block] = self.sorter.sort(blocks, page_image, pymupdf_page=pymupdf_page)
             else:
                 # No sorting - keep original order
-                sorted_regions = regions
+                sorted_blocks = blocks
 
             # Extract column layout info if available (for output compatibility)
-            column_layout = self._extract_column_layout(sorted_regions)
+            column_layout = self._extract_column_layout(sorted_blocks)
 
             # Stage 4: Recognition - extract text from regions
             # Note: olmocr-vlm sorter already includes text, skip recognition
             if self.sorter_name == "olmocr-vlm":
-                processed_regions = sorted_regions
+                processed_blocks = sorted_blocks
             else:
-                processed_regions = self.recognizer.process_regions(page_image, sorted_regions)
+                processed_blocks = self.recognizer.process_regions(page_image, sorted_blocks)
 
             # Check for rate limit errors
-            if self._check_for_rate_limit_errors({"regions": processed_regions}):
+            if self._check_for_rate_limit_errors({"blocks": processed_blocks}):
                 logger.warning("Rate limit detected on page %d. Stopping processing.", page_num)
                 return None, True
 
             # Compose page-level text
-            raw_text = self._compose_page_text(processed_regions)
+            raw_text = self._compose_page_text(processed_blocks)
 
             # Correct text
             corrected_text, correction_confidence, stop_due_to_correction = self._perform_page_correction(
@@ -412,8 +412,8 @@ class Pipeline:
                 pdf_path,
                 page_num,
                 page_image,
-                sorted_regions,
-                processed_regions,
+                sorted_blocks,
+                processed_blocks,
                 raw_text,
                 corrected_text,
                 correction_confidence,
@@ -426,7 +426,7 @@ class Pipeline:
             return page_result, False
 
         except Exception as e:
-            logger.error("Error processing page %d: %s", page_num, e)
+            logger.error("Error processing page %d: %s", page_num, e, exc_info=True)
             error_page_result = {
                 "page_number": page_num,
                 "error": str(e),
@@ -491,7 +491,7 @@ class Pipeline:
         page_num: int,
         page_image: Any,
         regions: Sequence[Region],
-        processed_regions: Sequence[Region],
+        processed_blocks: Sequence[Region],
         raw_text: str,
         corrected_text: str,
         correction_confidence: float,
@@ -505,7 +505,7 @@ class Pipeline:
             page_num: Page number
             page_image: Page image array
             regions: Detected regions
-            processed_regions: Regions with extracted text
+            processed_blocks: Regions with extracted text
             raw_text: Raw extracted text
             corrected_text: VLM-corrected text
             correction_confidence: Correction confidence score
@@ -521,8 +521,7 @@ class Pipeline:
             "image_path": str(self.temp_dir / f"{pdf_path.stem}_page_{page_num}.jpg"),
             "width": int(page_width),
             "height": int(page_height),
-            "regions": [r.to_dict() for r in regions],
-            "processed_regions": [r.to_dict() for r in processed_regions],
+            "blocks": [b.to_dict() for b in processed_blocks],  # Use processed_blocks (includes text)
             "raw_text": raw_text,
             "corrected_text": corrected_text,
             "correction_confidence": correction_confidence,
@@ -568,6 +567,9 @@ class Pipeline:
             "pdf_path": str(pdf_path),
             "num_pages": total_pages,
             "processed_pages": len(processed_pages),
+            "detected_by": self.detector_name,
+            "ordered_by": self.sorter_name,
+            "recognized_by": f"{self.backend}/{self.model}",
             "output_directory": str(summary_output_dir),
             "processed_at": tz_now().isoformat(),
             "status_summary": {k: v for k, v in status_counts.items() if v > 0},
@@ -594,7 +596,7 @@ class Pipeline:
             status = "partial" if page_result.get("error") else "complete"
             status_counts[status] += 1
             pages_summary.append(
-                {"page": page_no, "status": status, "file_suffix": "" if status == "complete" else status}
+                {"id": page_no, "status": status}
             )
 
         return pages_summary, status_counts
@@ -610,11 +612,11 @@ class Pipeline:
     def _check_for_rate_limit_errors(self, page_result: dict[str, Any]) -> bool:
         """Check if page result contains rate limit errors."""
         try:
-            # Check in regions
-            regions = page_result.get("regions", [])
-            if isinstance(regions, list):
-                for region in regions:
-                    if isinstance(region, dict) and region.get("error") in ["gemini_rate_limit", "rate_limit_daily"]:
+            # Check in blocks
+            blocks = page_result.get("blocks", [])
+            if isinstance(blocks, list):
+                for block in blocks:
+                    if isinstance(block, dict) and block.get("error") in ["gemini_rate_limit", "rate_limit_daily"]:
                         return True
 
             # Check in corrected_text (can be string or dict)
@@ -648,10 +650,10 @@ class Pipeline:
                 if page_result.get("error"):
                     return True
 
-                # Check for region-level errors
-                regions = page_result.get("regions", [])
-                for region in regions:
-                    if isinstance(region, dict) and region.get("error"):
+                # Check for block-level errors
+                blocks = page_result.get("blocks", [])
+                for block in blocks:
+                    if isinstance(block, dict) and block.get("error"):
                         return True
 
                 # Check for text correction errors
@@ -753,7 +755,7 @@ class Pipeline:
 
         return summary
 
-    def _extract_column_layout(self, regions: list[Region]) -> dict[str, Any] | None:
+    def _extract_column_layout(self, blocks: list[Block]) -> dict[str, Any] | None:
         """Extract column layout information from sorted regions.
 
         Args:
@@ -762,14 +764,14 @@ class Pipeline:
         Returns:
             Column layout dict or None
         """
-        # Check if any regions have column_index
-        has_columns = any(r.column_index is not None for r in regions)
+        # Check if any blocks have column_index
+        has_columns = any(r.column_index is not None for r in blocks)
 
         if not has_columns:
             return None
 
         # Extract unique columns
-        column_indices = {r.column_index for r in regions if r.column_index is not None}
+        column_indices = {r.column_index for r in blocks if r.column_index is not None}
 
         if not column_indices:
             return None
@@ -777,12 +779,12 @@ class Pipeline:
         # Build column layout info (filter out None values)
         columns = []
         for col_idx in sorted(column_indices):
-            col_regions = [r for r in regions if r.column_index == col_idx]
-            if col_regions:
+            col_blocks = [r for r in blocks if r.column_index == col_idx]
+            if col_blocks:
                 # Get bbox if available
-                first_region = col_regions[0]
-                if first_region.bbox:
-                    bbox = first_region.bbox
+                first_block = col_blocks[0]
+                if first_block.bbox:
+                    bbox = first_block.bbox
                     columns.append(
                         {
                             "index": col_idx,
@@ -798,7 +800,7 @@ class Pipeline:
 
         return {"columns": columns}
 
-    def _compose_page_text(self, processed_regions: Sequence[Region]) -> str:
+    def _compose_page_text(self, processed_blocks: Sequence[Region]) -> str:
         """Compose page-level raw text from processed regions in reading order.
 
         Reading order: Uses reading_order_rank if available, otherwise top-to-bottom (y),
@@ -806,25 +808,25 @@ class Pipeline:
         newlines within each region's text.
 
         Args:
-            processed_regions: List of processed regions with text content
+            processed_blocks: List of processed regions with text content
 
         Returns:
             Composed text in natural reading order
         """
-        if not processed_regions:
+        if not processed_blocks:
             return ""
 
         text_like_types = {"plain text", "text", "title", "list"}
         sortable_regions: list[tuple[int, int, str, int | None]] = []
 
-        for region in processed_regions:
-            if region.type not in text_like_types:
+        for block in processed_blocks:
+            if block.type not in text_like_types:
                 continue
-            x, y = region.bbox.x0, region.bbox.y0
-            text_value = region.text
+            x, y = block.bbox.x0, block.bbox.y0
+            text_value = block.text
             if text_value and text_value.strip():
                 # Keep internal newlines; trim outer whitespace only
-                order_rank = region.reading_order_rank
+                order_rank = block.order
                 sortable_regions.append((y, x, text_value.strip(), order_rank))
 
         # Sort by reading order rank if available, otherwise by y then x

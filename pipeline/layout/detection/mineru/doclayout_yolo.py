@@ -17,7 +17,7 @@ from mineru.model.layout.doclayoutyolo import DocLayoutYOLOModel
 from mineru.utils.enum_class import ModelPath
 from mineru.utils.models_download_utils import auto_download_and_get_model_root_path
 
-from ....types import BBox, Region, RegionTypeMapper
+from ....types import BBox, Block, BlockTypeMapper
 
 if TYPE_CHECKING:
     import numpy as np
@@ -63,7 +63,7 @@ class MinerUDocLayoutYOLODetector:
 
         logger.info("MinerU DocLayout-YOLO detector initialized")
 
-    def detect(self, image: np.ndarray) -> list[Region]:
+    def detect(self, image: np.ndarray) -> list[Block]:
         """Detect layout regions in image.
 
         Args:
@@ -82,16 +82,16 @@ class MinerUDocLayoutYOLODetector:
 
         logger.debug("Detected %d regions with MinerU DocLayout-YOLO", len(raw_results))
 
-        return [self._to_region(r) for r in raw_results]
+        return [self._to_block(r) for r in raw_results]
 
-    def _to_region(self, raw_data: dict[str, Any]) -> Region:
-        """Convert MinerU DocLayout-YOLO result to unified Region format.
+    def _to_block(self, raw_data: dict[str, Any]) -> Block:
+        """Convert MinerU DocLayout-YOLO result to unified Block format.
 
         Args:
             raw_data: {"category_id": int, "poly": [8 points], "score": float}
 
         Returns:
-            Unified Region with BBox and standardized type
+            Unified Block with BBox and standardized type
         """
         poly = raw_data["poly"]
         xmin = min(poly[0], poly[2], poly[4], poly[6])
@@ -105,12 +105,12 @@ class MinerUDocLayoutYOLODetector:
         original_type = self._category_to_type(category_id)
 
         # Map to standardized type
-        standardized_type = RegionTypeMapper.map_type(original_type, "mineru-doclayout-yolo")
+        standardized_type = BlockTypeMapper.map_type(original_type, "mineru-doclayout-yolo")
 
-        return Region(
+        return Block(
             type=standardized_type,
             bbox=bbox,
-            confidence=float(raw_data["score"]),
+            detection_confidence=float(raw_data["score"]),
             source="mineru-doclayout-yolo",
         )
 

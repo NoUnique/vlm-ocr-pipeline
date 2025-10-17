@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from mineru.backend.vlm.vlm_analyze import ModelSingleton
 
-from ....types import BBox, Region, RegionTypeMapper
+from ....types import BBox, Block, BlockTypeMapper
 
 if TYPE_CHECKING:
     import numpy as np
@@ -111,7 +111,7 @@ class MinerUVLMDetector:
             detection_only,
         )
 
-    def detect(self, image: np.ndarray) -> list[Region]:
+    def detect(self, image: np.ndarray) -> list[Block]:
         """Detect layout regions using MinerU VLM.
 
         Args:
@@ -165,10 +165,10 @@ class MinerUVLMDetector:
         # Get image dimensions for bbox scaling
         img_height, img_width = image.shape[:2]
 
-        return [self._to_region(block, img_width, img_height) for block in raw_blocks]
+        return [self._to_block(block, img_width, img_height) for block in raw_blocks]
 
-    def _to_region(self, block: dict[str, Any], img_width: int, img_height: int) -> Region:
-        """Convert MinerU block to unified Region format.
+    def _to_block(self, block: dict[str, Any], img_width: int, img_height: int) -> Block:
+        """Convert MinerU block to unified Block format.
 
         Args:
             block: {"type": str, "bbox": [x0, y0, x1, y1], "text": str (optional), "index": int (optional)}
@@ -176,7 +176,7 @@ class MinerUVLMDetector:
             img_height: Image height in pixels
 
         Returns:
-            Unified Region dataclass instance with BBox and standardized type
+            Unified Block dataclass instance with BBox and standardized type
         """
         # MinerU returns normalized coordinates (0.0-1.0), convert to pixel coordinates
         normalized_bbox = block["bbox"]
@@ -196,19 +196,21 @@ class MinerUVLMDetector:
         # Map to standardized type (MinerU VLM already uses standardized types,
         # but we apply the mapper for consistency and future-proofing)
         original_type = block["type"]
-        standardized_type = RegionTypeMapper.map_type(original_type, "mineru-vlm")
+        standardized_type = BlockTypeMapper.map_type(original_type, "mineru-vlm")
 
         # MinerU VLM returns 'content' field with OCR text
         # Note: This text will only be used if no separate recognizer is configured,
         # or if the recognizer is explicitly set to use detector's content
-        region = Region(
+        # MinerU VLM 2.5 does not provide confidence scores
+        confidence_value = block.get("confidence")
+        block_obj = Block(
             type=standardized_type,
             bbox=bbox,
-            confidence=float(block.get("confidence", 1.0)),
+            detection_confidence=float(confidence_value) if confidence_value is not None else None,
             source="mineru-vlm",
             text=block.get("content"),  # MinerU uses 'content', not 'text'
             index=block.get("index"),
-            reading_order_rank=block.get("index"),
+            order=block.get("index"),  # Use index as reading order
         )
 
-        return region
+        return block_obj

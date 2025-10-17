@@ -23,10 +23,10 @@ RGB_IMAGE_NDIM = 3  # RGB image has 3 dimensions (H, W, C)
 # ==================== Standardized Region Types ====================
 # Based on MinerU 2.5 VLM (most comprehensive type system)
 
-class RegionType:
-    """Standardized region types based on MinerU 2.5 VLM.
+class BlockType:
+    """Standardized block types based on MinerU 2.5 VLM.
 
-    This provides a canonical set of region types that all detectors
+    This provides a canonical set of block types that all detectors
     should map to for consistent processing throughout the pipeline.
     """
 
@@ -86,69 +86,69 @@ class RegionType:
 
 
 # Type mapping dictionaries for each detector
-class RegionTypeMapper:
-    """Maps detector-specific region types to standardized types."""
+class BlockTypeMapper:
+    """Maps detector-specific block types to standardized types."""
 
     # DocLayout-YOLO (this project) - model-dependent, these are common mappings
     DOCLAYOUT_YOLO_MAP: dict[str, str] = {
-        "title": RegionType.TITLE,
-        "plain text": RegionType.TEXT,
-        "text": RegionType.TEXT,
-        "figure": RegionType.IMAGE,
-        "image": RegionType.IMAGE,
-        "table": RegionType.TABLE,
-        "equation": RegionType.INTERLINE_EQUATION,
-        "list": RegionType.LIST,
-        "list_item": RegionType.LIST,
+        "title": BlockType.TITLE,
+        "plain text": BlockType.TEXT,
+        "text": BlockType.TEXT,
+        "figure": BlockType.IMAGE,
+        "image": BlockType.IMAGE,
+        "table": BlockType.TABLE,
+        "equation": BlockType.INTERLINE_EQUATION,
+        "list": BlockType.LIST,
+        "list_item": BlockType.LIST,
     }
 
     # MinerU DocLayout-YOLO (fixed mapping)
     MINERU_DOCLAYOUT_YOLO_MAP: dict[str, str] = {
-        "title": RegionType.TITLE,
-        "plain text": RegionType.TEXT,
-        "abandon": RegionType.DISCARDED,
-        "figure": RegionType.IMAGE,
-        "figure_caption": RegionType.IMAGE_CAPTION,
-        "table": RegionType.TABLE,
-        "table_caption": RegionType.TABLE_CAPTION,
-        "table_footnote": RegionType.TABLE_FOOTNOTE,
-        "isolate_formula": RegionType.INTERLINE_EQUATION,
-        "formula_caption": RegionType.IMAGE_CAPTION,  # Treat as caption
+        "title": BlockType.TITLE,
+        "plain text": BlockType.TEXT,
+        "abandon": BlockType.DISCARDED,
+        "figure": BlockType.IMAGE,
+        "figure_caption": BlockType.IMAGE_CAPTION,
+        "table": BlockType.TABLE,
+        "table_caption": BlockType.TABLE_CAPTION,
+        "table_footnote": BlockType.TABLE_FOOTNOTE,
+        "isolate_formula": BlockType.INTERLINE_EQUATION,
+        "formula_caption": BlockType.IMAGE_CAPTION,  # Treat as caption
     }
 
     # MinerU VLM 2.5 (already standardized, identity mapping)
     MINERU_VLM_MAP: dict[str, str] = {
-        "text": RegionType.TEXT,
-        "title": RegionType.TITLE,
-        "image": RegionType.IMAGE,
-        "image_body": RegionType.IMAGE_BODY,
-        "image_caption": RegionType.IMAGE_CAPTION,
-        "image_footnote": RegionType.IMAGE_FOOTNOTE,
-        "table": RegionType.TABLE,
-        "table_body": RegionType.TABLE_BODY,
-        "table_caption": RegionType.TABLE_CAPTION,
-        "table_footnote": RegionType.TABLE_FOOTNOTE,
-        "interline_equation": RegionType.INTERLINE_EQUATION,
-        "inline_equation": RegionType.INLINE_EQUATION,
-        "code": RegionType.CODE,
-        "code_body": RegionType.CODE_BODY,
-        "code_caption": RegionType.CODE_CAPTION,
-        "algorithm": RegionType.ALGORITHM,
-        "list": RegionType.LIST,
-        "header": RegionType.HEADER,
-        "footer": RegionType.FOOTER,
-        "page_number": RegionType.PAGE_NUMBER,
-        "page_footnote": RegionType.PAGE_FOOTNOTE,
-        "ref_text": RegionType.REF_TEXT,
-        "phonetic": RegionType.PHONETIC,
-        "aside_text": RegionType.ASIDE_TEXT,
-        "index": RegionType.INDEX,
-        "discarded": RegionType.DISCARDED,
+        "text": BlockType.TEXT,
+        "title": BlockType.TITLE,
+        "image": BlockType.IMAGE,
+        "image_body": BlockType.IMAGE_BODY,
+        "image_caption": BlockType.IMAGE_CAPTION,
+        "image_footnote": BlockType.IMAGE_FOOTNOTE,
+        "table": BlockType.TABLE,
+        "table_body": BlockType.TABLE_BODY,
+        "table_caption": BlockType.TABLE_CAPTION,
+        "table_footnote": BlockType.TABLE_FOOTNOTE,
+        "interline_equation": BlockType.INTERLINE_EQUATION,
+        "inline_equation": BlockType.INLINE_EQUATION,
+        "code": BlockType.CODE,
+        "code_body": BlockType.CODE_BODY,
+        "code_caption": BlockType.CODE_CAPTION,
+        "algorithm": BlockType.ALGORITHM,
+        "list": BlockType.LIST,
+        "header": BlockType.HEADER,
+        "footer": BlockType.FOOTER,
+        "page_number": BlockType.PAGE_NUMBER,
+        "page_footnote": BlockType.PAGE_FOOTNOTE,
+        "ref_text": BlockType.REF_TEXT,
+        "phonetic": BlockType.PHONETIC,
+        "aside_text": BlockType.ASIDE_TEXT,
+        "index": BlockType.INDEX,
+        "discarded": BlockType.DISCARDED,
     }
 
     # olmOCR VLM (always returns "text")
     OLMOCR_VLM_MAP: dict[str, str] = {
-        "text": RegionType.TEXT,
+        "text": BlockType.TEXT,
     }
 
     @classmethod
@@ -156,17 +156,17 @@ class RegionTypeMapper:
         """Map a detector-specific type to standardized type.
 
         Args:
-            region_type: Original region type from detector
+            region_type: Original block type from detector
             detector_name: Name of detector ("doclayout-yolo", "mineru-doclayout-yolo",
                           "mineru-vlm", "olmocr-vlm")
 
         Returns:
-            Standardized region type (falls back to original if no mapping found)
+            Standardized block type (falls back to original if no mapping found)
 
         Example:
-            >>> RegionTypeMapper.map_type("plain text", "doclayout-yolo")
+            >>> BlockTypeMapper.map_type("plain text", "doclayout-yolo")
             'text'
-            >>> RegionTypeMapper.map_type("abandon", "mineru-doclayout-yolo")
+            >>> BlockTypeMapper.map_type("abandon", "mineru-doclayout-yolo")
             'discarded'
         """
         mapping_dict: dict[str, str] | None = None
@@ -902,140 +902,119 @@ class BBox:
 
 
 @dataclass
-class Region:
-    """Document region with bounding box.
+class Block:
+    """Document block with bounding box.
 
     This dataclass provides type safety and better IDE support for
-    region data throughout the pipeline.
+    block data throughout the pipeline.
 
     Core fields:
     - type: Region type string. Should use standardized types from RegionType class
             (e.g., "text", "title", "image", "table", "code", etc.)
             Detectors may use detector-specific types which should be mapped using
-            RegionTypeMapper.map_type() before further processing.
+            BlockTypeMapper.map_type() before further processing.
     - bbox: BBox object (required, always present)
-    - confidence: Detection confidence (0.0 to 1.0)
+    - detection_confidence: Detection confidence (0.0 to 1.0), optional
 
     Optional fields added by various pipeline stages:
-    - reading_order_rank: Added by sorters
-    - column_index: Added by multi-column sorters
-    - text: Added by recognizers
-    - corrected_text: Added by text correction
-    - source: Which detector/sorter produced this region
+    - order: Reading order rank (Added by sorters)
+    - column_index: Column index (Added by multi-column sorters)
+    - text: Recognized text (Added by recognizers)
+    - corrected_text: VLM-corrected text (Added by text correction)
+    - source: Which detector/sorter produced this region (internal use only, not serialized)
     - index: Internal index (MinerU VLM)
 
     Note:
-        Region types should ideally use the standardized types defined in RegionType.
-        Use RegionTypeMapper.map_type(region.type, detector_name) to normalize
+        Region types should ideally use the standardized types defined in BlockType.
+        Use BlockTypeMapper.map_type(block.type, detector_name) to normalize
         detector-specific types to standardized types.
     """
 
     # Core fields (always present)
     type: str  # Ideally from RegionType constants
     bbox: BBox  # Required, no longer optional
-    confidence: float
+    detection_confidence: float | None = None  # Optional, not all detectors provide confidence
 
     # Optional fields added by pipeline stages
-    reading_order_rank: int | None = None
+    order: int | None = None  # Reading order rank (renamed from reading_order_rank)
     column_index: int | None = None
 
     # Text content
     text: str | None = None
     corrected_text: str | None = None
 
-    # Metadata
+    # Metadata (internal use, not serialized to JSON)
     source: str | None = None  # "doclayout-yolo", "mineru-vlm", etc.
     index: int | None = None  # MinerU VLM internal index
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to JSON-serializable dict.
 
-        Bbox is serialized as xywh list for human readability.
+        Bbox is serialized as xywh list [x, y, width, height] for human readability.
+        The 'source' field is excluded from serialization as it's for internal use only.
 
         Returns:
-            Dict with bbox in [x, y, w, h] format
+            Dict with xywh bbox format
 
         Example:
-            >>> region = Region(type="text", bbox=BBox(100, 50, 300, 200), confidence=0.95)
-            >>> region.to_dict()
-            {'type': 'text', 'bbox': [100, 50, 200, 150], 'confidence': 0.95}
+            >>> block = Block(type="text", bbox=BBox(100, 50, 300, 200), detection_confidence=0.95)
+            >>> block.to_dict()
+            {'type': 'text', 'xywh': [100, 50, 200, 150], 'detection_confidence': 0.95}
         """
-        result = {
+        result: dict[str, Any] = {
             "type": self.type,
-            "bbox": self.bbox.to_xywh_list(),  # Serialize as xywh for readability
-            "confidence": self.confidence,
+            "xywh": self.bbox.to_xywh_list(),  # Explicit xywh format
         }
 
         # Add optional fields (only if not None)
-        if self.reading_order_rank is not None:
-            result["reading_order_rank"] = self.reading_order_rank
+        if self.detection_confidence is not None:
+            result["detection_confidence"] = self.detection_confidence
+        if self.order is not None:
+            result["order"] = self.order
         if self.column_index is not None:
             result["column_index"] = self.column_index
         if self.text is not None:
             result["text"] = self.text
         if self.corrected_text is not None:
             result["corrected_text"] = self.corrected_text
-        if self.source is not None:
-            result["source"] = self.source
-        if self.index is not None:
-            result["index"] = self.index
+        # Note: 'source' and 'index' are intentionally excluded (internal metadata)
 
         return result
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Region:
-        """Create Region from dict (supports multiple formats).
-
-        Supports:
-        - "bbox": [x, y, w, h] (xywh format - default for JSON)
-        - "bbox": [x0, y0, x1, y1] (xyxy format)
-        - "bbox": {"x0": 10, "y0": 20, ...} (dict format)
-        - "coords": [x, y, w, h] (legacy xywh format)
+    def from_dict(cls, data: dict[str, Any]) -> Block:
+        """Create Block from dict.
 
         Args:
-            data: Dictionary with region data
+            data: Dictionary with block data (must have "xywh" field)
 
         Returns:
-            Region object
+            Block object
 
         Example:
-            >>> data = {"type": "text", "bbox": [100, 50, 200, 150], "confidence": 0.95}
-            >>> region = Region.from_dict(data)
-            >>> region.bbox
+            >>> data = {"type": "text", "xywh": [100, 50, 200, 150], "detection_confidence": 0.95}
+            >>> block = Block.from_dict(data)
+            >>> block.bbox
             BBox(x0=100, y0=50, x1=300, y1=200)
         """
         data = data.copy()  # Don't modify original
 
-        # Parse bbox
-        if "bbox" in data:
-            bbox_value = data.pop("bbox")
+        # Parse xywh field (required)
+        if "xywh" not in data:
+            raise ValueError("Block dict must have 'xywh' field")
 
-            if isinstance(bbox_value, BBox):
-                # Already a BBox object
-                bbox = bbox_value
-            elif isinstance(bbox_value, dict):
-                # Dict format: {"x0": 10, "y0": 20, ...}
-                bbox = BBox(**bbox_value)
-            elif isinstance(bbox_value, (list, tuple)):
-                # List format - default to xywh (JSON standard)
-                bbox = BBox.from_xywh(*bbox_value[:4])
-            else:
-                raise ValueError(f"Invalid bbox type: {type(bbox_value)}")
+        xywh_value = data.pop("xywh")
+        if not isinstance(xywh_value, (list, tuple)):
+            raise ValueError(f"Invalid xywh type: {type(xywh_value)}")
 
-        # Legacy: handle "coords" field (always xywh)
-        elif "coords" in data:
-            coords = data.pop("coords")
-            bbox = BBox.from_xywh(*coords[:4])
-
-        else:
-            raise ValueError("Region dict must have 'bbox' or 'coords' field")
+        bbox = BBox.from_xywh(*xywh_value[:4])
 
         # Build Region with remaining fields
         return cls(
             type=data.get("type", "unknown"),
             bbox=bbox,
-            confidence=data.get("confidence", 1.0),
-            reading_order_rank=data.get("reading_order_rank"),
+            detection_confidence=data.get("detection_confidence"),
+            order=data.get("order"),
             column_index=data.get("column_index"),
             text=data.get("text"),
             corrected_text=data.get("corrected_text"),
@@ -1056,7 +1035,7 @@ class Page:
 
     Core fields:
     - page_num: Page number (1-indexed)
-    - regions: List of detected Region objects
+    - blocks: List of detected Block objects
 
     Optional metadata fields:
     - image_path: Path to rendered page image
@@ -1068,7 +1047,7 @@ class Page:
 
     # Core fields
     page_num: int
-    regions: list[Region]
+    blocks: list[Block]
 
     # Optional metadata
     image_path: str | None = None
@@ -1090,7 +1069,7 @@ class Page:
         """
         result: dict[str, Any] = {
             "page_num": self.page_num,
-            "regions": [r.to_dict() for r in self.regions],
+            "blocks": [b.to_dict() for b in self.blocks],
         }
 
         # Add optional fields (only if not None or non-default)
@@ -1118,12 +1097,12 @@ class Page:
             Page object
 
         Example:
-            >>> data = {"page_num": 1, "regions": [...]}
+            >>> data = {"page_num": 1, "blocks": [...]}
             >>> page = Page.from_dict(data)
         """
         return cls(
             page_num=data["page_num"],
-            regions=[Region.from_dict(r) for r in data.get("regions", [])],
+            blocks=[Block.from_dict(b) for b in data.get("blocks", [])],
             image_path=data.get("image_path"),
             auxiliary_info=data.get("auxiliary_info"),
             status=data.get("status", "completed"),
@@ -1225,18 +1204,18 @@ class Document:
 class Detector(Protocol):
     """Layout detection interface.
 
-    All detectors must implement this interface and return regions
+    All detectors must implement this interface and return blocks
     in the unified Region format with bbox field.
     """
 
-    def detect(self, image: np.ndarray) -> list[Region]:
+    def detect(self, image: np.ndarray) -> list[Block]:
         """Detect regions in image.
 
         Args:
             image: Input image as numpy array (H, W, C)
 
         Returns:
-            List of detected Region objects with bbox
+            List of detected Block objects with bbox
 
         Example:
             >>> detector = DocLayoutYOLODetector()
@@ -1256,11 +1235,11 @@ class Sorter(Protocol):
     to regions (reading_order_rank) while maintaining the unified Region format.
     """
 
-    def sort(self, regions: list[Region], image: np.ndarray, **kwargs: Any) -> list[Region]:
+    def sort(self, blocks: list[Block], image: np.ndarray, **kwargs: Any) -> list[Block]:
         """Sort regions by reading order.
 
         Args:
-            regions: Detected regions with bbox
+            regions: Detected blocks with bbox
             image: Page image for analysis (H, W, C)
             **kwargs: Additional context (e.g., pymupdf_page, pdf_path)
 
@@ -1269,8 +1248,8 @@ class Sorter(Protocol):
 
         Example:
             >>> sorter = PyMuPDFSorter()
-            >>> sorted_regions = sorter.sort(regions, image, pymupdf_page=page)
-            >>> sorted_regions[0].reading_order_rank
+            >>> sorted_blocks = sorter.sort(regions, image, pymupdf_page=page)
+            >>> sorted_blocks[0].reading_order_rank
             0
         """
         ...
@@ -1279,16 +1258,16 @@ class Sorter(Protocol):
 # ==================== Utility Functions ====================
 
 
-def regions_to_olmocr_anchor_text(
-    regions: Sequence[Region],
+def blocks_to_olmocr_anchor_text(
+    blocks: Sequence[Block],
     page_width: int,
     page_height: int,
     max_length: int = 4000,
 ) -> str:
-    """Convert regions to olmOCR anchor text format.
+    """Convert blocks to olmOCR anchor text format.
 
     Args:
-        regions: List of Region instances with bbox
+        regions: List of Block instances with bbox
         page_width: Page width in pixels
         page_height: Page height in pixels
         max_length: Maximum anchor text length (approximate)
@@ -1297,11 +1276,11 @@ def regions_to_olmocr_anchor_text(
         olmOCR anchor text string
 
     Example:
-        >>> regions = [
-        ...     Region(type="title", bbox=BBox(100, 50, 300, 80), confidence=0.9),
-        ...     Region(type="figure", bbox=BBox(100, 100, 300, 250), confidence=0.95),
+        >>> blocks = [
+        ...     Block(type="title", bbox=BBox(100, 50, 300, 80), confidence=0.9),
+        ...     Block(type="figure", bbox=BBox(100, 100, 300, 250), confidence=0.95),
         ... ]
-        >>> anchor = regions_to_olmocr_anchor_text(regions, 800, 600)
+        >>> anchor = blocks_to_olmocr_anchor_text(blocks, 800, 600)
         >>> print(anchor)
         Page dimensions: 800x600
         [100x50]
@@ -1310,11 +1289,11 @@ def regions_to_olmocr_anchor_text(
     # Header
     lines = [f"Page dimensions: {page_width}x{page_height}"]
 
-    # Convert each region
-    for region in regions:
-        bbox = region.bbox
-        text_content = (region.text or "")[:50] if region.type in ["text", "title", "plain text"] else ""
-        anchor_line = bbox.to_olmocr_anchor(content_type=region.type, text_content=text_content)
+    # Convert each block
+    for block in blocks:
+        bbox = block.bbox
+        text_content = (block.text or "")[:50] if block.type in ["text", "title", "plain text"] else ""
+        anchor_line = bbox.to_olmocr_anchor(content_type=block.type, text_content=text_content)
         lines.append(anchor_line)
 
         # Check length limit

@@ -337,7 +337,7 @@ class MultiColumnSorter:
                 - pymupdf_page: PyMuPDF page object for column detection
 
         Returns:
-            Sorted regions with reading_order_rank and column_index added
+            Sorted blocks with reading_order_rank and column_index added
         """
 
         pymupdf_page = kwargs.get("pymupdf_page")
@@ -358,10 +358,10 @@ class MultiColumnSorter:
             logger.debug("Single column detected, using simple ordering")
             return self._fallback_sort(regions)
 
-        sorted_regions = self._sort_by_columns(regions, columns)
-        logger.debug("Sorted %d regions by %d columns", len(sorted_regions), len(columns))
+        sorted_blocks = self._sort_by_columns(regions, columns)
+        logger.debug("Sorted blocks by %d columns", len(sorted_blocks), len(columns))
 
-        return sorted_regions
+        return sorted_blocks
 
     def _detect_column_layout(self, pymupdf_page: Any, page_image: np.ndarray) -> dict[str, Any] | None:
         """Detect column layout using column_boxes utility function."""
@@ -461,13 +461,13 @@ class MultiColumnSorter:
 
     def _sort_by_columns(self, regions: list[Any], columns: list[ColumnInfo]) -> list[Any]:
         """Sort regions by column-aware reading order."""
-        if not regions:
-            return regions
+        if not blocks:
+            return blocks
 
         keyed_regions: list[tuple[tuple[float, float, float], Any, int]] = []
 
-        for region in regions:
-            bbox = region.bbox
+        for block in regions:
+            bbox = block.bbox
             region_center_x, _ = bbox.center
 
             best_col_idx = 0
@@ -492,26 +492,26 @@ class MultiColumnSorter:
                 best_col_idx = nearest_col["index"]
 
             sort_key = (float(best_col_idx), bbox.y0, bbox.x0)
-            keyed_regions.append((sort_key, region, best_col_idx))
+            keyed_regions.append((sort_key, block, best_col_idx))
 
         keyed_regions.sort(key=lambda item: item[0])
 
-        sorted_regions = []
-        for rank, (_, region, col_idx) in enumerate(keyed_regions):
-            region.reading_order_rank = rank
-            region.column_index = col_idx
-            sorted_regions.append(region)
+        sorted_blocks = []
+        for rank, (_, block, col_idx) in enumerate(keyed_regions):
+            block.order = rank
+            block.column_index = col_idx
+            sorted_blocks.append(block)
 
-        return sorted_regions
+        return sorted_blocks
 
-    def _fallback_sort(self, regions: list[Any]) -> list[Any]:
+    def _fallback_sort(self, blocks: list[Any]) -> list[Any]:
         """Fallback to simple geometric sorting."""
-        if not regions:
-            return regions
+        if not blocks:
+            return blocks
 
-        sorted_regions = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0))
+        sorted_blocks = sorted(blocks, key=lambda r: (r.bbox.y0, r.bbox.x0))
 
-        for rank, region in enumerate(sorted_regions):
-            region.reading_order_rank = rank
+        for rank, block in enumerate(sorted_blocks):
+            block.order = rank
 
-        return sorted_regions
+        return sorted_blocks

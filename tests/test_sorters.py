@@ -51,7 +51,7 @@ def test_xycut_sorter_handles_empty_regions():
 
 
 def test_xycut_sorter_works_with_single_region():
-    """Test XY-Cut sorter works with a single region."""
+    """Test XY-Cut sorter works with a single block."""
     sorter = MinerUXYCutSorter()
     image = np.zeros((600, 800, 3), dtype=np.uint8)
 

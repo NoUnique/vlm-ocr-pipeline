@@ -15,7 +15,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from pipeline.types import Document, Page, Region
+from pipeline.types import Document, Page, Block
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +86,7 @@ class RegionTypeHeaderIdentifier:
 
 
 def region_to_markdown(  # noqa: PLR0911, PLR0912, PLR0915
-    region: Region,
+    region: Block,
     header_identifier: RegionTypeHeaderIdentifier | None = None,
 ) -> str:
     """Convert a Region object to Markdown format using region type.
@@ -101,16 +101,16 @@ def region_to_markdown(  # noqa: PLR0911, PLR0912, PLR0915
         Markdown-formatted string for the region
 
     Example:
-        >>> from pipeline.types import Region, BBox
-        >>> region = Region(type="title", bbox=BBox(0, 0, 100, 20), confidence=0.9, text="Introduction")
+        >>> from pipeline.types import Block, BBox
+        >>> block = Block(type="title", bbox=BBox(0, 0, 100, 20), confidence=0.9, text="Introduction")
         >>> region_to_markdown(region)
         '# Introduction'
     """
     if header_identifier is None:
         header_identifier = RegionTypeHeaderIdentifier()
 
-    region_type = region.type.lower()
-    text = region.corrected_text or region.text or ""
+    region_type = block.type.lower()
+    text = block.corrected_text or block.text or ""
 
     if not text:
         return ""
@@ -226,7 +226,7 @@ def region_to_markdown(  # noqa: PLR0911, PLR0912, PLR0915
 
 
 def regions_to_markdown(
-    regions: list[Region],
+    blocks: list[Block],
     include_bbox: bool = False,
     include_confidence: bool = False,
     header_identifier: RegionTypeHeaderIdentifier | None = None,
@@ -242,18 +242,18 @@ def regions_to_markdown(
         include_bbox: Include bounding box information (default: False)
         include_confidence: Include confidence scores (default: False)
         header_identifier: Custom header identifier (uses default if None)
-        preserve_reading_order: Sort by reading_order_rank if True (default: True)
+        preserve_reading_order: Sort by order if True (default: True)
 
     Returns:
         Markdown-formatted string
 
     Example:
-        >>> from pipeline.types import Region, BBox
+        >>> from pipeline.types import Block, BBox
         >>> regions = [
         ...     Region(type="title", bbox=BBox(0, 0, 100, 20), confidence=0.9,
-        ...            text="Chapter 1", reading_order_rank=0),
+        ...            text="Chapter 1", order=0),
         ...     Region(type="text", bbox=BBox(0, 30, 100, 50), confidence=0.95,
-        ...            text="Introduction.", reading_order_rank=1),
+        ...            text="Introduction.", order=1),
         ... ]
         >>> md = regions_to_markdown(regions)
         >>> print(md)
@@ -265,27 +265,27 @@ def regions_to_markdown(
         header_identifier = RegionTypeHeaderIdentifier()
 
     # Sort by reading order if available and requested
-    sorted_regions = regions
+    sorted_blocks = regions
     if preserve_reading_order:
-        # Filter regions with reading_order_rank
-        ranked_regions = [r for r in regions if r.reading_order_rank is not None]
-        unranked_regions = [r for r in regions if r.reading_order_rank is None]
+        # Filter regions with order
+        ranked_regions = [r for r in regions if r.order is not None]
+        unranked_regions = [r for r in regions if r.order is None]
 
         if ranked_regions:
-            sorted_regions = sorted(ranked_regions, key=lambda r: r.reading_order_rank)  # type: ignore
+            sorted_blocks = sorted(ranked_regions, key=lambda r: r.order)  # type: ignore
             # Append unranked regions at the end
-            sorted_regions.extend(unranked_regions)
+            sorted_blocks.extend(unranked_regions)
 
     lines: list[str] = []
     prev_type = None
 
-    for region in sorted_regions:
+    for region in sorted_blocks:
         md_text = region_to_markdown(region, header_identifier)
 
         if not md_text:
             continue
 
-        current_type = region.type.lower()
+        current_type = block.type.lower()
 
         # Add spacing between different types
         if prev_type is not None and current_type != prev_type:
@@ -298,10 +298,10 @@ def regions_to_markdown(
         # Add metadata if requested
         metadata_parts: list[str] = []
         if include_bbox:
-            bbox = region.bbox.to_xywh_list()
+            bbox = block.bbox.to_xywh_list()
             metadata_parts.append(f"bbox: {bbox}")
         if include_confidence:
-            conf = region.confidence
+            conf = block.confidence
             metadata_parts.append(f"confidence: {conf:.2f}")
 
         if metadata_parts:
@@ -330,7 +330,7 @@ def page_to_markdown(
         Markdown-formatted string
 
     Example:
-        >>> from pipeline.types import Page, Region, BBox
+        >>> from pipeline.types import Page, Block, BBox
         >>> page = Page(
         ...     page_num=1,
         ...     regions=[Region(type="title", bbox=BBox(0, 0, 100, 20), confidence=0.9, text="Title")]
@@ -375,7 +375,7 @@ def document_to_markdown(
         Markdown-formatted string
 
     Example:
-        >>> from pipeline.types import Document, Page, Region, BBox
+        >>> from pipeline.types import Document, Page, Block, BBox
         >>> doc = Document(
         ...     pdf_name="test",
         ...     pdf_path="/test.pdf",
@@ -430,7 +430,7 @@ def region_dict_to_markdown(data: dict[str, Any], **kwargs: Any) -> str:
         Markdown-formatted string
 
     Example:
-        >>> data = {"type": "title", "bbox": [0, 0, 100, 20], "confidence": 0.9, "text": "Hello"}
+        >>> data = {"type": "title", "xywh": [0, 0, 100, 20], "confidence": 0.9, "text": "Hello"}
         >>> region_dict_to_markdown(data)
         '# Hello'
     """
@@ -449,7 +449,7 @@ def regions_dict_to_markdown(data: list[dict[str, Any]], **kwargs: Any) -> str:
         Markdown-formatted string
 
     Example:
-        >>> data = [{"type": "title", "bbox": [0, 0, 100, 20], "confidence": 0.9, "text": "Hello"}]
+        >>> data = [{"type": "title", "xywh": [0, 0, 100, 20], "confidence": 0.9, "text": "Hello"}]
         >>> regions_dict_to_markdown(data)
         '# Hello'
     """
@@ -468,7 +468,7 @@ def page_dict_to_markdown(data: dict[str, Any], **kwargs: Any) -> str:
         Markdown-formatted string
 
     Example:
-        >>> data = {"page_num": 1, "regions": [{"type": "title", "bbox": [0, 0, 100, 20], "confidence": 0.9, "text": "Hello"}]}
+        >>> data = {"page_num": 1, "blocks": [{"type": "title", "xywh": [0, 0, 100, 20], "confidence": 0.9, "text": "Hello"}]}
         >>> page_dict_to_markdown(data)
         '## Page 1\\n\\n# Hello'
     """
@@ -492,7 +492,7 @@ def document_dict_to_markdown(data: dict[str, Any], **kwargs: Any) -> str:
         ...     "pdf_path": "/test.pdf",
         ...     "num_pages": 1,
         ...     "processed_pages": 1,
-        ...     "pages": [{"page_num": 1, "regions": []}]
+        ...     "pages": [{"page_num": 1, "blocks": []}]
         ... }
         >>> md = document_dict_to_markdown(data)
     """
@@ -506,7 +506,7 @@ def document_dict_to_markdown(data: dict[str, Any], **kwargs: Any) -> str:
 
 
 def save_regions_to_markdown(
-    regions: list[Region],
+    blocks: list[Block],
     output_path: Path,
     include_bbox: bool = False,
     include_confidence: bool = False,
@@ -525,7 +525,7 @@ def save_regions_to_markdown(
         OSError: If file cannot be written
 
     Example:
-        >>> from pipeline.types import Region, BBox
+        >>> from pipeline.types import Block, BBox
         >>> regions = [
         ...     Region(type="title", bbox=BBox(0, 0, 100, 20), confidence=0.9, text="Document Title"),
         ...     Region(type="text", bbox=BBox(0, 30, 100, 50), confidence=0.95, text="Content here."),

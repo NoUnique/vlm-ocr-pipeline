@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from pipeline.types import Region
+from pipeline.types import Block
 
 if TYPE_CHECKING:
     import numpy as np
@@ -41,7 +41,7 @@ class MinerUXYCutSorter:
 
         logger.info("MinerU XY-Cut sorter initialized")
 
-    def sort(self, regions: list[Region], image: np.ndarray, **kwargs: Any) -> list[Region]:
+    def sort(self, blocks: list[Block], image: np.ndarray, **kwargs: Any) -> list[Block]:
         """Sort regions using XY-Cut algorithm.
 
         Args:
@@ -50,37 +50,37 @@ class MinerUXYCutSorter:
             **kwargs: Additional context (unused)
 
         Returns:
-            Sorted regions with reading_order_rank added
+            Sorted blocks with reading_order_rank added
 
         Example:
             >>> sorter = MinerUXYCutSorter()
-            >>> sorted_regions = sorter.sort(regions, image)
-            >>> sorted_regions[0]["reading_order_rank"]
+            >>> sorted_blocks = sorter.sort(regions, image)
+            >>> sorted_blocks[0]["reading_order_rank"]
             0
         """
-        if not regions:
-            return regions
+        if not blocks:
+            return blocks
 
         try:
             import numpy as np
 
             bboxes = np.array(
-                [[r.bbox.x0, r.bbox.y0, r.bbox.x1, r.bbox.y1] for r in regions],
+                [[r.bbox.x0, r.bbox.y0, r.bbox.x1, r.bbox.y1] for r in blocks],
                 dtype=int,
             )
 
-            indices = list(range(len(regions)))
+            indices = list(range(len(blocks)))
             result_indices: list[int] = []
             self._recursive_xy_cut(bboxes, indices, result_indices)
 
-            sorted_regions = [regions[i] for i in result_indices]
+            sorted_blocks = [blocks[i] for i in result_indices]
 
-            for rank, region in enumerate(sorted_regions):
-                region.reading_order_rank = rank
+            for rank, block in enumerate(sorted_blocks):
+                block.order = rank
 
-            logger.debug("Sorted %d regions using XY-Cut algorithm", len(sorted_regions))
+            logger.debug("Sorted blocks using XY-Cut algorithm", len(sorted_blocks))
 
-            return sorted_regions
+            return sorted_blocks
 
         except Exception as e:
             logger.error("XY-Cut sorting failed: %s, falling back to simple sort", e)
@@ -201,14 +201,14 @@ class MinerUXYCutSorter:
 
         return arr_start, arr_end
 
-    def _fallback_sort(self, regions: list[Region]) -> list[Region]:
+    def _fallback_sort(self, blocks: list[Block]) -> list[Block]:
         """Fallback to simple geometric sorting."""
-        if not regions:
-            return regions
+        if not blocks:
+            return blocks
 
-        sorted_regions = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0))
+        sorted_blocks = sorted(blocks, key=lambda r: (r.bbox.y0, r.bbox.x0))
 
-        for rank, region in enumerate(sorted_regions):
-            region.reading_order_rank = rank
+        for rank, block in enumerate(sorted_blocks):
+            block.order = rank
 
-        return sorted_regions
+        return sorted_blocks

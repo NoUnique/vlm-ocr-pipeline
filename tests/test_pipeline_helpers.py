@@ -55,10 +55,10 @@ def test_determine_pages_to_process_honors_priority_and_bounds():
 @pytest.mark.parametrize(
     "page_result, expected",
     [
-        ({"regions": [{"error": "gemini_rate_limit"}]}, True),
+        ({"blocks": [{"error": "gemini_rate_limit"}]}, True),
         ({"corrected_text": {"error": "rate_limit_daily"}}, True),
         ({"corrected_text": "RATE_LIMIT_EXCEEDED"}, True),
-        ({"regions": [{"type": "plain text"}], "corrected_text": "ok"}, False),
+        ({"blocks": [{"type": "plain text"}], "corrected_text": "ok"}, False),
     ],
 )
 def test_check_for_rate_limit_errors(page_result, expected):
@@ -70,9 +70,9 @@ def test_check_for_rate_limit_errors(page_result, expected):
 @pytest.mark.parametrize(
     "summary, expected",
     [
-        ({"pages_data": [{"page_number": 1, "regions": [], "corrected_text": "ok"}]}, False),
+        ({"pages_data": [{"page_number": 1, "blocks": [], "corrected_text": "ok"}]}, False),
         ({"pages_data": [{"page_number": 1, "error": "failed"}]}, True),
-        ({"pages_data": [{"page_number": 1, "regions": [{"error": "bad"}]}]}, True),
+        ({"pages_data": [{"page_number": 1, "blocks": [{"error": "bad"}]}]}, True),
         ({"pages_data": [{"page_number": 1, "corrected_text": {"error": "oops"}}]}, True),
         (
             {
@@ -83,7 +83,7 @@ def test_check_for_rate_limit_errors(page_result, expected):
         ),
         (
             {
-                "pages_data": [{"page_number": 1, "regions": []}],
+                "pages_data": [{"page_number": 1, "blocks": []}],
                 "processing_stopped": True,
             },
             True,

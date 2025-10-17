@@ -339,7 +339,7 @@ Each single image (or individual PDF page) is written as `page_<number>.json` un
   "image_path": "output/tmp/document_page_1.jpg",
   "width": 1920,
   "height": 1080,
-  "regions": [...],
+  "blocks": [...],
   "processed_regions": [...],
   "raw_text": "Original OCR text...",
   "corrected_text": "AI-corrected text...",

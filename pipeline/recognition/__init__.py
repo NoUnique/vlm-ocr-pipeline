@@ -11,7 +11,7 @@ from typing import Any
 import numpy as np
 
 from ..prompt import PromptManager
-from ..types import Region
+from ..types import Block
 from .api.gemini import GeminiClient
 from .api.openai import OpenAIClient
 from .cache import RecognitionCache
@@ -76,26 +76,26 @@ class TextRecognizer:
             use_cache,
         )
 
-    def process_regions(self, image: np.ndarray, regions: Sequence[Region]) -> list[Region]:
+    def process_regions(self, image: np.ndarray, blocks: Sequence[Block]) -> list[Block]:
         """Process all regions to extract text.
 
         Args:
             image: Full page image
-            regions: List of detected regions
+            regions: List of detected blocks
 
         Returns:
-            Regions with text extracted
+            Blocks with text extracted
         """
-        processed_regions = []
+        processed_blocks = []
 
-        for region in regions:
-            processed_region = self._process_single_region(image, region)
-            processed_regions.append(processed_region)
+        for block in blocks:
+            processed_block = self._process_single_block(image, block)
+            processed_blocks.append(processed_block)
 
-        return processed_regions
+        return processed_blocks
 
-    def _process_single_region(self, image: np.ndarray, region: Region) -> Region:
-        """Process a single region to extract text.
+    def _process_single_block(self, image: np.ndarray, block: Block) -> Block:
+        """Process a single block to extract text.
 
         IMPORTANT: This recognizer will ALWAYS extract text using the configured VLM backend,
         regardless of whether the detector already provided text content. This ensures that
@@ -104,74 +104,74 @@ class TextRecognizer:
 
         Args:
             image: Full page image
-            region: Region instance
+            block: Block instance
 
         Returns:
             Region with text extracted
         """
-        region_type = region.type
+        block_type = block.type
 
         # Clear any pre-existing text from detector
         # This ensures we use the recognizer's extraction, not the detector's content
-        if region.text:
+        if block.text:
             logger.debug(
                 "Clearing detector-provided text for region (source=%s). Will use recognizer instead.",
-                region.source
+                block.source
             )
-            region.text = None
+            block.text = None
 
-        # Extract region image
+        # Extract block image
         try:
-            region_image = self._crop_region(image, region)
+            block_image = self._crop_block(image, block)
         except Exception as e:
-            logger.error("Failed to crop region: %s", e)
-            # Note: error field not in Region dataclass, just log and continue
-            return region
+            logger.error("Failed to crop block: %s", e)
+            # Note: error field not in Block dataclass, just log and continue
+            return block
 
         # Get prompt for region type
-        prompt = self._get_prompt_for_region_type(region_type)
+        prompt = self._get_prompt_for_block_type(block_type)
 
         # Extract text
         try:
-            result = self.client.extract_text(region_image, region.to_dict(), prompt)
-            region.text = result.get("text", "") if isinstance(result, dict) else str(result)
+            result = self.client.extract_text(block_image, block.to_dict(), prompt)
+            block.text = result.get("text", "") if isinstance(result, dict) else str(result)
         except Exception as e:
             logger.error("Failed to extract text: %s", e)
-            region.text = ""
+            block.text = ""
 
         # Cleanup
-        del region_image
+        del block_image
         gc.collect()
 
-        return region
+        return block
 
-    def _crop_region(self, image: np.ndarray, region: Region) -> np.ndarray:
-        """Crop a region from the full image.
+    def _crop_block(self, image: np.ndarray, block: Block) -> np.ndarray:
+        """Crop a block from the full image.
 
         Args:
             image: Full page image
-            region: Region with bbox
+            block: Block with bbox
 
         Returns:
-            Cropped region image
+            Cropped block image
         """
         # Use BBox.crop() method with padding
-        return region.bbox.crop(image, padding=5)
+        return block.bbox.crop(image, padding=5)
 
-    def _get_prompt_for_region_type(self, region_type: str) -> str:
-        """Get prompt for specific region type.
+    def _get_prompt_for_block_type(self, block_type: str) -> str:
+        """Get prompt for specific block type.
 
         Args:
-            region_type: Type of region
+            block_type: Type of block
 
         Returns:
-            Prompt string for the region type
+            Prompt string for the block type
         """
-        if region_type in ["plain text", "title", "list"]:
+        if block_type in ["plain text", "title", "list"]:
             return self.prompt_manager.get_prompt("text_extraction", "user")
-        elif region_type == "table":
+        elif block_type == "table":
             return self.prompt_manager.get_prompt("content_analysis", "table_analysis", "user")
-        elif region_type in ["figure", "equation"]:
+        elif block_type in ["figure", "equation"]:
             return self.prompt_manager.get_prompt("content_analysis", "figure_analysis", "user")
         else:
             return self.prompt_manager.get_prompt("text_extraction", "user")

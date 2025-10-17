@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from pipeline.types import Region
+from pipeline.types import Block
 
 if TYPE_CHECKING:
     import numpy as np
@@ -28,7 +28,7 @@ class MinerUVLMSorter:
         """Initialize MinerU VLM sorter."""
         logger.info("MinerU VLM sorter initialized")
 
-    def sort(self, regions: list[Region], image: np.ndarray, **kwargs: Any) -> list[Region]:
+    def sort(self, blocks: list[Block], image: np.ndarray, **kwargs: Any) -> list[Block]:
         """Sort regions using MinerU VLM's ordering information.
 
         This sorter expects regions to have "index" field from MinerU VLM.
@@ -40,7 +40,7 @@ class MinerUVLMSorter:
             **kwargs: Additional context (unused)
 
         Returns:
-            Sorted regions with reading_order_rank added/updated
+            Sorted blocks with reading_order_rank added/updated
 
         Example:
             >>> sorter = MinerUVLMSorter()
@@ -48,37 +48,37 @@ class MinerUVLMSorter:
             ...     {"type": "text", "coords": [...], "index": 1, "confidence": 0.9},
             ...     {"type": "text", "coords": [...], "index": 0, "confidence": 0.9},
             ... ]
-            >>> sorted_regions = sorter.sort(regions, image)
-            >>> [r["reading_order_rank"] for r in sorted_regions]
+            >>> sorted_blocks = sorter.sort(regions, image)
+            >>> [r["reading_order_rank"] for r in sorted_blocks]
             [0, 1]
         """
-        if not regions:
-            return regions
+        if not blocks:
+            return blocks
 
-        has_index = all(r.index is not None for r in regions)
+        has_index = all(r.index is not None for r in blocks)
 
         if not has_index:
             logger.warning(
-                "MinerU VLM sorter: regions missing 'index' field. "
+                "MinerU VLM sorter: blocks missing 'index' field. "
                 "Did you use MinerUVLMDetector with detection_only=False? "
                 "Falling back to simple sort."
             )
-            return self._fallback_sort(regions)
+            return self._fallback_sort(blocks)
 
-        sorted_regions = sorted(regions, key=lambda r: r.index if r.index is not None else float("inf"))
+        sorted_blocks = sorted(blocks, key=lambda r: r.index if r.index is not None else float("inf"))
 
-        for rank, region in enumerate(sorted_regions):
-            region.reading_order_rank = rank
+        for rank, block in enumerate(sorted_blocks):
+            block.order = rank
 
-        logger.debug("Sorted %d regions using MinerU VLM ordering", len(sorted_regions))
+        logger.debug("Sorted %d blocks using MinerU VLM ordering", len(sorted_blocks))
 
-        return sorted_regions
+        return sorted_blocks
 
-    def _fallback_sort(self, regions: list[Region]) -> list[Region]:
+    def _fallback_sort(self, blocks: list[Block]) -> list[Block]:
         """Fallback to simple geometric sorting."""
-        sorted_regions = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0))
+        sorted_blocks = sorted(blocks, key=lambda r: (r.bbox.y0, r.bbox.x0))
 
-        for rank, region in enumerate(sorted_regions):
-            region.reading_order_rank = rank
+        for rank, block in enumerate(sorted_blocks):
+            block.order = rank
 
-        return sorted_regions
+        return sorted_blocks
