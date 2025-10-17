@@ -27,7 +27,7 @@ vlm-ocr-pipeline/
 ├── main.py                     # CLI entry point
 ├── pipeline/                   # Modular VLM OCR Pipeline
 │   ├── __init__.py            # Main Pipeline class
-│   ├── types.py               # Integer-based BBox and Region types
+│   ├── types.py               # Integer-based BBox and Block types
 │   ├── constants.py
 │   ├── misc.py
 │   ├── prompt.py

@@ -240,11 +240,13 @@ class Pipeline:
         else:
             processed_blocks = self.recognizer.process_regions(image_np, sorted_blocks)
 
-        # Correct text for text regions
+        # Block-level text correction for text regions
         for block in processed_blocks:
-            if block.type in ["plain text", "title", "list"] and block.text:
+            if block.type in ["plain text", "title", "list", "text"] and block.text:
                 corrected = self.recognizer.correct_text(block.text)
-                if isinstance(corrected, str):
+                if isinstance(corrected, dict):
+                    block.corrected_text = corrected.get("corrected_text", block.text)
+                elif isinstance(corrected, str):
                     block.corrected_text = corrected
 
         result = {
@@ -392,6 +394,15 @@ class Pipeline:
             if self._check_for_rate_limit_errors({"blocks": processed_blocks}):
                 logger.warning("Rate limit detected on page %d. Stopping processing.", page_num)
                 return None, True
+
+            # Block-level text correction for text regions
+            for block in processed_blocks:
+                if block.type in ["plain text", "title", "list", "text"] and block.text:
+                    corrected = self.recognizer.correct_text(block.text)
+                    if isinstance(corrected, dict):
+                        block.corrected_text = corrected.get("corrected_text", block.text)
+                    elif isinstance(corrected, str):
+                        block.corrected_text = corrected
 
             # Compose page-level text
             raw_text = self._compose_page_text(processed_blocks)

@@ -909,7 +909,7 @@ class Block:
     block data throughout the pipeline.
 
     Core fields:
-    - type: Region type string. Should use standardized types from RegionType class
+    - type: Block type string. Should use standardized types from BlockType class
             (e.g., "text", "title", "image", "table", "code", etc.)
             Detectors may use detector-specific types which should be mapped using
             BlockTypeMapper.map_type() before further processing.
@@ -921,17 +921,17 @@ class Block:
     - column_index: Column index (Added by multi-column sorters)
     - text: Recognized text (Added by recognizers)
     - corrected_text: VLM-corrected text (Added by text correction)
-    - source: Which detector/sorter produced this region (internal use only, not serialized)
+    - source: Which detector/sorter produced this block (internal use only, not serialized)
     - index: Internal index (MinerU VLM)
 
     Note:
-        Region types should ideally use the standardized types defined in BlockType.
+        Block types should ideally use the standardized types defined in BlockType.
         Use BlockTypeMapper.map_type(block.type, detector_name) to normalize
         detector-specific types to standardized types.
     """
 
     # Core fields (always present)
-    type: str  # Ideally from RegionType constants
+    type: str  # Ideally from BlockType constants
     bbox: BBox  # Required, no longer optional
     detection_confidence: float | None = None  # Optional, not all detectors provide confidence
 
@@ -950,6 +950,9 @@ class Block:
     def to_dict(self) -> dict[str, Any]:
         """Convert to JSON-serializable dict.
 
+        Field order: order → type → xywh → detection_confidence → column_index → text → corrected_text
+        This order prioritizes reading order first, then type, then position, then content.
+
         Bbox is serialized as xywh list [x, y, width, height] for human readability.
         The 'source' field is excluded from serialization as it's for internal use only.
 
@@ -957,26 +960,39 @@ class Block:
             Dict with xywh bbox format
 
         Example:
-            >>> block = Block(type="text", bbox=BBox(100, 50, 300, 200), detection_confidence=0.95)
+            >>> block = Block(type="text", bbox=BBox(100, 50, 300, 200), detection_confidence=0.95, order=0)
             >>> block.to_dict()
-            {'type': 'text', 'xywh': [100, 50, 200, 150], 'detection_confidence': 0.95}
+            {'order': 0, 'type': 'text', 'xywh': [100, 50, 200, 150], 'detection_confidence': 0.95}
         """
-        result: dict[str, Any] = {
-            "type": self.type,
-            "xywh": self.bbox.to_xywh_list(),  # Explicit xywh format
-        }
+        result: dict[str, Any] = {}
 
-        # Add optional fields (only if not None)
-        if self.detection_confidence is not None:
-            result["detection_confidence"] = self.detection_confidence
+        # Add fields in desired order (Python 3.7+ preserves insertion order)
+        # 1. Reading order (most important for document reconstruction)
         if self.order is not None:
             result["order"] = self.order
+
+        # 2. Type (what kind of block)
+        result["type"] = self.type
+
+        # 3. Position (where it is)
+        result["xywh"] = self.bbox.to_xywh_list()
+
+        # 4. Detection confidence (optional)
+        if self.detection_confidence is not None:
+            result["detection_confidence"] = self.detection_confidence
+
+        # 5. Column index (optional, for multi-column layouts)
         if self.column_index is not None:
             result["column_index"] = self.column_index
+
+        # 6. Text content (extracted)
         if self.text is not None:
             result["text"] = self.text
+
+        # 7. Corrected text (VLM-corrected)
         if self.corrected_text is not None:
             result["corrected_text"] = self.corrected_text
+
         # Note: 'source' and 'index' are intentionally excluded (internal metadata)
 
         return result
@@ -1009,7 +1025,7 @@ class Block:
 
         bbox = BBox.from_xywh(*xywh_value[:4])
 
-        # Build Region with remaining fields
+        # Build Block with remaining fields
         return cls(
             type=data.get("type", "unknown"),
             bbox=bbox,
