@@ -17,12 +17,14 @@ try:
 except ImportError:
     pass
 
+from .conversion.output.markdown import page_to_markdown
+from .conversion.output.plaintext import blocks_to_plaintext
 from .layout.detection import create_detector as create_detector_impl
 from .layout.ordering import create_sorter as create_sorter_impl, validate_combination
 from .misc import tz_now
 from .recognition import TextRecognizer
 from .recognition.api.ratelimit import rate_limiter
-from .types import Block
+from .types import Block, Page
 
 logger = logging.getLogger(__name__)
 
@@ -310,9 +312,19 @@ class Pipeline:
         pages_to_process: list[int],
         total_pages: int,
         page_output_dir: Path,
-    ) -> tuple[list[dict[str, Any]], bool]:
-        """Process multiple PDF pages."""
-        processed_pages: list[dict[str, Any]] = []
+    ) -> tuple[list[Page], bool]:
+        """Process multiple PDF pages.
+
+        Args:
+            pdf_path: Path to PDF file
+            pages_to_process: List of page numbers to process
+            total_pages: Total number of pages in PDF
+            page_output_dir: Directory to save page outputs
+
+        Returns:
+            Tuple of (list of Page objects, processing_stopped flag)
+        """
+        processed_pages: list[Page] = []
         processing_stopped = False
 
         from .conversion.input import pdf as pdf_converter
@@ -360,8 +372,18 @@ class Pipeline:
         page_num: int,
         page_output_dir: Path,
         pymupdf_page: Any | None,
-    ) -> tuple[dict[str, Any] | None, bool]:
-        """Process a single PDF page through the entire pipeline."""
+    ) -> tuple[Page | None, bool]:
+        """Process a single PDF page through the entire pipeline.
+
+        Args:
+            pdf_path: Path to PDF file
+            page_num: Page number to process
+            page_output_dir: Directory to save page output
+            pymupdf_page: PyMuPDF page object (optional)
+
+        Returns:
+            Tuple of (Page object or None, should_stop)
+        """
         page_image = None
 
         try:
@@ -442,12 +464,14 @@ class Pipeline:
 
         except Exception as e:
             logger.error("Error processing page %d: %s", page_num, e, exc_info=True)
-            error_page_result = {
-                "page_number": page_num,
-                "error": str(e),
-                "processed_at": tz_now().isoformat(),
-            }
-            return error_page_result, False
+            error_page = Page(
+                page_num=page_num,
+                blocks=[],
+                auxiliary_info={"error": str(e)},
+                status="failed",
+                processed_at=tz_now().isoformat(),
+            )
+            return error_page, False
 
         finally:
             if page_image is not None:
@@ -517,8 +541,8 @@ class Pipeline:
         correction_ratio: float,
         column_layout: dict[str, Any] | None,
         auxiliary_info: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Build page result dictionary.
+    ) -> Page:
+        """Build Page object from processing results.
 
         Args:
             pdf_path: Path to PDF file
@@ -533,54 +557,78 @@ class Pipeline:
             auxiliary_info: Auxiliary information (e.g., text_spans with font info)
 
         Returns:
-            Page result dictionary with auxiliary_info if available
+            Page object with all processing results
         """
         page_height, page_width = page_image.shape[0], page_image.shape[1]
 
-        page_result = {
+        # Build auxiliary_info dict that includes all additional metadata
+        full_auxiliary_info = auxiliary_info.copy() if auxiliary_info else {}
+        full_auxiliary_info.update({
             "image_path": str(self.temp_dir / f"{pdf_path.stem}_page_{page_num}.jpg"),
             "width": int(page_width),
             "height": int(page_height),
-            "blocks": [b.to_dict() for b in processed_blocks],  # Use processed_blocks (includes text)
             "raw_text": raw_text,
             "corrected_text": corrected_text,
             "correction_ratio": correction_ratio,
-            "processed_at": tz_now().isoformat(),
-            "page_number": page_num,
-        }
+        })
 
         if column_layout is not None:
-            page_result["column_layout"] = column_layout
+            full_auxiliary_info["column_layout"] = column_layout
 
-        # Add auxiliary info (contains text_spans with font info) if available
-        if auxiliary_info is not None:
-            page_result["auxiliary_info"] = auxiliary_info
+        page = Page(
+            page_num=page_num,
+            blocks=list(processed_blocks),  # Use processed_blocks (includes text)
+            auxiliary_info=full_auxiliary_info,
+            status="completed",
+            processed_at=tz_now().isoformat(),
+        )
 
-        return page_result
+        # Generate markdown rendering of the page
+        try:
+            rendered_text = page_to_markdown(page, include_page_header=False)
+            page.auxiliary_info["rendered_text"] = rendered_text  # type: ignore
+        except Exception as e:
+            logger.warning("Failed to render page %d to markdown: %s", page_num, e)
 
-    def _save_page_output(self, page_output_dir: Path, page_num: int, page_result: dict[str, Any]) -> None:
-        """Save page processing output."""
+        return page
+
+    def _save_page_output(self, page_output_dir: Path, page_num: int, page: Page) -> None:
+        """Save page processing output as JSON.
+
+        Args:
+            page_output_dir: Directory to save page output
+            page_num: Page number
+            page: Page object to save
+        """
         page_output_file = page_output_dir / f"page_{page_num}.json"
         with page_output_file.open("w", encoding="utf-8") as f:
-            json.dump(page_result, f, ensure_ascii=False, indent=2)
+            json.dump(page.to_dict(), f, ensure_ascii=False, indent=2)
         logger.info("Results saved to %s", page_output_file)
 
     def _create_pdf_summary(
         self,
         pdf_path: Path,
         total_pages: int,
-        processed_pages: list[dict[str, Any]],
+        processed_pages: list[Page],
         processing_stopped: bool,
         summary_output_dir: Path,
     ) -> dict[str, Any]:
-        """Create PDF processing summary."""
+        """Create PDF processing summary.
+
+        Args:
+            pdf_path: Path to PDF file
+            total_pages: Total number of pages in PDF
+            processed_pages: List of Page objects (processed or failed)
+            processing_stopped: Whether processing was stopped early
+            summary_output_dir: Directory to save summary
+
+        Returns:
+            Summary dictionary
+        """
         pages_summary, status_counts = self._build_pages_summary(processed_pages)
 
-        temp_summary_for_errors = {
-            "pages_data": processed_pages,
-            "processing_stopped": processing_stopped,
-        }
-        has_errors = self._check_for_any_errors(temp_summary_for_errors)
+        # Check if any pages have errors
+        has_errors = any(page.status == "failed" for page in processed_pages)
 
         summary = {
             "pdf_name": pdf_path.stem,
@@ -590,6 +638,7 @@ class Pipeline:
             "detected_by": self.detector_name,
             "ordered_by": self.sorter_name,
             "recognized_by": f"{self.backend}/{self.model}",
+            "rendered_by": "markdown",  # Default rendering format
             "output_directory": str(summary_output_dir),
             "processed_at": tz_now().isoformat(),
             "status_summary": {k: v for k, v in status_counts.items() if v > 0},
@@ -605,15 +654,24 @@ class Pipeline:
         return summary
 
     def _build_pages_summary(
-        self, processed_pages: list[dict[str, Any]]
+        self, processed_pages: list[Page]
     ) -> tuple[list[dict[str, Any]], dict[str, int]]:
-        """Build summary of processed pages."""
+        """Build summary of processed pages.
+
+        Args:
+            processed_pages: List of Page objects
+
+        Returns:
+            Tuple of (pages_summary, status_counts)
+        """
         pages_summary: list[dict[str, Any]] = []
         status_counts = {"complete": 0, "partial": 0, "incomplete": 0}
 
-        for page_result in processed_pages:
-            page_no = int(page_result.get("page_number", 0))
-            status = "partial" if page_result.get("error") else "complete"
+        for page in processed_pages:
+            page_no = page.page_num
+            status = page.status if page.status != "completed" else "complete"
+            if status == "failed":
+                status = "partial"
             status_counts[status] += 1
             pages_summary.append(
                 {"id": page_no, "status": status}
@@ -821,50 +879,18 @@ class Pipeline:
         return {"columns": columns}
 
     def _compose_page_text(self, processed_blocks: Sequence[Block]) -> str:
-        """Compose page-level raw text from processed blocks in reading order.
+        """Compose page-level raw text from processed blocks using plaintext converter.
 
-        Reading order: Uses reading_order_rank if available, otherwise top-to-bottom (y),
-        then left-to-right (x). Includes text-like regions only and preserves internal
-        newlines within each region's text.
+        This method uses the plaintext converter which joins blocks with double newlines
+        in reading order. This is a simple concatenation strategy without formatting.
 
         Args:
-            processed_blocks: List of processed regions with text content
+            processed_blocks: List of processed blocks with text content
 
         Returns:
-            Composed text in natural reading order
+            Composed text in natural reading order (plaintext format)
         """
-        if not processed_blocks:
-            return ""
-
-        text_like_types = {"plain text", "text", "title", "list"}
-        sortable_regions: list[tuple[int, int, str, int | None]] = []
-
-        for block in processed_blocks:
-            if block.type not in text_like_types:
-                continue
-            x, y = block.bbox.x0, block.bbox.y0
-            text_value = block.text
-            if text_value and text_value.strip():
-                # Keep internal newlines; trim outer whitespace only
-                order_rank = block.order
-                sortable_regions.append((y, x, text_value.strip(), order_rank))
-
-        # Sort by reading order rank if available, otherwise by y then x
-        if sortable_regions:
-            if any(item[3] is not None for item in sortable_regions):
-                sortable_regions.sort(
-                    key=lambda item: (
-                        0 if item[3] is not None else 1,
-                        item[3] if item[3] is not None else item[0],
-                        item[0],
-                        item[1],
-                    )
-                )
-            else:
-                sortable_regions.sort(key=lambda item: (item[0], item[1]))
-
-        # Join with a blank line between regions to separate blocks
-        return "\n\n".join(item[2] for item in sortable_regions)
+        return blocks_to_plaintext(processed_blocks)
 
     def _save_results(self, result: dict[str, Any], output_path: Path) -> None:
         """Save processing results to JSON file."""
