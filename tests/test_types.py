@@ -1,6 +1,6 @@
-"""Tests for pipeline types (BBox, Region).
+"""Tests for pipeline types (BBox, Block).
 
-Comprehensive tests for BBox format conversions, Region utilities,
+Comprehensive tests for BBox format conversions, Block utilities,
 and geometric operations.
 """
 
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from pipeline.types import BBox, Region, regions_to_olmocr_anchor_text
+from pipeline.types import BBox, Block, blocks_to_olmocr_anchor_text
 
 
 class TestBBoxCreation:
@@ -264,32 +264,32 @@ class TestBBoxRoundTrip:
         assert converted == original
 
 
-class TestRegionUtilities:
-    """Test Region utility functions."""
+class TestBlockUtilities:
+    """Test Block utility functions."""
 
-    def test_regions_to_olmocr_anchor_text(self):
-        """Test regions to olmOCR anchor text conversion."""
-        regions: list[Region] = [
-            Region(
+    def test_blocks_to_olmocr_anchor_text(self):
+        """Test blocks to olmOCR anchor text conversion."""
+        blocks: list[Block] = [
+            Block(
                 type="title",
                 bbox=BBox(100, 50, 300, 80),
-                confidence=0.9,
+                detection_confidence=0.9,
                 text="Chapter 1",
             ),
-            Region(
+            Block(
                 type="figure",
                 bbox=BBox(100, 100, 300, 250),
-                confidence=0.95,
+                detection_confidence=0.95,
             ),
-            Region(
+            Block(
                 type="plain text",
                 bbox=BBox(100, 300, 500, 350),
-                confidence=0.9,
+                detection_confidence=0.9,
                 text="Content here with some long text that might be truncated",
             ),
         ]
 
-        anchor_text = regions_to_olmocr_anchor_text(regions, 800, 600)
+        anchor_text = blocks_to_olmocr_anchor_text(blocks, 800, 600)
 
         # Check header
         assert "Page dimensions: 800x600" in anchor_text
@@ -303,20 +303,20 @@ class TestRegionUtilities:
         # Check another text region
         assert "[100x300]Content here" in anchor_text
 
-    def test_regions_to_olmocr_anchor_text_max_length(self):
+    def test_blocks_to_olmocr_anchor_text_max_length(self):
         """Test anchor text respects max_length limit."""
-        # Create many regions
-        regions: list[Region] = [
-            Region(
+        # Create many blocks
+        blocks: list[Block] = [
+            Block(
                 type="text",
                 bbox=BBox(i * 10, i * 10, i * 10 + 100, i * 10 + 20),
-                confidence=0.9,
+                detection_confidence=0.9,
             )
             for i in range(100)
         ]
 
         # Set short max_length
-        anchor_text = regions_to_olmocr_anchor_text(regions, 800, 600, max_length=200)
+        anchor_text = blocks_to_olmocr_anchor_text(blocks, 800, 600, max_length=200)
 
         # Should be limited
         assert len(anchor_text) <= 250  # Some buffer for formatting

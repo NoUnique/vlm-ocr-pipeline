@@ -1227,11 +1227,11 @@ class Detector(Protocol):
     """Layout detection interface.
 
     All detectors must implement this interface and return blocks
-    in the unified Region format with bbox field.
+    in the unified Block format with bbox field.
     """
 
     def detect(self, image: np.ndarray) -> list[Block]:
-        """Detect regions in image.
+        """Detect blocks in image.
 
         Args:
             image: Input image as numpy array (H, W, C)
@@ -1241,10 +1241,10 @@ class Detector(Protocol):
 
         Example:
             >>> detector = DocLayoutYOLODetector()
-            >>> regions = detector.detect(image)
-            >>> regions[0].type
-            'plain text'
-            >>> regions[0].bbox
+            >>> blocks = detector.detect(image)
+            >>> blocks[0].type
+            'text'
+            >>> blocks[0].bbox
             BBox(x0=100, y0=50, x1=300, y1=200)
         """
         ...
@@ -1254,24 +1254,24 @@ class Sorter(Protocol):
     """Reading order sorting interface.
 
     All sorters must implement this interface and add ordering information
-    to regions (reading_order_rank) while maintaining the unified Region format.
+    to blocks (order field) while maintaining the unified Block format.
     """
 
     def sort(self, blocks: list[Block], image: np.ndarray, **kwargs: Any) -> list[Block]:
-        """Sort regions by reading order.
+        """Sort blocks by reading order.
 
         Args:
-            regions: Detected blocks with bbox
+            blocks: Detected blocks with bbox
             image: Page image for analysis (H, W, C)
             **kwargs: Additional context (e.g., pymupdf_page, pdf_path)
 
         Returns:
-            Sorted regions with reading_order_rank field added
+            Sorted blocks with order field added
 
         Example:
             >>> sorter = PyMuPDFSorter()
-            >>> sorted_blocks = sorter.sort(regions, image, pymupdf_page=page)
-            >>> sorted_blocks[0].reading_order_rank
+            >>> sorted_blocks = sorter.sort(blocks, image, pymupdf_page=page)
+            >>> sorted_blocks[0].order
             0
         """
         ...

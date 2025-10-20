@@ -510,8 +510,8 @@ class Pipeline:
         pdf_path: Path,
         page_num: int,
         page_image: Any,
-        regions: Sequence[Region],
-        processed_blocks: Sequence[Region],
+        regions: Sequence[Block],
+        processed_blocks: Sequence[Block],
         raw_text: str,
         corrected_text: str,
         correction_ratio: float,
@@ -524,8 +524,8 @@ class Pipeline:
             pdf_path: Path to PDF file
             page_num: Page number
             page_image: Page image array
-            regions: Detected regions
-            processed_blocks: Regions with extracted text
+            regions: Detected blocks
+            processed_blocks: Blocks with extracted text
             raw_text: Raw extracted text
             corrected_text: VLM-corrected text
             correction_ratio: How much text was changed (0.0 = no change, 1.0 = completely different)
@@ -820,8 +820,8 @@ class Pipeline:
 
         return {"columns": columns}
 
-    def _compose_page_text(self, processed_blocks: Sequence[Region]) -> str:
-        """Compose page-level raw text from processed regions in reading order.
+    def _compose_page_text(self, processed_blocks: Sequence[Block]) -> str:
+        """Compose page-level raw text from processed blocks in reading order.
 
         Reading order: Uses reading_order_rank if available, otherwise top-to-bottom (y),
         then left-to-right (x). Includes text-like regions only and preserves internal

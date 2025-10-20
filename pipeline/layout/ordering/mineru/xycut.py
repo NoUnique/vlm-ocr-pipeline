@@ -84,7 +84,7 @@ class MinerUXYCutSorter:
 
         except Exception as e:
             logger.error("XY-Cut sorting failed: %s, falling back to simple sort", e)
-            return self._fallback_sort(regions)
+            return self._fallback_sort(blocks)
 
     def _recursive_xy_cut(self, boxes: np.ndarray, indices: list[int], result: list[int]) -> None:
         """Recursive XY-Cut algorithm.

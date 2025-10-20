@@ -85,103 +85,103 @@ class RegionTypeHeaderIdentifier:
 # ==================== Core: Object → Markdown ====================
 
 
-def region_to_markdown(  # noqa: PLR0911, PLR0912, PLR0915
-    region: Block,
+def block_to_markdown(  # noqa: PLR0911, PLR0912, PLR0915
+    block: Block,
     header_identifier: RegionTypeHeaderIdentifier | None = None,
 ) -> str:
-    """Convert a Region object to Markdown format using region type.
+    """Convert a Block object to Markdown format using block type.
 
-    Supports all MinerU 2.5 VLM region types (25+ types) plus legacy types.
+    Supports all MinerU 2.5 VLM block types (25+ types) plus legacy types.
 
     Args:
-        region: Region object (not dict!)
+        block: Block object (not dict!)
         header_identifier: Header identifier (uses default if None)
 
     Returns:
-        Markdown-formatted string for the region
+        Markdown-formatted string for the block
 
     Example:
         >>> from pipeline.types import Block, BBox
-        >>> block = Block(type="title", bbox=BBox(0, 0, 100, 20), confidence=0.9, text="Introduction")
-        >>> region_to_markdown(region)
+        >>> block = Block(type="title", bbox=BBox(0, 0, 100, 20), detection_confidence=0.9, text="Introduction")
+        >>> block_to_markdown(block)
         '# Introduction'
     """
     if header_identifier is None:
         header_identifier = RegionTypeHeaderIdentifier()
 
-    region_type = block.type.lower()
+    block_type = block.type.lower()
     text = block.corrected_text or block.text or ""
 
     if not text:
         return ""
 
-    # Check if it's a header based on region type
-    header_prefix = header_identifier.get_header_prefix(region_type)
+    # Check if it's a header based on block type
+    header_prefix = header_identifier.get_header_prefix(block_type)
     if header_prefix:
         return f"{header_prefix}{text}"
 
     # ==================== Content Types ====================
-    if region_type in ["text", "plain text"]:
+    if block_type in ["text", "plain text"]:
         return text
 
     # ==================== List Types ====================
-    if region_type in ["list", "list_item"]:
+    if block_type in ["list", "list_item"]:
         # Ensure proper list formatting
         if not text.startswith(("-", "*", "1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9.")):
             return f"- {text}"
         return text
 
     # ==================== Table Types ====================
-    if region_type in ["table", "table_body"]:
-        # Table regions might already contain markdown table or need formatting
+    if block_type in ["table", "table_body"]:
+        # Table blocks might already contain markdown table or need formatting
         if "|" in text:  # Already markdown table
             return text
         return f"**Table:**\n\n{text}"
 
-    if region_type == "table_caption":
+    if block_type == "table_caption":
         return f"**Table:** {text}"
 
-    if region_type == "table_footnote":
+    if block_type == "table_footnote":
         return f"*{text}*"
 
     # ==================== Figure/Image Types ====================
-    if region_type in ["figure", "image", "image_body"]:
+    if block_type in ["figure", "image", "image_body"]:
         # Image descriptions
         return f"**Figure:** {text}"
 
-    if region_type == "image_caption":
+    if block_type == "image_caption":
         return f"**Figure:** {text}"
 
-    if region_type == "image_footnote":
+    if block_type == "image_footnote":
         return f"*{text}*"
 
     # ==================== Equation Types ====================
-    if region_type in ["equation", "interline_equation"]:
+    if block_type in ["equation", "interline_equation"]:
         # Display equations (on their own line)
         if text.startswith(("$$", "$")):
             return text
         return f"$${text}$$"
 
-    if region_type == "inline_equation":
+    if block_type == "inline_equation":
         # Inline equations
         if text.startswith("$") and text.endswith("$"):
             return text
         return f"${text}$"
 
     # Legacy MinerU DocLayoutYOLO types
-    if region_type == "isolate_formula":
+    if block_type == "isolate_formula":
         if text.startswith(("$$", "$")):
             return text
         return f"$${text}$$"
 
-    if region_type == "formula_caption":
+    if block_type == "formula_caption":
         return f"*Formula: {text}*"
 
-    if region_type == "figure_caption":
+    if block_type == "figure_caption":
         return f"**Figure:** {text}"
 
     # ==================== Code Types ====================
-    if region_type in ["code", "code_body", "algorithm"]:
+    if block_type in ["code", "code_body", "algorithm"]:
         # Code blocks
         if text.startswith("```") and text.endswith("```"):
             return text
@@ -191,33 +191,33 @@ def region_to_markdown(  # noqa: PLR0911, PLR0912, PLR0915
             return f"```\n{text}\n```"
         return f"```\n{text}\n```"
 
-    if region_type == "code_caption":
+    if block_type == "code_caption":
         return f"**Code:** {text}"
 
     # ==================== Page Elements (Skip) ====================
-    if region_type in ["header", "footer", "page_number"]:
+    if block_type in ["header", "footer", "page_number"]:
         # Skip page headers/footers/numbers - they're not content
         return ""
 
     # ==================== Reference/Metadata Types ====================
-    if region_type == "ref_text":
+    if block_type == "ref_text":
         # References - render as normal text
         return text
 
-    if region_type in ["phonetic", "aside_text"]:
+    if block_type in ["phonetic", "aside_text"]:
         # Side notes - render in italics
         return f"*{text}*"
 
-    if region_type == "page_footnote":
+    if block_type == "page_footnote":
         # Footnotes - render in italics
         return f"*{text}*"
 
-    if region_type == "index":
+    if block_type == "index":
         # Index entries - render as normal text or skip
         return text
 
     # ==================== Discarded Types ====================
-    if region_type in ["discarded", "abandon"]:
+    if block_type in ["discarded", "abandon"]:
         # Skip discarded content
         return ""
 
@@ -225,20 +225,20 @@ def region_to_markdown(  # noqa: PLR0911, PLR0912, PLR0915
     return text
 
 
-def regions_to_markdown(
+def blocks_to_markdown(
     blocks: list[Block],
     include_bbox: bool = False,
     include_confidence: bool = False,
     header_identifier: RegionTypeHeaderIdentifier | None = None,
     preserve_reading_order: bool = True,
 ) -> str:
-    """Convert list of Region objects to Markdown format using region types.
+    """Convert list of Block objects to Markdown format using block types.
 
-    This function processes regions in reading order (if available) and
-    applies appropriate Markdown formatting based on region types.
+    This function processes blocks in reading order (if available) and
+    applies appropriate Markdown formatting based on block types.
 
     Args:
-        regions: List of Region objects (not dicts!)
+        blocks: List of Block objects (not dicts!)
         include_bbox: Include bounding box information (default: False)
         include_confidence: Include confidence scores (default: False)
         header_identifier: Custom header identifier (uses default if None)
@@ -249,13 +249,13 @@ def regions_to_markdown(
 
     Example:
         >>> from pipeline.types import Block, BBox
-        >>> regions = [
-        ...     Region(type="title", bbox=BBox(0, 0, 100, 20), confidence=0.9,
+        >>> blocks = [
+        ...     Block(type="title", bbox=BBox(0, 0, 100, 20), detection_confidence=0.9,
         ...            text="Chapter 1", order=0),
-        ...     Region(type="text", bbox=BBox(0, 30, 100, 50), confidence=0.95,
+        ...     Block(type="text", bbox=BBox(0, 30, 100, 50), detection_confidence=0.95,
         ...            text="Introduction.", order=1),
         ... ]
-        >>> md = regions_to_markdown(regions)
+        >>> md = blocks_to_markdown(blocks)
         >>> print(md)
         # Chapter 1
         <BLANKLINE>
@@ -265,22 +265,22 @@ def regions_to_markdown(
         header_identifier = RegionTypeHeaderIdentifier()
 
     # Sort by reading order if available and requested
-    sorted_blocks = regions
+    sorted_blocks = blocks
     if preserve_reading_order:
-        # Filter regions with order
-        ranked_regions = [r for r in regions if r.order is not None]
-        unranked_regions = [r for r in regions if r.order is None]
+        # Filter blocks with order
+        ranked_blocks = [b for b in blocks if b.order is not None]
+        unranked_blocks = [b for b in blocks if b.order is None]
 
-        if ranked_regions:
-            sorted_blocks = sorted(ranked_regions, key=lambda r: r.order)  # type: ignore
-            # Append unranked regions at the end
-            sorted_blocks.extend(unranked_regions)
+        if ranked_blocks:
+            sorted_blocks = sorted(ranked_blocks, key=lambda b: b.order)  # type: ignore
+            # Append unranked blocks at the end
+            sorted_blocks.extend(unranked_blocks)
 
     lines: list[str] = []
     prev_type = None
 
-    for region in sorted_blocks:
-        md_text = region_to_markdown(region, header_identifier)
+    for block in sorted_blocks:
+        md_text = block_to_markdown(block, header_identifier)
 
         if not md_text:
             continue
@@ -300,8 +300,8 @@ def regions_to_markdown(
         if include_bbox:
             bbox = block.bbox.to_xywh_list()
             metadata_parts.append(f"bbox: {bbox}")
-        if include_confidence:
-            conf = block.confidence
+        if include_confidence and block.detection_confidence is not None:
+            conf = block.detection_confidence
             metadata_parts.append(f"confidence: {conf:.2f}")
 
         if metadata_parts:
@@ -347,8 +347,8 @@ def page_to_markdown(
         lines.append(f"## Page {page.page_num}")
         lines.append("")
 
-    md_content = regions_to_markdown(
-        page.regions,
+    md_content = blocks_to_markdown(
+        page.blocks,
         include_bbox=include_bbox,
         include_confidence=include_confidence,
     )
@@ -434,8 +434,8 @@ def region_dict_to_markdown(data: dict[str, Any], **kwargs: Any) -> str:
         >>> region_dict_to_markdown(data)
         '# Hello'
     """
-    region = Region.from_dict(data)
-    return region_to_markdown(region, **kwargs)
+    block = Block.from_dict(data)
+    return block_to_markdown(block, **kwargs)
 
 
 def regions_dict_to_markdown(data: list[dict[str, Any]], **kwargs: Any) -> str:
@@ -453,8 +453,8 @@ def regions_dict_to_markdown(data: list[dict[str, Any]], **kwargs: Any) -> str:
         >>> regions_dict_to_markdown(data)
         '# Hello'
     """
-    regions = [Region.from_dict(r) for r in data]
-    return regions_to_markdown(regions, **kwargs)
+    blocks = [Block.from_dict(b) for b in data]
+    return blocks_to_markdown(blocks, **kwargs)
 
 
 def page_dict_to_markdown(data: dict[str, Any], **kwargs: Any) -> str:
@@ -505,17 +505,17 @@ def document_dict_to_markdown(data: dict[str, Any], **kwargs: Any) -> str:
 # ==================== File I/O ====================
 
 
-def save_regions_to_markdown(
+def save_blocks_to_markdown(
     blocks: list[Block],
     output_path: Path,
     include_bbox: bool = False,
     include_confidence: bool = False,
     add_header: bool = True,
 ) -> None:
-    """Save regions to Markdown file.
+    """Save blocks to Markdown file.
 
     Args:
-        regions: List of Region objects
+        blocks: List of Block objects
         output_path: Output Markdown file path
         include_bbox: Include bounding box information (default: False)
         include_confidence: Include confidence scores (default: False)
@@ -526,11 +526,11 @@ def save_regions_to_markdown(
 
     Example:
         >>> from pipeline.types import Block, BBox
-        >>> regions = [
-        ...     Region(type="title", bbox=BBox(0, 0, 100, 20), confidence=0.9, text="Document Title"),
-        ...     Region(type="text", bbox=BBox(0, 30, 100, 50), confidence=0.95, text="Content here."),
+        >>> blocks = [
+        ...     Block(type="title", bbox=BBox(0, 0, 100, 20), detection_confidence=0.9, text="Document Title"),
+        ...     Block(type="text", bbox=BBox(0, 30, 100, 50), detection_confidence=0.95, text="Content here."),
         ... ]
-        >>> save_regions_to_markdown(regions, Path("output.md"))
+        >>> save_blocks_to_markdown(blocks, Path("output.md"))
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -540,14 +540,14 @@ def save_regions_to_markdown(
     if add_header:
         lines.append("# OCR Result")
         lines.append("")
-        lines.append(f"Total regions: {len(regions)}")
+        lines.append(f"Total blocks: {len(blocks)}")
         lines.append("")
         lines.append("---")
         lines.append("")
 
-    # Convert regions to markdown
-    md_content = regions_to_markdown(
-        regions,
+    # Convert blocks to markdown
+    md_content = blocks_to_markdown(
+        blocks,
         include_bbox=include_bbox,
         include_confidence=include_confidence,
     )
@@ -557,7 +557,11 @@ def save_regions_to_markdown(
     with open(output_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
 
-    logger.info("Saved %d regions to Markdown: %s", len(regions), output_path)
+    logger.info("Saved %d blocks to Markdown: %s", len(blocks), output_path)
+
+
+# Backward compatibility alias
+save_regions_to_markdown = save_blocks_to_markdown
 
 
 def save_page_to_markdown(
@@ -620,3 +624,10 @@ def save_document_to_markdown(
         f.write(md_content)
 
     logger.info("Saved document '%s' to Markdown: %s", doc.pdf_name, output_path)
+
+
+# ==================== Backward Compatibility Aliases ====================
+# For backward compatibility with code that uses the old naming
+
+region_to_markdown = block_to_markdown
+regions_to_markdown = blocks_to_markdown

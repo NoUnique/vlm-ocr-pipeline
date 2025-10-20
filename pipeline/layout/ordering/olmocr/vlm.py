@@ -69,31 +69,31 @@ class OlmOCRVLMSorter:
             raise ImportError("olmOCR VLM dependencies not available. Please install vllm or transformers.") from e
 
     def sort(self, blocks: list[Block], image: np.ndarray, **kwargs: Any) -> list[Block]:
-        """Sort regions using olmOCR VLM.
+        """Sort blocks using olmOCR VLM.
 
         This sorter processes the entire page with VLM and returns a single
-        region containing the natural text output.
+        block containing the natural text output.
 
         Args:
-            regions: Detected regions (used for anchor text if use_anchoring=True)
+            blocks: Detected blocks (used for anchor text if use_anchoring=True)
             image: Page image
             **kwargs: Additional context:
                 - pdf_path: PDF path for PyPDF fallback anchor
                 - page_num: Page number
 
         Returns:
-            Single region containing VLM output text
+            Single block containing VLM output text
 
         Example:
             >>> sorter = OlmOCRVLMSorter()
-            >>> result = sorter.sort(regions, image)
-            >>> result[0]["text"]
+            >>> result = sorter.sort(blocks, image)
+            >>> result[0].text
             'Chapter 1\n\nThis is the first paragraph...'
         """
         page_height, page_width = image.shape[:2]
 
-        if self.use_anchoring and regions:
-            anchor_text = blocks_to_olmocr_anchor_text(regions, page_width, page_height)
+        if self.use_anchoring and blocks:
+            anchor_text = blocks_to_olmocr_anchor_text(blocks, page_width, page_height)
             prompt = self._build_prompt_with_anchor(anchor_text)
         else:
             prompt = self._build_prompt_no_anchor()
@@ -102,7 +102,7 @@ class OlmOCRVLMSorter:
             vlm_client = self._get_vlm_client()
             response = vlm_client.process(image, prompt)
 
-            result_region = Region(
+            result_block = Block(
                 type="text",
                 bbox=BBox(0, 0, page_width, page_height),
                 detection_confidence=1.0,
@@ -113,11 +113,11 @@ class OlmOCRVLMSorter:
 
             logger.debug("Processed page with olmOCR VLM")
 
-            return [result_region]
+            return [result_block]
 
         except NotImplementedError:
             logger.error("olmOCR VLM not implemented yet, falling back to simple sort")
-            return self._fallback_sort(regions)
+            return self._fallback_sort(blocks)
 
     def _build_prompt_with_anchor(self, anchor_text: str) -> str:
         """Build prompt with anchor text."""
