@@ -64,13 +64,13 @@ class MinerUDocLayoutYOLODetector:
         logger.info("MinerU DocLayout-YOLO detector initialized")
 
     def detect(self, image: np.ndarray) -> list[Block]:
-        """Detect layout regions in image.
+        """Detect layout blocks in image.
 
         Args:
             image: Input image as numpy array (H, W, C)
 
         Returns:
-            List of detected regions in unified format
+            List of detected blocks in unified format
         """
         try:
             from PIL import Image as PILImage
@@ -80,7 +80,7 @@ class MinerUDocLayoutYOLODetector:
         pil_image = PILImage.fromarray(image)
         raw_results = self.model.predict(pil_image)
 
-        logger.debug("Detected %d regions with MinerU DocLayout-YOLO", len(raw_results))
+        logger.debug("Detected %d blocks with MinerU DocLayout-YOLO", len(raw_results))
 
         return [self._to_block(r) for r in raw_results]
 
@@ -115,7 +115,7 @@ class MinerUDocLayoutYOLODetector:
         )
 
     def _category_to_type(self, category_id: int) -> str:
-        """Convert MinerU category ID to region type name."""
+        """Convert MinerU category ID to block type name."""
         category_map = {
             0: "title",
             1: "plain text",

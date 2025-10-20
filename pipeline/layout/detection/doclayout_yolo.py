@@ -50,26 +50,26 @@ class DocLayoutYOLODetector:
         logger.info("DocLayout-YOLO detector initialized")
 
     def detect(self, image: np.ndarray) -> list[Block]:
-        """Detect layout regions in image.
+        """Detect layout blocks in image.
 
         Args:
             image: Input image as numpy array (H, W, C)
 
         Returns:
-            List of detected regions in unified format
+            List of detected blocks in unified format
 
         Example:
             >>> detector = DocLayoutYOLODetector()
-            >>> regions = detector.detect(image)
-            >>> regions[0]["type"]
+            >>> blocks = detector.detect(image)
+            >>> blocks[0].type
             'plain text'
-            >>> regions[0]["coords"]  # [x, y, w, h]
-            [100, 50, 200, 150]
-            >>> regions[0]["bbox"]  # BBox object
+            >>> blocks[0].bbox.to_xywh()  # (x, y, w, h)
+            (100, 50, 200, 150)
+            >>> blocks[0].bbox  # BBox object
             BBox(x0=100, y0=50, x1=300, y1=200)
         """
         raw_results = self.model.predict(image, conf=self.confidence_threshold)
-        logger.debug("Detected %d regions with DocLayout-YOLO", len(raw_results))
+        logger.debug("Detected %d blocks with DocLayout-YOLO", len(raw_results))
 
         return [self._to_block(r) for r in raw_results]
 

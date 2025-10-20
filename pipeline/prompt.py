@@ -211,7 +211,7 @@ class PromptManager:
         return f"Process this content according to {category} guidelines."
 
     def get_prompt_for_region_type(self, region_type: str) -> str:
-        """Get appropriate prompt for a region type (backend-agnostic)"""
+        """Get appropriate prompt for a block type (backend-agnostic)"""
         region_type_mapping = {
             "table": "table_analysis",
             "figure": "figure_analysis",
@@ -225,7 +225,7 @@ class PromptManager:
         return self.get_prompt("content_analysis", analysis_type, "user")
 
     def get_gemini_prompt_for_region_type(self, region_type: str) -> str:
-        """Get Gemini-specific prompt for a region type (deprecated, use get_prompt_for_region_type)"""
+        """Get Gemini-specific prompt for a block type (deprecated, use get_prompt_for_region_type)"""
         return self.get_prompt_for_region_type(region_type)
 
     def reload_prompts(self) -> None:

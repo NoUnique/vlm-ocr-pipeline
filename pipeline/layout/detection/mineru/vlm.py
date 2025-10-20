@@ -27,7 +27,7 @@ class MinerUVLMDetector:
     """Detector using MinerU VLM model.
 
     MinerU VLM can be used in two modes:
-    1. Detection only: Extract layout regions (step 1)
+    1. Detection only: Extract layout blocks (step 1)
     2. Full pipeline: Detection + ordering + OCR (two-step)
 
     This detector provides flexible usage based on the detection_only flag.
@@ -112,18 +112,18 @@ class MinerUVLMDetector:
         )
 
     def detect(self, image: np.ndarray) -> list[Block]:
-        """Detect layout regions using MinerU VLM.
+        """Detect layout blocks using MinerU VLM.
 
         Args:
             image: Input image as numpy array (H, W, C)
 
         Returns:
-            List of detected regions in unified format
+            List of detected blocks in unified format
 
         Example:
             >>> detector = MinerUVLMDetector(model="opendatalab/PDF-Extract-Kit-1.0")
-            >>> regions = detector.detect(image)
-            >>> regions[0]["type"]
+            >>> blocks = detector.detect(image)
+            >>> blocks[0].type
             'text'
             >>> regions[0]["bbox"]
             BBox(x0=100, y0=50, x1=300, y1=200)

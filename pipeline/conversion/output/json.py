@@ -15,10 +15,10 @@ def save_regions_to_json(
     output_path: Path,
     indent: int = 2,
 ) -> None:
-    """Save regions to JSON file.
+    """Save blocks to JSON file.
 
     Args:
-        regions: List of region dictionaries
+        regions: List of block dictionaries
         output_path: Output JSON file path
         indent: JSON indentation level (default: 2)
 
@@ -26,18 +26,18 @@ def save_regions_to_json(
         OSError: If file cannot be written
 
     Example:
-        >>> regions = [
+        >>> blocks = [
         ...     {"type": "text", "bbox": [100, 50, 200, 150], "confidence": 0.95},
         ...     {"type": "title", "bbox": [100, 10, 300, 40], "confidence": 0.98},
         ... ]
-        >>> save_regions_to_json(regions, Path("output.json"))
+        >>> save_regions_to_json(blocks, Path("output.json"))
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(regions, f, indent=indent, ensure_ascii=False)
 
-    logger.info("Saved %d regions to JSON: %s", len(regions), output_path)
+    logger.info("Saved %d blocks to JSON: %s", len(regions), output_path)
 
 
 def save_pipeline_result_to_json(
@@ -48,7 +48,7 @@ def save_pipeline_result_to_json(
     """Save pipeline result to JSON file.
 
     Args:
-        result: Pipeline result dictionary (may contain regions, metadata, etc.)
+        result: Pipeline result dictionary (may contain blocks, metadata, etc.)
         output_path: Output JSON file path
         indent: JSON indentation level (default: 2)
 
@@ -73,21 +73,21 @@ def save_pipeline_result_to_json(
 
 
 def load_regions_from_json(json_path: Path) -> list[dict[str, Any]]:
-    """Load regions from JSON file.
+    """Load blocks from JSON file.
 
     Args:
         json_path: Input JSON file path
 
     Returns:
-        List of region dictionaries
+        List of block dictionaries
 
     Raises:
         FileNotFoundError: If file does not exist
         json.JSONDecodeError: If file is not valid JSON
 
     Example:
-        >>> regions = load_regions_from_json(Path("output.json"))
-        >>> len(regions)
+        >>> blocks = load_regions_from_json(Path("output.json"))
+        >>> len(blocks)
         10
     """
     with open(json_path, encoding="utf-8") as f:
@@ -99,7 +99,7 @@ def load_regions_from_json(json_path: Path) -> list[dict[str, Any]]:
     elif isinstance(data, dict) and "regions" in data:
         regions = data["regions"]
     elif isinstance(data, dict) and "pages" in data:
-        # Multi-page format: extract all regions
+        # Multi-page format: extract all blocks
         regions = []
         for page in data["pages"]:
             if "regions" in page:
@@ -107,7 +107,7 @@ def load_regions_from_json(json_path: Path) -> list[dict[str, Any]]:
     else:
         raise ValueError(f"Unsupported JSON format in {json_path}")
 
-    logger.info("Loaded %d regions from JSON: %s", len(regions), json_path)
+    logger.info("Loaded %d blocks from JSON: %s", len(regions), json_path)
     return regions
 
 

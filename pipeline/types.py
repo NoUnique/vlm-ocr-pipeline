@@ -2,7 +2,9 @@
 
 This module provides:
 - BBox: Integer-based bounding box (internal: xyxy, JSON: xywh)
-- Region: Document region with required bbox field
+- Block: Document block with required bbox field
+- Page: Single page processing result
+- Document: Multi-page document processing result
 - Detector/Sorter: Protocol interfaces
 """
 
@@ -20,7 +22,7 @@ if TYPE_CHECKING:
 RGB_IMAGE_NDIM = 3  # RGB image has 3 dimensions (H, W, C)
 
 
-# ==================== Standardized Region Types ====================
+# ==================== Standardized Block Types ====================
 # Based on MinerU 2.5 VLM (most comprehensive type system)
 
 class BlockType:
@@ -625,7 +627,7 @@ class BBox:
 
         Args:
             content_type: Type of content ("text", "image", "figure", "table")
-            text_content: Text content for text regions (optional)
+            text_content: Text content for text blocks (optional)
 
         Returns:
             olmOCR anchor text string
@@ -863,14 +865,14 @@ class BBox:
         )
 
     def crop(self, image: np.ndarray, padding: int = 0) -> np.ndarray:
-        """Crop this bbox region from an image with optional padding.
+        """Crop this bbox area from an image with optional padding.
 
         Args:
             image: Input image as numpy array (H, W, C) or (H, W)
             padding: Padding to add on all sides (default: 0)
 
         Returns:
-            Cropped region as numpy array
+            Cropped area as numpy array
 
         Example:
             >>> import numpy as np
@@ -898,7 +900,7 @@ class BBox:
         return image[y0:y1, x0:x1]
 
 
-# ==================== Region TypedDict ====================
+# ==================== Block Dataclass ====================
 
 
 @dataclass
@@ -1052,7 +1054,7 @@ class Block:
 class Page:
     """Single page processing result.
 
-    Represents the result of processing one page, containing detected regions
+    Represents the result of processing one page, containing detected blocks
     and associated metadata. This provides type safety for page-level operations.
 
     Core fields:
@@ -1082,12 +1084,12 @@ class Page:
         """Convert to JSON-serializable dict.
 
         Returns:
-            Dict with regions converted to dicts
+            Dict with blocks converted to dicts
 
         Example:
-            >>> page = Page(page_num=1, regions=[...])
+            >>> page = Page(page_num=1, blocks=[...])
             >>> page.to_dict()
-            {'page_num': 1, 'regions': [...], 'status': 'completed'}
+            {'page_num': 1, 'blocks': [...], 'status': 'completed'}
         """
         result: dict[str, Any] = {
             "page_num": self.page_num,
@@ -1301,7 +1303,7 @@ def blocks_to_olmocr_anchor_text(
     """Convert blocks to olmOCR anchor text format.
 
     Args:
-        regions: List of Block instances with bbox
+        blocks: List of Block instances with bbox
         page_width: Page width in pixels
         page_height: Page height in pixels
         max_length: Maximum anchor text length (approximate)
@@ -1311,8 +1313,8 @@ def blocks_to_olmocr_anchor_text(
 
     Example:
         >>> blocks = [
-        ...     Block(type="title", bbox=BBox(100, 50, 300, 80), confidence=0.9),
-        ...     Block(type="figure", bbox=BBox(100, 100, 300, 250), confidence=0.95),
+        ...     Block(type="title", bbox=BBox(100, 50, 300, 80), detection_confidence=0.9),
+        ...     Block(type="figure", bbox=BBox(100, 100, 300, 250), detection_confidence=0.95),
         ... ]
         >>> anchor = blocks_to_olmocr_anchor_text(blocks, 800, 600)
         >>> print(anchor)

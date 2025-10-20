@@ -94,11 +94,11 @@ class OpenAIClient:
 
     def extract_text(self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str) -> dict[str, Any]:
         """
-        Extract text from region using OpenAI API
+        Extract text from block using OpenAI API
 
         Args:
-            region_img: Image region as numpy array
-            region_info: Region metadata including type and coordinates
+            region_img: Image block as numpy array
+            region_info: Block metadata including type and coordinates
             prompt: Prompt for text extraction
 
         Returns:
@@ -184,11 +184,11 @@ class OpenAIClient:
         self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str
     ) -> dict[str, Any]:
         """
-        Process special regions (tables, figures) with OpenAI API
+        Process special blocks (tables, figures) with OpenAI API
 
         Args:
-            region_img: Image region as numpy array
-            region_info: Region metadata including type and coordinates
+            region_img: Image block as numpy array
+            region_info: Block metadata including type and coordinates
             prompt: Prompt for special content analysis
 
         Returns:
@@ -254,7 +254,7 @@ class OpenAIClient:
 
         except Exception as e:
             error_str = str(e)
-            logger.error("OpenAI special region processing error: %s", e)
+            logger.error("OpenAI special block processing error: %s", e)
 
             # Handle rate limit errors
             if "429" in error_str or "rate_limit" in error_str.lower():
@@ -376,7 +376,7 @@ class OpenAIClient:
         return result
 
     def _parse_openai_response(self, response_text: str, region_info: dict[str, Any]) -> dict[str, Any]:
-        """Parse OpenAI response for special regions"""
+        """Parse OpenAI response for special blocks"""
         try:
             parsed = json.loads(response_text)
 

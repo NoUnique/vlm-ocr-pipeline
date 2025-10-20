@@ -39,9 +39,9 @@ class Pipeline:
 
     This pipeline orchestrates four main stages:
     1. Document Conversion: Convert PDFs/images to processable format
-    2. Layout Detection: Identify regions (text, tables, figures, etc.)
-    3. Layout Analysis: Determine reading order of regions
-    4. Recognition: Extract and correct text from regions
+    2. Layout Detection: Identify blocks (text, tables, figures, etc.)
+    3. Layout Analysis: Determine reading order of blocks
+    4. Recognition: Extract and correct text from blocks
     """
 
     def __init__(
@@ -226,7 +226,7 @@ class Pipeline:
             image_path: Path to image file
 
         Returns:
-            Processing results with regions and extracted text
+            Processing results with blocks and extracted text
         """
         logger.info("Processing image: %s", image_path)
 
@@ -235,22 +235,22 @@ class Pipeline:
 
         image_np = image_loader.load_image(image_path)
 
-        # Stage 2: Detect layout regions (new detector interface)
+        # Stage 2: Detect layout blocks (new detector interface)
         blocks: list[Block] = self.detector.detect(image_np) if self.detector else []
 
-        # Stage 3: Sort regions by reading order (new sorter interface)
+        # Stage 3: Sort blocks by reading order (new sorter interface)
         if self.sorter:
             sorted_blocks: list[Block] = self.sorter.sort(blocks, image_np)
         else:
             sorted_blocks = blocks
 
-        # Stage 4: Recognition - extract text from regions
+        # Stage 4: Recognition - extract text from blocks
         if self.sorter_name == "olmocr-vlm":
             processed_blocks: list[Block] = sorted_blocks
         else:
-            processed_blocks = self.recognizer.process_regions(image_np, sorted_blocks)
+            processed_blocks = self.recognizer.process_blocks(image_np, sorted_blocks)
 
-        # Block-level text correction for text regions
+        # Block-level text correction for text blocks
         for block in processed_blocks:
             if block.type in ["plain text", "title", "list", "text"] and block.text:
                 corrected = self.recognizer.correct_text(block.text)
@@ -402,10 +402,10 @@ class Pipeline:
                 pdf_path, page_num, temp_dir=self.temp_dir
             )
 
-            # Stage 2: Detect layout regions (new detector interface)
+            # Stage 2: Detect layout blocks (new detector interface)
             blocks: list[Block] = self.detector.detect(page_image) if self.detector else []
 
-            # Stage 3: Sort regions by reading order (new sorter interface)
+            # Stage 3: Sort blocks by reading order (new sorter interface)
             if self.sorter:
                 sorted_blocks: list[Block] = self.sorter.sort(blocks, page_image, pymupdf_page=pymupdf_page)
             else:
@@ -415,19 +415,19 @@ class Pipeline:
             # Extract column layout info if available (for output compatibility)
             column_layout = self._extract_column_layout(sorted_blocks)
 
-            # Stage 4: Recognition - extract text from regions
+            # Stage 4: Recognition - extract text from blocks
             # Note: olmocr-vlm sorter already includes text, skip recognition
             if self.sorter_name == "olmocr-vlm":
                 processed_blocks = sorted_blocks
             else:
-                processed_blocks = self.recognizer.process_regions(page_image, sorted_blocks)
+                processed_blocks = self.recognizer.process_blocks(page_image, sorted_blocks)
 
             # Check for rate limit errors
             if self._check_for_rate_limit_errors({"blocks": processed_blocks}):
                 logger.warning("Rate limit detected on page %d. Stopping processing.", page_num)
                 return None, True
 
-            # Block-level text correction for text regions
+            # Block-level text correction for text blocks
             for block in processed_blocks:
                 if block.type in ["plain text", "title", "list", "text"] and block.text:
                     corrected = self.recognizer.correct_text(block.text)
@@ -551,7 +551,7 @@ class Pipeline:
         pdf_path: Path,
         page_num: int,
         page_image: Any,
-        regions: Sequence[Block],
+        detected_blocks: Sequence[Block],
         processed_blocks: Sequence[Block],
         text: str,
         corrected_text: str,
@@ -565,7 +565,7 @@ class Pipeline:
             pdf_path: Path to PDF file
             page_num: Page number
             page_image: Page image array
-            regions: Detected blocks
+            detected_blocks: Detected blocks
             processed_blocks: Blocks with extracted text
             text: Rendered text (markdown or plaintext based on renderer setting)
             corrected_text: VLM-corrected text
@@ -859,10 +859,10 @@ class Pipeline:
         return summary
 
     def _extract_column_layout(self, blocks: list[Block]) -> dict[str, Any] | None:
-        """Extract column layout information from sorted regions.
+        """Extract column layout information from sorted blocks.
 
         Args:
-            regions: Sorted regions (may have column_index)
+            blocks: Sorted blocks (may have column_index)
 
         Returns:
             Column layout dict or None

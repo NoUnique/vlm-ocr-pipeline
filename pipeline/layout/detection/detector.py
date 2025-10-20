@@ -14,12 +14,12 @@ class LayoutDetector:
     """Base class for layout detection."""
 
     def detect(self, image: np.ndarray) -> list[dict[str, Any]]:
-        """Detect layout regions in an image.
+        """Detect layout blocks in an image.
 
         Args:
             image: Input image
 
         Returns:
-            List of detected regions
+            List of detected blocks
         """
         raise NotImplementedError("Subclasses must implement detect()")

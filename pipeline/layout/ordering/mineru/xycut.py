@@ -3,7 +3,7 @@
 XY-Cut Algorithm:
 - Recursive projection-based sorting
 - No specific bbox format requirement (works with unified BBox)
-- Splits regions by alternating X and Y projections
+- Splits blocks by alternating X and Y projections
 - Fast and dependency-light (only numpy)
 """
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class MinerUXYCutSorter:
     """Sorter using MinerU's XY-Cut algorithm.
 
-    XY-Cut is a recursive projection-based algorithm that splits regions
+    XY-Cut is a recursive projection-based algorithm that splits blocks
     by alternating between horizontal (X) and vertical (Y) projections.
     It's fast and doesn't require model loading.
     """
@@ -42,10 +42,10 @@ class MinerUXYCutSorter:
         logger.info("MinerU XY-Cut sorter initialized")
 
     def sort(self, blocks: list[Block], image: np.ndarray, **kwargs: Any) -> list[Block]:
-        """Sort regions using XY-Cut algorithm.
+        """Sort blocks using XY-Cut algorithm.
 
         Args:
-            regions: Detected regions in unified format
+            blocks: Detected blocks in unified format
             image: Page image (unused, included for interface compatibility)
             **kwargs: Additional context (unused)
 
@@ -54,8 +54,8 @@ class MinerUXYCutSorter:
 
         Example:
             >>> sorter = MinerUXYCutSorter()
-            >>> sorted_blocks = sorter.sort(regions, image)
-            >>> sorted_blocks[0]["reading_order_rank"]
+            >>> sorted_blocks = sorter.sort(blocks, image)
+            >>> sorted_blocks[0].order
             0
         """
         if not blocks:
@@ -93,7 +93,7 @@ class MinerUXYCutSorter:
 
         Args:
             boxes: Array of bboxes (N, 4) in [x0, y0, x1, y1] format
-            indices: Current indices mapping to original regions
+            indices: Current indices mapping to original blocks
             result: Output list to accumulate sorted indices
         """
 

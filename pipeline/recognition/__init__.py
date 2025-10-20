@@ -22,7 +22,7 @@ __all__ = ["TextRecognizer"]
 
 
 class TextRecognizer:
-    """Handles text recognition and extraction from document regions.
+    """Handles text recognition and extraction from document blocks.
 
     This class manages the text extraction pipeline using VLM APIs
     (OpenAI/OpenRouter or Gemini) with intelligent caching.
@@ -76,12 +76,12 @@ class TextRecognizer:
             use_cache,
         )
 
-    def process_regions(self, image: np.ndarray, blocks: Sequence[Block]) -> list[Block]:
-        """Process all regions to extract text.
+    def process_blocks(self, image: np.ndarray, blocks: Sequence[Block]) -> list[Block]:
+        """Process all blocks to extract text.
 
         Args:
             image: Full page image
-            regions: List of detected blocks
+            blocks: List of detected blocks
 
         Returns:
             Blocks with text extracted
@@ -107,7 +107,7 @@ class TextRecognizer:
             block: Block instance
 
         Returns:
-            Region with text extracted
+            Block with text extracted
         """
         block_type = block.type
 
@@ -115,7 +115,7 @@ class TextRecognizer:
         # This ensures we use the recognizer's extraction, not the detector's content
         if block.text:
             logger.debug(
-                "Clearing detector-provided text for region (source=%s). Will use recognizer instead.",
+                "Clearing detector-provided text for block (source=%s). Will use recognizer instead.",
                 block.source
             )
             block.text = None
@@ -128,7 +128,7 @@ class TextRecognizer:
             # Note: error field not in Block dataclass, just log and continue
             return block
 
-        # Get prompt for region type
+        # Get prompt for block type
         prompt = self._get_prompt_for_block_type(block_type)
 
         # Extract text

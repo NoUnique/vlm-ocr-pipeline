@@ -317,7 +317,7 @@ class MultiColumnSorter:
     """Multi-column aware reading order sorter using PyMuPDF.
 
     Detects columns using PyMuPDF text block extraction (column_boxes),
-    then sorts regions by column-aware reading order:
+    then sorts blocks by column-aware reading order:
     left column top-to-bottom, then right column top-to-bottom.
     """
 
@@ -327,11 +327,11 @@ class MultiColumnSorter:
             raise ImportError("PyMuPDF (fitz) is required for PyMuPDF sorter. Install with: pip install pymupdf")
         logger.info("PyMuPDF sorter initialized")
 
-    def sort(self, regions: list[Any], image: np.ndarray, **kwargs: Any) -> list[Any]:
-        """Sort regions using PyMuPDF multi-column detection.
+    def sort(self, blocks: list[Any], image: np.ndarray, **kwargs: Any) -> list[Any]:
+        """Sort blocks using PyMuPDF multi-column detection.
 
         Args:
-            regions: Detected regions in unified format
+            blocks: Detected blocks in unified format
             image: Page image for dimension reference
             **kwargs: Required context:
                 - pymupdf_page: PyMuPDF page object for column detection
@@ -344,21 +344,21 @@ class MultiColumnSorter:
 
         if not pymupdf_page:
             logger.warning("PyMuPDF page not provided, falling back to simple ordering")
-            return self._fallback_sort(regions)
+            return self._fallback_sort(blocks)
 
         column_layout = self._detect_column_layout(pymupdf_page, image)
 
         if not column_layout:
             logger.debug("No multi-column layout detected, using simple ordering")
-            return self._fallback_sort(regions)
+            return self._fallback_sort(blocks)
 
         columns = column_layout["columns"]
 
         if len(columns) <= 1:
             logger.debug("Single column detected, using simple ordering")
-            return self._fallback_sort(regions)
+            return self._fallback_sort(blocks)
 
-        sorted_blocks = self._sort_by_columns(regions, columns)
+        sorted_blocks = self._sort_by_columns(blocks, columns)
         logger.debug("Sorted blocks by %d columns", len(sorted_blocks), len(columns))
 
         return sorted_blocks
@@ -459,14 +459,14 @@ class MultiColumnSorter:
 
         return column_infos
 
-    def _sort_by_columns(self, regions: list[Any], columns: list[ColumnInfo]) -> list[Any]:
-        """Sort regions by column-aware reading order."""
+    def _sort_by_columns(self, blocks: list[Any], columns: list[ColumnInfo]) -> list[Any]:
+        """Sort blocks by column-aware reading order."""
         if not blocks:
             return blocks
 
-        keyed_regions: list[tuple[tuple[float, float, float], Any, int]] = []
+        keyed_blocks: list[tuple[tuple[float, float, float], Any, int]] = []
 
-        for block in regions:
+        for block in blocks:
             bbox = block.bbox
             region_center_x, _ = bbox.center
 

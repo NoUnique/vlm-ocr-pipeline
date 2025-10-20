@@ -57,11 +57,11 @@ class GeminiClient:
 
     def extract_text(self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str) -> dict[str, Any]:
         """
-        Extract text from region using Gemini API
+        Extract text from block using Gemini API
 
         Args:
-            region_img: Image region as numpy array
-            region_info: Region metadata including type and coordinates
+            region_img: Image block as numpy array
+            region_info: Block metadata including type and coordinates
             prompt: Prompt for text extraction
 
         Returns:
@@ -182,11 +182,11 @@ class GeminiClient:
         self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str
     ) -> dict[str, Any]:
         """
-        Process special regions (tables, figures) with Gemini API
+        Process special blocks (tables, figures) with Gemini API
 
         Args:
-            region_img: Image region as numpy array
-            region_info: Region metadata including type and coordinates
+            region_img: Image block as numpy array
+            region_info: Block metadata including type and coordinates
             prompt: Prompt for special content analysis
 
         Returns:
@@ -279,7 +279,7 @@ class GeminiClient:
 
         except Exception as e:
             error_str = str(e)
-            logger.error("Gemini special region processing error: %s", e)
+            logger.error("Gemini special block processing error: %s", e)
 
             # Handle rate limit errors
             if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
@@ -405,7 +405,7 @@ class GeminiClient:
         return result
 
     def _parse_gemini_response(self, response_text: str, region_info: dict[str, Any]) -> dict[str, Any]:
-        """Parse Gemini response for special regions"""
+        """Parse Gemini response for special blocks"""
         try:
             parsed = json.loads(response_text)
 
