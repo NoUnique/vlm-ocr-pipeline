@@ -27,17 +27,19 @@ text_correction:
     7. **Fix OCR word splits**: Join words that were incorrectly split by line breaks during OCR processing
        - Pattern "word-\nword" should become "wordword" (remove hyphen and newline)
        - Pattern "word\nword" should become "wordword" (remove newline if it splits a word)
-    8. Return only the corrected text without explanations
-    9. **CRITICAL**: Do NOT use bold, italics, asterisks, or any markdown formatting
-    10. **CRITICAL**: Do NOT highlight or emphasize the corrected parts in any way
-    11. Return plain text only - natural, flowing text without any special markup
+    8. **CRITICAL**: If the text has NO OCR errors, return the EXACT original text without any changes
+    9. **CRITICAL**: Do NOT add explanatory messages like "No OCR errors were found" or "The text is free of errors"
+    10. Return only the corrected text (or original text if no errors) without explanations
+    11. **CRITICAL**: Do NOT use bold, italics, asterisks, or any markdown formatting
+    12. **CRITICAL**: Do NOT highlight or emphasize the corrected parts in any way
+    13. Return plain text only - natural, flowing text without any special markup
 
     Text to correct:
     -----------
     {text}
     -----------
 
-    Return ONLY the corrected plain text. No bold (**text**), no formatting, no markup.
+    Return ONLY the corrected text (or exact original if no errors found). No explanations, no bold (**text**), no formatting, no markup.
 
   fallback: |
     Correct the OCR errors in this text while preserving the original language and formatting:
