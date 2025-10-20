@@ -246,8 +246,10 @@ class Pipeline:
                 corrected = self.recognizer.correct_text(block.text)
                 if isinstance(corrected, dict):
                     block.corrected_text = corrected.get("corrected_text", block.text)
+                    block.correction_ratio = corrected.get("correction_ratio", 0.0)
                 elif isinstance(corrected, str):
                     block.corrected_text = corrected
+                    block.correction_ratio = 0.0  # No ratio info available
 
         result = {
             "image_path": str(image_path),
@@ -401,8 +403,10 @@ class Pipeline:
                     corrected = self.recognizer.correct_text(block.text)
                     if isinstance(corrected, dict):
                         block.corrected_text = corrected.get("corrected_text", block.text)
+                        block.correction_ratio = corrected.get("correction_ratio", 0.0)
                     elif isinstance(corrected, str):
                         block.corrected_text = corrected
+                        block.correction_ratio = 0.0  # No ratio info available
 
             # Compose page-level text
             raw_text = self._compose_page_text(processed_blocks)

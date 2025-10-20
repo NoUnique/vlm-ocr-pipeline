@@ -28,14 +28,16 @@ text_correction:
        - Pattern "word-\nword" should become "wordword" (remove hyphen and newline)
        - Pattern "word\nword" should become "wordword" (remove newline if it splits a word)
     8. Return only the corrected text without explanations
-    9. Do NOT highlight or emphasize the corrected parts - return natural, flowing text
+    9. **CRITICAL**: Do NOT use bold, italics, asterisks, or any markdown formatting
+    10. **CRITICAL**: Do NOT highlight or emphasize the corrected parts in any way
+    11. Return plain text only - natural, flowing text without any special markup
 
     Text to correct:
     -----------
     {text}
     -----------
 
-    Return the corrected text naturally without highlighting changes or using any markup.
+    Return ONLY the corrected plain text. No bold (**text**), no formatting, no markup.
 
   fallback: |
     Correct the OCR errors in this text while preserving the original language and formatting:

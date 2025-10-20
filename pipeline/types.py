@@ -921,6 +921,7 @@ class Block:
     - column_index: Column index (Added by multi-column sorters)
     - text: Recognized text (Added by recognizers)
     - corrected_text: VLM-corrected text (Added by text correction)
+    - correction_ratio: Block-level correction ratio, 0.0 = no change, 1.0 = completely different (Added by text correction)
     - source: Which detector/sorter produced this block (internal use only, not serialized)
     - index: Internal index (MinerU VLM)
 
@@ -942,6 +943,7 @@ class Block:
     # Text content
     text: str | None = None
     corrected_text: str | None = None
+    correction_ratio: float | None = None  # Block-level correction ratio (0.0 = no change, 1.0 = completely different)
 
     # Metadata (internal use, not serialized to JSON)
     source: str | None = None  # "doclayout-yolo", "mineru-vlm", etc.
@@ -950,7 +952,7 @@ class Block:
     def to_dict(self) -> dict[str, Any]:
         """Convert to JSON-serializable dict.
 
-        Field order: order → type → xywh → detection_confidence → column_index → text → corrected_text
+        Field order: order → type → xywh → detection_confidence → column_index → text → corrected_text → correction_ratio
         This order prioritizes reading order first, then type, then position, then content.
 
         Bbox is serialized as xywh list [x, y, width, height] for human readability.
@@ -992,6 +994,10 @@ class Block:
         # 7. Corrected text (VLM-corrected)
         if self.corrected_text is not None:
             result["corrected_text"] = self.corrected_text
+
+        # 8. Correction ratio (block-level)
+        if self.correction_ratio is not None:
+            result["correction_ratio"] = self.correction_ratio
 
         # Note: 'source' and 'index' are intentionally excluded (internal metadata)
 
