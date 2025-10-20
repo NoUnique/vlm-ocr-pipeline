@@ -37,8 +37,8 @@ class ReadingOrderAnalyzer:
 
         # Sort by reading order rank if available, otherwise by position
         def sort_key(region: dict[str, Any]) -> tuple[int, float, float]:
-            rank = block.get("reading_order_rank", float("inf"))
-            coords = block.get("coords", [0, 0, 0, 0])
+            rank = region.get("reading_order_rank", float("inf"))
+            coords = region.get("coords", [0, 0, 0, 0])
             y = coords[1] if len(coords) > 1 else 0
             x = coords[0] if len(coords) > 0 else 0
             return (rank, y, x)

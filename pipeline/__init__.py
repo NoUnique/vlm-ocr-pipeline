@@ -24,7 +24,7 @@ from .layout.ordering import create_sorter as create_sorter_impl, validate_combi
 from .misc import tz_now
 from .recognition import TextRecognizer
 from .recognition.api.ratelimit import rate_limiter
-from .types import Block, Page
+from .types import Block, Document, Page
 
 logger = logging.getLogger(__name__)
 
@@ -197,7 +197,7 @@ class Pipeline:
         max_pages: int | None = None,
         page_range: tuple[int, int] | None = None,
         pages: list[int] | None = None,
-    ) -> dict[str, Any]:
+    ) -> Document | dict[str, Any]:
         """Process single image or PDF.
 
         Args:
@@ -207,7 +207,7 @@ class Pipeline:
             pages: Specific pages to process (PDF only)
 
         Returns:
-            Processing results
+            Document for PDF, dict for single image
         """
         image_path = Path(image_path)
 
@@ -275,7 +275,7 @@ class Pipeline:
         max_pages: int | None = None,
         page_range: tuple[int, int] | None = None,
         pages: list[int] | None = None,
-    ) -> dict[str, Any]:
+    ) -> Document:
         """Process PDF file with page limiting options.
 
         Args:
@@ -285,7 +285,7 @@ class Pipeline:
             pages: Specific list of page numbers to process
 
         Returns:
-            Summary of PDF processing results
+            Document object with full processing results
         """
         logger.info("Processing PDF: %s", pdf_path)
 
@@ -308,11 +308,11 @@ class Pipeline:
             pdf_path, pages_to_process, total_pages, output_dir
         )
 
-        summary = self._create_pdf_summary(pdf_path, total_pages, processed_pages, processing_stopped, output_dir)
+        document = self._create_pdf_summary(pdf_path, total_pages, processed_pages, processing_stopped, output_dir)
 
         logger.info("PDF processing complete: %s -> %s", pdf_path, output_dir)
 
-        return summary
+        return document
 
     def _process_pdf_pages(
         self,
@@ -622,8 +622,8 @@ class Pipeline:
         processed_pages: list[Page],
         processing_stopped: bool,
         summary_output_dir: Path,
-    ) -> dict[str, Any]:
-        """Create PDF processing summary.
+    ) -> Document:
+        """Create PDF processing summary as Document object.
 
         Args:
             pdf_path: Path to PDF file
@@ -633,26 +633,43 @@ class Pipeline:
             summary_output_dir: Directory to save summary
 
         Returns:
-            Summary dictionary
+            Document object with full page data
         """
         pages_summary, status_counts = self._build_pages_summary(processed_pages)
 
         # Check if any pages have errors
         has_errors = any(page.status == "failed" for page in processed_pages)
 
+        # Create Document object with full page data
+        document = Document(
+            pdf_name=pdf_path.stem,
+            pdf_path=str(pdf_path),
+            num_pages=total_pages,
+            processed_pages=len(processed_pages),
+            pages=processed_pages,  # Full Page objects
+            detected_by=self.detector_name,
+            ordered_by=self.sorter_name,
+            recognized_by=f"{self.backend}/{self.model}",
+            rendered_by=self.renderer,
+            output_directory=str(summary_output_dir),
+            processed_at=tz_now().isoformat(),
+            status_summary={k: v for k, v in status_counts.items() if v > 0},
+        )
+
+        # Create summary dict for JSON output (subset of Document data)
         summary = {
-            "pdf_name": pdf_path.stem,
-            "pdf_path": str(pdf_path),
-            "num_pages": total_pages,
-            "processed_pages": len(processed_pages),
-            "detected_by": self.detector_name,
-            "ordered_by": self.sorter_name,
-            "recognized_by": f"{self.backend}/{self.model}",
-            "rendered_by": self.renderer,  # Rendering format (markdown or plaintext)
-            "output_directory": str(summary_output_dir),
-            "processed_at": tz_now().isoformat(),
-            "status_summary": {k: v for k, v in status_counts.items() if v > 0},
-            "pages": pages_summary,
+            "pdf_name": document.pdf_name,
+            "pdf_path": document.pdf_path,
+            "num_pages": document.num_pages,
+            "processed_pages": document.processed_pages,
+            "detected_by": document.detected_by,
+            "ordered_by": document.ordered_by,
+            "recognized_by": document.recognized_by,
+            "rendered_by": document.rendered_by,
+            "output_directory": document.output_directory,
+            "processed_at": document.processed_at,
+            "status_summary": document.status_summary,
+            "pages": pages_summary,  # Use simplified page summary, not full pages
         }
 
         summary_filename = self._determine_summary_filename(processing_stopped, has_errors)
@@ -661,7 +678,7 @@ class Pipeline:
             json.dump(summary, f, ensure_ascii=False, indent=2)
         logger.info("Results saved to %s", summary_output_file)
 
-        return summary
+        return document
 
     def _build_pages_summary(
         self, processed_pages: list[Page]
@@ -807,14 +824,12 @@ class Pipeline:
                 # Process the PDF (outputs will be placed under <output>/<model>/<file>)
                 result = self.process_pdf(pdf_file, max_pages=max_pages, page_range=page_range, pages=specific_pages)
 
+                # Store Document object in results
                 results[str(pdf_file)] = result
                 processed_files += 1
 
-                # Check for processing errors that should stop batch processing
-                if result.get("processing_stopped", False):
-                    logger.warning(
-                        "Processing stopped for %s due to rate limits. Continuing with next file.", pdf_file.name
-                    )
+                # Note: Document objects don't track processing_stopped
+                # Continue processing next file regardless
 
             except Exception as e:
                 logger.error("Error processing %s: %s", pdf_file, e)

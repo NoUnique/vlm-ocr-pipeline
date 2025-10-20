@@ -1161,6 +1161,10 @@ class Document:
     pages: list[Page]
 
     # Optional metadata
+    detected_by: str | None = None  # Detector name
+    ordered_by: str | None = None  # Sorter name
+    recognized_by: str | None = None  # Backend/model name
+    rendered_by: str | None = None  # Renderer name (markdown/plaintext)
     output_directory: str | None = None
     processed_at: str | None = None
     status_summary: dict[str, int] | None = None
@@ -1185,6 +1189,14 @@ class Document:
         }
 
         # Add optional fields (only if not None)
+        if self.detected_by is not None:
+            result["detected_by"] = self.detected_by
+        if self.ordered_by is not None:
+            result["ordered_by"] = self.ordered_by
+        if self.recognized_by is not None:
+            result["recognized_by"] = self.recognized_by
+        if self.rendered_by is not None:
+            result["rendered_by"] = self.rendered_by
         if self.output_directory is not None:
             result["output_directory"] = self.output_directory
         if self.processed_at is not None:
