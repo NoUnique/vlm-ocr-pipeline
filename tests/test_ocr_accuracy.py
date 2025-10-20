@@ -250,8 +250,8 @@ def test_json_output_comparison(
     with expected_json_path.open("r", encoding="utf-8") as f:
         expected_json = json.load(f)
 
-    # Normalize both JSONs for comparison
-    result_normalized = normalize_json(result)
+    # Normalize both JSONs for comparison - convert Document to dict
+    result_normalized = normalize_json(result.to_dict())
     expected_normalized = normalize_json(expected_json)
 
     # Save normalized results for debugging
@@ -279,8 +279,8 @@ def test_json_output_comparison(
             print(f"  ... and {len(differences) - 10} more differences")
         print(f"{'=' * 60}")
         
-        # Calculate text-based accuracy as fallback
-        result_text = extract_text_from_result(result)
+        # Calculate text-based accuracy as fallback - convert Document to dict
+        result_text = extract_text_from_result(result.to_dict())
         expected_text = extract_text_from_result(expected_json)
         
         result_normalized_text = " ".join(result_text.split())
@@ -403,8 +403,8 @@ def test_markdown_output_comparison(
     # Process first page
     result = pipeline.process_pdf(sample_pdf_path, max_pages=1)
 
-    # Convert to Markdown
-    markdown_output = document_dict_to_markdown(result)
+    # Convert to Markdown - convert Document to dict
+    markdown_output = document_dict_to_markdown(result.to_dict())
 
     # Load expected Markdown
     expected_markdown = expected_markdown_path.read_text(encoding="utf-8")
@@ -490,16 +490,16 @@ def test_json_baseline(sample_pdf_path: Path, test_output_dir: Path) -> None:
     # Process only the first page
     result = pipeline.process_pdf(sample_pdf_path, max_pages=1)
 
-    # Verify basic processing
-    assert result["processed_pages"] == 1
-    assert len(result["pages"]) == 1
+    # Verify basic processing - result is now a Document object
+    assert result.processed_pages == 1
+    assert len(result.pages) == 1
 
-    # Save baseline JSON
+    # Save baseline JSON - convert Document to dict
     baseline_file = test_output_dir / "baseline_output.json"
-    baseline_file.write_text(json.dumps(result, indent=2, ensure_ascii=False))
+    baseline_file.write_text(json.dumps(result.to_dict(), indent=2, ensure_ascii=False))
 
     # Also save normalized version
-    normalized = normalize_json(result)
+    normalized = normalize_json(result.to_dict())
     normalized_file = test_output_dir / "baseline_output_normalized.json"
     normalized_file.write_text(json.dumps(normalized, indent=2, ensure_ascii=False))
 
@@ -526,8 +526,8 @@ def test_json_baseline(sample_pdf_path: Path, test_output_dir: Path) -> None:
     print(f"  Page data: {page_json_file}")
     print(f"  Normalized: {normalized_file}")
     print(f"\nResults:")
-    print(f"  Pages processed: {result['processed_pages']}")
-    print(f"  Regions detected: {num_regions}")
+    print(f"  Pages processed: {result.processed_pages}")
+    print(f"  Blocks detected: {num_regions}")
     print("\nNext steps:")
     print("1. Manually verify the JSON output")
     print("2. Create fixtures directory: mkdir -p tests/fixtures")
@@ -581,12 +581,12 @@ def test_markdown_baseline(sample_pdf_path: Path, test_output_dir: Path) -> None
     # Process only the first page
     result = pipeline.process_pdf(sample_pdf_path, max_pages=1)
 
-    # Verify basic processing
-    assert result["processed_pages"] == 1
-    assert len(result["pages"]) == 1
+    # Verify basic processing - result is now a Document object
+    assert result.processed_pages == 1
+    assert len(result.pages) == 1
 
-    # Convert to Markdown using the new dict wrapper
-    markdown_output = document_dict_to_markdown(result)
+    # Convert to Markdown using the new dict wrapper - convert Document to dict
+    markdown_output = document_dict_to_markdown(result.to_dict())
 
     # Save baseline Markdown
     baseline_file = test_output_dir / "baseline_output.md"
@@ -604,8 +604,8 @@ def test_markdown_baseline(sample_pdf_path: Path, test_output_dir: Path) -> None
     print(f"\nOutput file:")
     print(f"  {baseline_file}")
     print(f"\nResults:")
-    print(f"  Pages processed: {result['processed_pages']}")
-    print(f"  Regions detected: {len(result['pages'][0]['regions'])}")
+    print(f"  Pages processed: {result.processed_pages}")
+    print(f"  Blocks detected: {len(result.pages[0].blocks)}")
     print(f"  Markdown length: {len(markdown_output)} characters")
     print("\nNext steps:")
     print("1. Manually verify the Markdown output")
