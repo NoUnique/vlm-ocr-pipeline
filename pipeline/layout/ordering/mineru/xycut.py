@@ -78,7 +78,7 @@ class MinerUXYCutSorter(Sorter):
             for rank, block in enumerate(sorted_blocks):
                 block.order = rank
 
-            logger.debug("Sorted blocks using XY-Cut algorithm", len(sorted_blocks))
+            logger.debug("Sorted %d blocks using XY-Cut algorithm", len(sorted_blocks))
 
             return sorted_blocks
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -66,15 +66,15 @@ def calculate_accuracy(predicted: str, expected: str) -> dict[str, Any]:
     """
     distance = levenshtein_distance(predicted, expected)
     max_length = max(len(predicted), len(expected))
-    
+
     # Avoid division by zero
     if max_length == 0:
         similarity = 1.0
     else:
         similarity = 1.0 - (distance / max_length)
-    
+
     accuracy = similarity * 100.0
-    
+
     return {
         "distance": distance,
         "similarity": similarity,
@@ -94,11 +94,11 @@ def normalize_json(data: dict[str, Any]) -> dict[str, Any]:
         Normalized JSON data with volatile fields removed
     """
     normalized = copy.deepcopy(data)
-    
+
     # Remove timestamp fields
     if "processed_at" in normalized:
         del normalized["processed_at"]
-    
+
     # Remove volatile fields from pages
     if "pages" in normalized:
         for page in normalized["pages"]:
@@ -107,11 +107,11 @@ def normalize_json(data: dict[str, Any]) -> dict[str, Any]:
             if "image_path" in page:
                 # Keep only filename, not full path
                 page["image_path"] = Path(page["image_path"]).name
-    
+
     # Remove output directory path (keep only relative structure)
     if "output_directory" in normalized:
         normalized["output_directory"] = Path(normalized["output_directory"]).name
-    
+
     return normalized
 
 
@@ -126,10 +126,10 @@ def extract_text_from_result(result: dict[str, Any]) -> str:
     """
     if "pages" not in result or not result["pages"]:
         return ""
-    
+
     page_result = result["pages"][0]
     regions = page_result.get("blocks", [])
-    
+
     extracted_texts: list[str] = []
     for block in regions:
         if "corrected_text" in block:
@@ -138,7 +138,7 @@ def extract_text_from_result(result: dict[str, Any]) -> str:
             extracted_texts.append(block["text"])
         elif "structured_text" in block:
             extracted_texts.append(block["structured_text"])
-    
+
     return "\n".join(extracted_texts)
 
 
@@ -146,7 +146,7 @@ def extract_text_from_result(result: dict[str, Any]) -> str:
 def test_output_dir() -> Path:
     """Create timestamp-based test output directory."""
     # Use tests/output/<timestamp> for persistent storage with unique runs
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     output_dir = Path("tests/output") / timestamp
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
@@ -257,20 +257,20 @@ def test_json_output_comparison(
     # Save normalized results for debugging
     result_file = test_output_dir / "result_normalized.json"
     expected_file = test_output_dir / "expected_normalized.json"
-    
+
     result_file.write_text(json.dumps(result_normalized, indent=2, ensure_ascii=False))
     expected_file.write_text(json.dumps(expected_normalized, indent=2, ensure_ascii=False))
-    
+
     # Compare JSONs
     print(f"\n{'=' * 60}")
     print("JSON Comparison Results:")
     print(f"{'=' * 60}")
     print(f"Result saved to: {result_file}")
     print(f"Expected saved to: {expected_file}")
-    
+
     # Deep comparison
     differences = _compare_json_deep(expected_normalized, result_normalized)
-    
+
     if differences:
         print(f"\nFound {len(differences)} differences:")
         for i, diff in enumerate(differences[:10], 1):  # Show first 10 differences
@@ -278,14 +278,14 @@ def test_json_output_comparison(
         if len(differences) > 10:
             print(f"  ... and {len(differences) - 10} more differences")
         print(f"{'=' * 60}")
-        
+
         # Calculate text-based accuracy as fallback - convert Document to dict
         result_text = extract_text_from_result(result.to_dict())
         expected_text = extract_text_from_result(expected_json)
-        
+
         result_normalized_text = " ".join(result_text.split())
         expected_normalized_text = " ".join(expected_text.split())
-        
+
         metrics = calculate_accuracy(result_normalized_text, expected_normalized_text)
         print(f"\nText Accuracy: {metrics['accuracy']:.2f}%")
         print(f"Levenshtein Distance: {metrics['distance']}")
@@ -293,7 +293,7 @@ def test_json_output_comparison(
     else:
         print("✅ JSON outputs match perfectly!")
         print(f"{'=' * 60}")
-    
+
     # Assert based on comparison
     assert not differences or len(differences) < 5, (
         f"JSON outputs differ significantly: {len(differences)} differences found. "
@@ -313,43 +313,43 @@ def _compare_json_deep(expected: Any, actual: Any, path: str = "root") -> list[s
         List of difference descriptions
     """
     differences: list[str] = []
-    
+
     if type(expected) is not type(actual):
         differences.append(f"{path}: type mismatch ({type(expected).__name__} vs {type(actual).__name__})")
         return differences
-    
+
     if isinstance(expected, dict):
         # Check for missing or extra keys
         expected_keys = set(expected.keys())
         actual_keys = set(actual.keys())
-        
+
         missing_keys = expected_keys - actual_keys
         extra_keys = actual_keys - expected_keys
-        
+
         if missing_keys:
             differences.append(f"{path}: missing keys {missing_keys}")
         if extra_keys:
             differences.append(f"{path}: extra keys {extra_keys}")
-        
+
         # Compare common keys
         for key in expected_keys & actual_keys:
             differences.extend(_compare_json_deep(expected[key], actual[key], f"{path}.{key}"))
-    
+
     elif isinstance(expected, list):
         if len(expected) != len(actual):
             differences.append(f"{path}: length mismatch ({len(expected)} vs {len(actual)})")
             return differences
-        
+
         for i, (exp_item, act_item) in enumerate(zip(expected, actual, strict=False)):
             differences.extend(_compare_json_deep(exp_item, act_item, f"{path}[{i}]"))
-    
+
     # Compare primitive values with tolerance for floats
     elif isinstance(expected, float) and isinstance(actual, float):
         if abs(expected - actual) > 0.001:  # Tolerance for float comparison
             differences.append(f"{path}: value mismatch ({expected} vs {actual})")
     elif expected != actual:
         differences.append(f"{path}: value mismatch ({expected} vs {actual})")
-    
+
     return differences
 
 
@@ -432,7 +432,7 @@ def test_markdown_output_comparison(
     print(f"Levenshtein Distance: {metrics['distance']}")
     print(f"Similarity: {metrics['similarity']:.2%}")
     print(f"Threshold: {accuracy_threshold}%")
-    print(f"\nLengths:")
+    print("\nLengths:")
     print(f"  Output: {metrics['predicted_length']} characters")
     print(f"  Expected: {metrics['expected_length']} characters")
     print(f"{'=' * 60}")
@@ -516,16 +516,16 @@ def test_json_baseline(sample_pdf_path: Path, test_output_dir: Path) -> None:
     print(f"\n{'=' * 60}")
     print("Baseline JSON Output Generated:")
     print(f"{'=' * 60}")
-    print(f"Configuration:")
-    print(f"  - Backend: gemini")
-    print(f"  - Model: gemini-2.5-flash")
-    print(f"  - Detector: mineru-vlm")
-    print(f"  - Sorter: mineru-vlm")
-    print(f"\nOutput files:")
+    print("Configuration:")
+    print("  - Backend: gemini")
+    print("  - Model: gemini-2.5-flash")
+    print("  - Detector: mineru-vlm")
+    print("  - Sorter: mineru-vlm")
+    print("\nOutput files:")
     print(f"  Summary: {baseline_file}")
     print(f"  Page data: {page_json_file}")
     print(f"  Normalized: {normalized_file}")
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"  Pages processed: {result.processed_pages}")
     print(f"  Blocks detected: {num_regions}")
     print("\nNext steps:")
@@ -595,15 +595,15 @@ def test_markdown_baseline(sample_pdf_path: Path, test_output_dir: Path) -> None
     print(f"\n{'=' * 60}")
     print("Baseline Markdown Output Generated:")
     print(f"{'=' * 60}")
-    print(f"Configuration:")
-    print(f"  - Backend: gemini")
-    print(f"  - Model: gemini-2.5-flash")
-    print(f"  - Detector: mineru-vlm")
-    print(f"  - Sorter: mineru-vlm")
-    print(f"  - Conversion: Region type-based")
-    print(f"\nOutput file:")
+    print("Configuration:")
+    print("  - Backend: gemini")
+    print("  - Model: gemini-2.5-flash")
+    print("  - Detector: mineru-vlm")
+    print("  - Sorter: mineru-vlm")
+    print("  - Conversion: Region type-based")
+    print("\nOutput file:")
     print(f"  {baseline_file}")
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"  Pages processed: {result.processed_pages}")
     print(f"  Blocks detected: {len(result.pages[0].blocks)}")
     print(f"  Markdown length: {len(markdown_output)} characters")
@@ -622,18 +622,18 @@ def test_levenshtein_distance() -> None:
     """Test the Levenshtein distance implementation."""
     # Test identical strings
     assert levenshtein_distance("hello", "hello") == 0
-    
+
     # Test completely different strings
     assert levenshtein_distance("abc", "xyz") == 3
-    
+
     # Test classic example
     assert levenshtein_distance("kitten", "sitting") == 3
-    
+
     # Test empty strings
     assert levenshtein_distance("", "") == 0
     assert levenshtein_distance("hello", "") == 5
     assert levenshtein_distance("", "world") == 5
-    
+
     # Test single character difference
     assert levenshtein_distance("test", "text") == 1
 
@@ -645,12 +645,12 @@ def test_calculate_accuracy() -> None:
     assert metrics["distance"] == 0
     assert metrics["similarity"] == 1.0
     assert metrics["accuracy"] == 100.0
-    
+
     # Partial match
     metrics = calculate_accuracy("hello world", "hello word")
     assert metrics["distance"] == 1
     assert 90.0 < metrics["accuracy"] < 95.0
-    
+
     # Empty strings
     metrics = calculate_accuracy("", "")
     assert metrics["distance"] == 0
@@ -672,17 +672,17 @@ def test_normalize_json() -> None:
             }
         ],
     }
-    
+
     normalized = normalize_json(input_json)
-    
+
     # Check that volatile fields are removed
     assert "processed_at" not in normalized
     assert "processed_at" not in normalized["pages"][0]
-    
+
     # Check that paths are simplified
     assert normalized["output_directory"] == "dir"
     assert normalized["pages"][0]["image_path"] == "image.jpg"
-    
+
     # Check that other fields are preserved
     assert normalized["num_pages"] == 1
     assert len(normalized["pages"]) == 1

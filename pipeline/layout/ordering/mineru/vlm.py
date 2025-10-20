@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class MinerUVLMSorter(Sorter):
     """Sorter using MinerU VLM model's built-in ordering.
 
-    This sorter is designed to work with regions that already have
+    This sorter is designed to work with blocks that already have
     ordering information from MinerU VLM detection. It simply extracts
     and applies the ordering index.
 
@@ -29,27 +29,27 @@ class MinerUVLMSorter(Sorter):
         logger.info("MinerU VLM sorter initialized")
 
     def sort(self, blocks: list[Block], image: np.ndarray, **kwargs: Any) -> list[Block]:
-        """Sort regions using MinerU VLM's ordering information.
+        """Sort blocks using MinerU VLM's ordering information.
 
-        This sorter expects regions to have "index" field from MinerU VLM.
+        This sorter expects blocks to have "index" field from MinerU VLM.
         If index is not present, falls back to simple geometric sorting.
 
         Args:
-            regions: Detected regions (should be from MinerUVLMDetector)
+            blocks: Detected blocks (should be from MinerUVLMDetector)
             image: Page image (unused)
             **kwargs: Additional context (unused)
 
         Returns:
-            Sorted blocks with reading_order_rank added/updated
+            Sorted blocks with order field added/updated
 
         Example:
             >>> sorter = MinerUVLMSorter()
-            >>> regions = [
-            ...     {"type": "text", "coords": [...], "index": 1, "confidence": 0.9},
-            ...     {"type": "text", "coords": [...], "index": 0, "confidence": 0.9},
+            >>> blocks = [
+            ...     Block(type="text", bbox=BBox(...), index=1, detection_confidence=0.9),
+            ...     Block(type="text", bbox=BBox(...), index=0, detection_confidence=0.9),
             ... ]
-            >>> sorted_blocks = sorter.sort(regions, image)
-            >>> [r["reading_order_rank"] for r in sorted_blocks]
+            >>> sorted_blocks = sorter.sort(blocks, image)
+            >>> [b.order for b in sorted_blocks]
             [0, 1]
         """
         if not blocks:

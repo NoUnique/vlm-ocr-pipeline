@@ -356,7 +356,8 @@ class GeminiClient:
 
                     corrected_text = (response.text or "").strip()
                     similarity = difflib.SequenceMatcher(None, text, corrected_text).ratio()
-                    correction_ratio = 1.0 - similarity  # How much was changed (0.0 = no change, 1.0 = completely different)
+                    # How much was changed (0.0 = no change, 1.0 = completely different)
+                    correction_ratio = 1.0 - similarity
                     result = self._text_correction_result(corrected_text, correction_ratio)
 
         except Exception as e:

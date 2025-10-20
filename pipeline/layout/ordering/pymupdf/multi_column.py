@@ -361,7 +361,7 @@ class MultiColumnSorter(Sorter):
             return self._fallback_sort(blocks)
 
         sorted_blocks = self._sort_by_columns(blocks, columns)
-        logger.debug("Sorted blocks by %d columns", len(sorted_blocks), len(columns))
+        logger.debug("Sorted %d blocks by %d columns", len(sorted_blocks), len(columns))
 
         return sorted_blocks
 
@@ -470,7 +470,7 @@ class MultiColumnSorter(Sorter):
 
         for block in blocks:
             bbox = block.bbox
-            region_center_x, _ = bbox.center
+            block_center_x, _ = bbox.center
 
             best_col_idx = 0
             best_overlap = 0.0
@@ -480,7 +480,7 @@ class MultiColumnSorter(Sorter):
                 col_bbox = col["bbox"]
                 overlap = bbox.intersect(col_bbox)
                 overlap_ratio = overlap / bbox.area if bbox.area > 0 else 0.0
-                distance = abs(region_center_x - col["center"])
+                distance = abs(block_center_x - col["center"])
 
                 if overlap_ratio > best_overlap or (
                     abs(overlap_ratio - best_overlap) <= COLUMN_ORDER_EPSILON and distance < best_distance
@@ -490,16 +490,16 @@ class MultiColumnSorter(Sorter):
                     best_col_idx = col["index"]
 
             if best_overlap <= 0:
-                nearest_col = min(columns, key=lambda c: abs(region_center_x - c["center"]))
+                nearest_col = min(columns, key=lambda c: abs(block_center_x - c["center"]))
                 best_col_idx = nearest_col["index"]
 
             sort_key = (float(best_col_idx), bbox.y0, bbox.x0)
-            keyed_regions.append((sort_key, block, best_col_idx))
+            keyed_blocks.append((sort_key, block, best_col_idx))
 
-        keyed_regions.sort(key=lambda item: item[0])
+        keyed_blocks.sort(key=lambda item: item[0])
 
         sorted_blocks = []
-        for rank, (_, block, col_idx) in enumerate(keyed_regions):
+        for rank, (_, block, col_idx) in enumerate(keyed_blocks):
             block.order = rank
             block.column_index = col_idx
             sorted_blocks.append(block)

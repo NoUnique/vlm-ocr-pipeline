@@ -401,13 +401,13 @@ class TestPageDataclass:
             Block(type="text", bbox=BBox(100, 50, 300, 200), text="Hello"),
             Block(type="title", bbox=BBox(50, 10, 250, 40), text="Title"),
         ]
-        
+
         page = Page(
             page_num=1,
             blocks=blocks,
             status="completed",
         )
-        
+
         assert page.page_num == 1
         assert len(page.blocks) == 2
         assert page.status == "completed"
@@ -423,16 +423,16 @@ class TestPageDataclass:
                 order=0,
             ),
         ]
-        
+
         page = Page(
             page_num=1,
             blocks=blocks,
             auxiliary_info={"text": "Hello"},
             status="completed",
         )
-        
+
         result = page.to_dict()
-        
+
         assert result["page_num"] == 1
         assert result["status"] == "completed"
         assert len(result["blocks"]) == 1
@@ -448,7 +448,7 @@ class TestPageDataclass:
             status="failed",
             auxiliary_info={"error": "Rate limit exceeded"},
         )
-        
+
         assert page.status == "failed"
         assert page.blocks == []
         assert "error" in page.auxiliary_info
@@ -461,10 +461,10 @@ class TestDocumentDataclass:
         """Test creating a Document object with pages."""
         blocks1 = [Block(type="text", bbox=BBox(10, 10, 100, 50), text="Page 1")]
         blocks2 = [Block(type="text", bbox=BBox(20, 20, 120, 60), text="Page 2")]
-        
+
         page1 = Page(page_num=1, blocks=blocks1, status="completed")
         page2 = Page(page_num=2, blocks=blocks2, status="completed")
-        
+
         document = Document(
             pdf_name="test",
             pdf_path="/path/to/test.pdf",
@@ -472,7 +472,7 @@ class TestDocumentDataclass:
             processed_pages=2,
             pages=[page1, page2],
         )
-        
+
         assert document.pdf_name == "test"
         assert document.num_pages == 2
         assert len(document.pages) == 2
@@ -480,7 +480,7 @@ class TestDocumentDataclass:
     def test_document_with_metadata(self):
         """Test Document with all metadata fields."""
         page = Page(page_num=1, blocks=[], status="completed")
-        
+
         document = Document(
             pdf_name="sample",
             pdf_path="/docs/sample.pdf",
@@ -495,7 +495,7 @@ class TestDocumentDataclass:
             processed_at=tz_now().isoformat(),
             status_summary={"completed": 5},
         )
-        
+
         assert document.detected_by == "doclayout-yolo"
         assert document.ordered_by == "mineru-xycut"
         assert document.recognized_by == "gemini/gemini-2.5-flash"
@@ -506,7 +506,7 @@ class TestDocumentDataclass:
         """Test Document.to_dict() includes all fields."""
         blocks = [Block(type="text", bbox=BBox(10, 10, 100, 50), text="Test")]
         page = Page(page_num=1, blocks=blocks, status="completed")
-        
+
         document = Document(
             pdf_name="test",
             pdf_path="/test.pdf",
@@ -518,9 +518,9 @@ class TestDocumentDataclass:
             recognized_by="gemini/gemini-2.5-flash",
             rendered_by="markdown",
         )
-        
+
         result = document.to_dict()
-        
+
         assert result["pdf_name"] == "test"
         assert result["num_pages"] == 1
         assert result["detected_by"] == "doclayout-yolo"
@@ -533,7 +533,7 @@ class TestDocumentDataclass:
     def test_document_to_dict_optional_fields(self):
         """Test Document.to_dict() omits None fields."""
         page = Page(page_num=1, blocks=[], status="completed")
-        
+
         document = Document(
             pdf_name="minimal",
             pdf_path="/minimal.pdf",
@@ -542,13 +542,13 @@ class TestDocumentDataclass:
             pages=[page],
             # All optional fields are None
         )
-        
+
         result = document.to_dict()
-        
+
         # Required fields present
         assert "pdf_name" in result
         assert "num_pages" in result
-        
+
         # Optional fields not present when None
         assert "detected_by" not in result
         assert "ordered_by" not in result

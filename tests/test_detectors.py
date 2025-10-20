@@ -31,4 +31,4 @@ def test_doclayout_detector_returns_regions_with_bbox():
         assert hasattr(region, "type")
         assert hasattr(region, "detection_confidence")
         assert hasattr(region, "source")
-        assert block.bbox is not None
+        assert region.bbox is not None

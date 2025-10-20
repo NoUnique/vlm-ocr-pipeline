@@ -60,9 +60,12 @@ class MinerUVLMDetector(Detector):
         # when model/processor are None. We need to pre-load them.
         if backend == "transformers" and model:
             try:
-                from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
-                from transformers import __version__ as transformers_version
                 from packaging import version
+                from transformers import (
+                    AutoProcessor,
+                    Qwen2VLForConditionalGeneration,
+                    __version__ as transformers_version,
+                )
 
                 # Determine dtype parameter name based on transformers version
                 if version.parse(transformers_version) >= version.parse("4.56.0"):
@@ -74,7 +77,7 @@ class MinerUVLMDetector(Detector):
                 vlm_model = Qwen2VLForConditionalGeneration.from_pretrained(
                     model,
                     device_map="auto",
-                    **{dtype_key: "auto"},
+                    **{dtype_key: "auto"},  # type: ignore[arg-type]
                 )
                 vlm_processor = AutoProcessor.from_pretrained(model, use_fast=True)
 
@@ -92,7 +95,7 @@ class MinerUVLMDetector(Detector):
             from mineru_vl_utils import MinerUClient
 
             self.vlm = MinerUClient(
-                backend=backend,
+                backend=backend,  # type: ignore[arg-type]
                 model_path=model,
                 **vlm_kwargs,
             )
@@ -125,10 +128,10 @@ class MinerUVLMDetector(Detector):
             >>> blocks = detector.detect(image)
             >>> blocks[0].type
             'text'
-            >>> regions[0]["bbox"]
+            >>> blocks[0].bbox
             BBox(x0=100, y0=50, x1=300, y1=200)
-            >>> # If detection_only=False, regions will have reading_order_rank
-            >>> regions[0].get("reading_order_rank")
+            >>> # If detection_only=False, blocks will have reading_order_rank (order field)
+            >>> blocks[0].order
             0
         """
         try:
@@ -160,7 +163,7 @@ class MinerUVLMDetector(Detector):
             print(f"[BBOX-DEBUG] First raw block: {raw_blocks[0]}")
             print(f"[BBOX-DEBUG] Second raw block: {raw_blocks[1] if len(raw_blocks) > 1 else 'N/A'}")
 
-        logger.debug("Detected %d regions with MinerU VLM", len(raw_blocks))
+        logger.debug("Detected %d blocks with MinerU VLM", len(raw_blocks))
 
         # Get image dimensions for bbox scaling
         img_height, img_width = image.shape[:2]
@@ -188,7 +191,10 @@ class MinerUVLMDetector(Detector):
         x1_px = x1_norm * img_width
         y1_px = y1_norm * img_height
 
-        print(f"[BBOX-DEBUG] Normalized: {normalized_bbox[:4]} -> Pixel: [{x0_px:.1f}, {y0_px:.1f}, {x1_px:.1f}, {y1_px:.1f}]")
+        print(
+            f"[BBOX-DEBUG] Normalized: {normalized_bbox[:4]} -> "
+            f"Pixel: [{x0_px:.1f}, {y0_px:.1f}, {x1_px:.1f}, {y1_px:.1f}]"
+        )
 
         # Create BBox with pixel coordinates
         bbox = BBox.from_xyxy(x0_px, y0_px, x1_px, y1_px)

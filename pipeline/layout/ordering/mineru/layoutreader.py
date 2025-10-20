@@ -28,10 +28,10 @@ class MinerULayoutReaderSorter(Sorter):
     """Sorter using MinerU's LayoutReader (LayoutLMv3) model.
 
     LayoutReader uses a transformer-based model to predict reading order
-    for document regions. It's more accurate than heuristic methods but
+    for document blocks. It's more accurate than heuristic methods but
     requires model loading and has a line limit (~200 lines).
 
-    The sorter first splits regions into lines, then uses LayoutReader
+    The sorter first splits blocks into lines, then uses LayoutReader
     to order the lines, and finally assigns block-level ordering based
     on line ordering.
     """
@@ -60,20 +60,20 @@ class MinerULayoutReaderSorter(Sorter):
         logger.info("MinerU LayoutReader sorter initialized")
 
     def sort(self, blocks: list[Block], image: np.ndarray, **kwargs: Any) -> list[Block]:
-        """Sort regions using LayoutReader model.
+        """Sort blocks using LayoutReader model.
 
         Args:
-            regions: Detected regions in unified format
+            blocks: Detected blocks in unified format
             image: Page image for dimension reference
             **kwargs: Additional context (unused)
 
         Returns:
-            Sorted blocks with reading_order_rank added
+            Sorted blocks with order field added
 
         Example:
             >>> sorter = MinerULayoutReaderSorter()
-            >>> sorted_blocks = sorter.sort(regions, image)
-            >>> sorted_blocks[0]["reading_order_rank"]
+            >>> sorted_blocks = sorter.sort(blocks, image)
+            >>> sorted_blocks[0].order
             0
         """
         if not blocks:
@@ -96,7 +96,7 @@ class MinerULayoutReaderSorter(Sorter):
 
         sorted_blocks = self._assign_region_ordering(blocks, lines_data, sorted_line_indices)
 
-        logger.debug("Sorted blocks using LayoutReader", len(sorted_blocks))
+        logger.debug("Sorted %d blocks using LayoutReader", len(sorted_blocks))
 
         return sorted_blocks
 
@@ -222,10 +222,10 @@ class MinerULayoutReaderSorter(Sorter):
         lines_data: list[dict[str, Any]],
         sorted_line_indices: list[int],
     ) -> list[Block]:
-        """Assign region-level ordering based on line-level ordering.
+        """Assign block-level ordering based on line-level ordering.
 
-        Each region may have multiple lines. We use the median line index
-        as the region's ordering.
+        Each block may have multiple lines. We use the median line index
+        as the block's ordering.
         """
         block_to_line_positions: dict[int, list[int]] = {}
 
@@ -259,9 +259,9 @@ class MinerULayoutReaderSorter(Sorter):
 
     def _fallback_sort(self, blocks: list[Block]) -> list[Block]:
         """Fallback to simple geometric sorting."""
-        sorted_blocks = sorted(regions, key=lambda r: (r.bbox.y0, r.bbox.x0))
+        sorted_blocks = sorted(blocks, key=lambda b: (b.bbox.y0, b.bbox.x0))
 
-        for rank, region in enumerate(sorted_blocks):
+        for rank, block in enumerate(sorted_blocks):
             block.order = rank
 
         return sorted_blocks

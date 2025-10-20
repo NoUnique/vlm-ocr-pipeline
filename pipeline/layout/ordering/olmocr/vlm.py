@@ -22,9 +22,9 @@ class OlmOCRVLMSorter(Sorter):
     1. With anchor text: Detection bbox → anchor text → VLM
     2. Without anchor text: Pure visual understanding
 
-    Note: This sorter changes the output format from structured regions
+    Note: This sorter changes the output format from structured blocks
     to text-only output, since olmOCR VLM returns natural text without
-    individual region bboxes.
+    individual block bboxes.
     """
 
     def __init__(

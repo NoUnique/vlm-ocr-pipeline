@@ -15,7 +15,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from pipeline.types import Document, Page, Block
+from pipeline.types import Block, Document, Page
 
 logger = logging.getLogger(__name__)
 
@@ -468,7 +468,10 @@ def page_dict_to_markdown(data: dict[str, Any], **kwargs: Any) -> str:
         Markdown-formatted string
 
     Example:
-        >>> data = {"page_num": 1, "blocks": [{"type": "title", "xywh": [0, 0, 100, 20], "confidence": 0.9, "text": "Hello"}]}
+        >>> data = {
+        ...     "page_num": 1,
+        ...     "blocks": [{"type": "title", "xywh": [0, 0, 100, 20], "confidence": 0.9, "text": "Hello"}]
+        ... }
         >>> page_dict_to_markdown(data)
         '## Page 1\\n\\n# Hello'
     """

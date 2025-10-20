@@ -67,27 +67,27 @@ class FontSizeHeaderIdentifier:
         return "#" * level + " "
 
 
-def match_region_with_text_spans(
-    region: dict[str, Any],
+def match_block_with_text_spans(
+    block: dict[str, Any],
     text_spans: list[dict[str, Any]],
     iou_threshold: float = 0.3,
 ) -> dict[str, Any] | None:
-    """Match a region with text spans using IoU.
+    """Match a block with text spans using IoU.
 
     Args:
-        region: Region dictionary with bbox
+        block: Block dictionary with bbox
         text_spans: List of text spans (PyMuPDF spans with size, font)
         iou_threshold: Minimum IoU to consider a match (default: 0.3)
 
     Returns:
         Best matching text span or None
     """
-    region_bbox_list = block.get("bbox", [])
-    if len(region_bbox_list) < 4:  # noqa: PLR2004 - bbox always needs 4 coordinates
+    block_bbox_list = block.get("bbox", [])
+    if len(block_bbox_list) < 4:  # noqa: PLR2004 - bbox always needs 4 coordinates
         return None
 
-    # Region bbox is in xywh format, convert to xyxy
-    region_bbox = BBox.from_xywh(*region_bbox_list[:4])
+    # Block bbox is in xywh format, convert to xyxy
+    block_bbox = BBox.from_xywh(*block_bbox_list[:4])
 
     best_match = None
     best_iou = 0.0
@@ -101,7 +101,7 @@ def match_region_with_text_spans(
         span_bbox = BBox(*span_bbox_list[:4])
 
         # Calculate IoU
-        iou = _calculate_iou(region_bbox, span_bbox)
+        iou = _calculate_iou(block_bbox, span_bbox)
 
         if iou > best_iou:
             best_iou = iou
@@ -131,16 +131,16 @@ def _calculate_iou(bbox1: BBox, bbox2: BBox) -> float:
     return intersection_area / union_area
 
 
-def region_to_markdown_with_font(  # noqa: PLR0911
-    region: dict[str, Any],
+def block_to_markdown_with_font(  # noqa: PLR0911
+    block: dict[str, Any],
     text_spans: list[dict[str, Any]],
     header_identifier: FontSizeHeaderIdentifier | None = None,
     iou_threshold: float = 0.3,
 ) -> str:
-    """Convert a region to Markdown using font size from matched text spans.
+    """Convert a block to Markdown using font size from matched text spans.
 
     Args:
-        region: Region dictionary
+        block: Block dictionary
         text_spans: List of text spans with font info (PyMuPDF spans)
         header_identifier: Font size-based header identifier
         iou_threshold: IoU threshold for matching (default: 0.3)
@@ -151,14 +151,14 @@ def region_to_markdown_with_font(  # noqa: PLR0911
     if header_identifier is None:
         header_identifier = FontSizeHeaderIdentifier()
 
-    region_type = block.get("type", "").lower()
+    block_type = block.get("type", "").lower()
     text = block.get("corrected_text") or block.get("text", "")
 
     if not text:
         return ""
 
-    # Match region with text span to get font size
-    matched_span = match_region_with_text_spans(region, text_spans, iou_threshold)
+    # Match block with text span to get font size
+    matched_span = match_block_with_text_spans(block, text_spans, iou_threshold)
     font_size = matched_span.get("size") if matched_span else None  # PyMuPDF uses 'size'
 
     # Try to determine header based on font size
@@ -166,21 +166,21 @@ def region_to_markdown_with_font(  # noqa: PLR0911
     if header_prefix:
         return f"{header_prefix}{text}"
 
-    # Fallback to region type-based formatting for special types
-    if region_type in ["list", "list_item"]:
+    # Fallback to block type-based formatting for special types
+    if block_type in ["list", "list_item"]:
         if not text.startswith(("-", "*")):
             return f"- {text}"
         return text
 
-    if region_type == "table":
+    if block_type == "table":
         if "|" in text:
             return text
         return f"**Table:**\n\n{text}"
 
-    if region_type in ["figure", "image"]:
+    if block_type in ["figure", "image"]:
         return f"**Figure:** {text}"
 
-    if region_type == "equation":
+    if block_type == "equation":
         if text.startswith(("$$", "$")):
             return text
         return f"$${text}$$"
@@ -248,8 +248,8 @@ def regions_to_markdown_with_fonts(
     lines: list[str] = []
     prev_was_header = False
 
-    for region in sorted_blocks:
-        md_text = region_to_markdown_with_font(region, text_spans, header_identifier, iou_threshold)
+    for block in sorted_blocks:
+        md_text = block_to_markdown_with_font(block, text_spans, header_identifier, iou_threshold)
 
         if not md_text:
             continue

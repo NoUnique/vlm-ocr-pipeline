@@ -923,7 +923,8 @@ class Block:
     - column_index: Column index (Added by multi-column sorters)
     - text: Recognized text (Added by recognizers)
     - corrected_text: VLM-corrected text (Added by text correction)
-    - correction_ratio: Block-level correction ratio, 0.0 = no change, 1.0 = completely different (Added by text correction)
+    - correction_ratio: Block-level correction ratio (0.0 = no change, 1.0 = completely different)
+      (Added by text correction)
     - source: Which detector/sorter produced this block (internal use only, not serialized)
     - index: Internal index (MinerU VLM)
 
@@ -954,7 +955,8 @@ class Block:
     def to_dict(self) -> dict[str, Any]:
         """Convert to JSON-serializable dict.
 
-        Field order: order → type → xywh → detection_confidence → column_index → text → corrected_text → correction_ratio
+        Field order:
+            order → type → xywh → detection_confidence → column_index → text → corrected_text → correction_ratio
         This order prioritizes reading order first, then type, then position, then content.
 
         Bbox is serialized as xywh list [x, y, width, height] for human readability.

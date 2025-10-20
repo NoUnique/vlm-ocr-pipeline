@@ -153,7 +153,9 @@ class Pipeline:
             }
 
         # Create detector
-        self.detector: Detector | None = create_detector_impl(detector, **detector_kwargs) if detector != "none" else None
+        self.detector: Detector | None = (
+            create_detector_impl(detector, **detector_kwargs) if detector != "none" else None
+        )
 
         # Create sorter
         sorter_kwargs = {}
