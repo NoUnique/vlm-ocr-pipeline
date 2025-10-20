@@ -131,24 +131,24 @@ cropped = bbox.crop(image, padding=5)  # Direct image cropping
 The `Region` dataclass represents detected document regions:
 
 ```python
-from pipeline.types import Region, BBox
+from pipeline.types import Block, BBox
 
-region = Region(
+block = Block(
     type="text",
     bbox=BBox(100, 50, 300, 200),  # Required, always present
-    confidence=0.95,
+    detection_confidence=0.95,
     # Optional fields
-    reading_order_rank=0,
+    order=0,
     column_index=1,
     text="Extracted text...",
 )
 
 # Serialize to JSON (bbox → xywh format for readability)
-data = region.to_dict()
-# {"type": "text", "bbox": [100, 50, 200, 150], "confidence": 0.95}
+data = block.to_dict()
+# {"order": 0, "type": "text", "xywh": [100, 50, 200, 150], "detection_confidence": 0.95, ...}
 
 # Deserialize from JSON (supports xywh)
-region = Region.from_dict(data)
+block = Block.from_dict(data)
 ```
 
 ## Key Points

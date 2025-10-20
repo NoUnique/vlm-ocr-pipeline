@@ -130,7 +130,7 @@ class MinerUVLMDetector(Detector):
             'text'
             >>> blocks[0].bbox
             BBox(x0=100, y0=50, x1=300, y1=200)
-            >>> # If detection_only=False, blocks will have reading_order_rank (order field)
+            >>> # If detection_only=False, blocks will have order field
             >>> blocks[0].order
             0
         """

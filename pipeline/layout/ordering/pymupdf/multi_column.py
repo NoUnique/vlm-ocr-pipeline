@@ -339,7 +339,7 @@ class MultiColumnSorter(Sorter):
                 - pymupdf_page: PyMuPDF page object for column detection
 
         Returns:
-            Sorted blocks with reading_order_rank and column_index added
+            Sorted blocks with order and column_index added
         """
 
         pymupdf_page = kwargs.get("pymupdf_page")

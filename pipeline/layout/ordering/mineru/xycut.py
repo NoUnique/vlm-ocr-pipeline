@@ -50,7 +50,7 @@ class MinerUXYCutSorter(Sorter):
             **kwargs: Additional context (unused)
 
         Returns:
-            Sorted blocks with reading_order_rank added
+            Sorted blocks with order field added
 
         Example:
             >>> sorter = MinerUXYCutSorter()

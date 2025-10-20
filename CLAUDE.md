@@ -66,25 +66,25 @@ The system follows a clear separation of concerns through five distinct stages:
 
 2. **Layout Detection** (`pipeline/layout/detection/`)
    - Factory pattern: `create_detector(name, **kwargs)` in `__init__.py`
-   - Returns `list[Region]` with detected bounding boxes
+   - Returns `list[Block]` with detected bounding boxes
    - Detectors: `doclayout-yolo` (this project's YOLO), `mineru-doclayout-yolo`, `mineru-vlm`
-   - Protocol interface: `Detector.detect(image) -> list[Region]`
+   - Protocol interface: `Detector.detect(image) -> list[Block]`
 
 3. **Reading Order Analysis** (`pipeline/layout/ordering/`)
    - Factory pattern: `create_sorter(name, **kwargs)` in `__init__.py`
-   - Adds `reading_order_rank` and optionally `column_index` to regions
+   - Adds `order` and optionally `column_index` to blocks
    - Sorters: `pymupdf` (multi-column), `mineru-layoutreader` (LayoutLMv3), `mineru-xycut` (fast, default), `mineru-vlm`, `olmocr-vlm`
-   - Protocol interface: `Sorter.sort(regions, image, **kwargs) -> list[Region]`
+   - Protocol interface: `Sorter.sort(blocks, image, **kwargs) -> list[Block]`
    - Combination validator: `validate_combination(detector, sorter)` ensures compatibility
 
 4. **Text Recognition & Correction** (`pipeline/recognition/`)
-   - VLM-powered text extraction per region: `TextRecognizer.process_regions()`
+   - VLM-powered text extraction per block: `TextRecognizer.process_blocks()`
    - Page-level correction: `TextRecognizer.correct_text()`
    - Multi-backend support (OpenAI/Gemini) with prompt templates in `settings/prompts/{model}/`
    - Intelligent caching system to avoid re-processing identical content
 
 5. **Result Conversion (Output)** (`pipeline/conversion/output/`)
-   - Converts processed regions to various output formats
+   - Converts processed blocks to various output formats
    - Currently implements Markdown conversion with two strategies (see below)
    - Extensible design for future formats (HTML, LaTeX, etc.)
 
@@ -96,18 +96,19 @@ The system follows a clear separation of concerns through five distinct stages:
 - Automatic conversion between 6+ formats (YOLO, MinerU, PyMuPDF, PyPDF, olmOCR)
 - Only PyPDF uses bottom-left origin (requires Y-axis flip via `from_pypdf_rect()`)
 
-**Region Dataclass**: Document regions combine detection and processing results:
+**Block Dataclass**: Document blocks combine detection and processing results:
 ```python
 @dataclass
-class Region:
-    type: str              # "plain text", "title", "table", "figure", etc.
+class Block:
+    type: str              # "text", "title", "table", "image", etc.
     bbox: BBox             # Required, integer coordinates
-    confidence: float      # Detection confidence
-    reading_order_rank: int | None    # Added by sorters
-    column_index: int | None          # Added by multi-column sorters
-    text: str | None                  # Added by recognizers
-    corrected_text: str | None        # Added by VLM correction
-    source: str | None                # Detector name
+    detection_confidence: float | None  # Detection confidence
+    order: int | None                   # Reading order rank (added by sorters)
+    column_index: int | None            # Column index (added by multi-column sorters)
+    text: str | None                    # Extracted text (added by recognizers)
+    corrected_text: str | None          # VLM-corrected text (added by correction)
+    correction_ratio: float | None      # Block-level correction ratio
+    source: str | None                  # Detector name (internal use)
 ```
 
 **Factory Pattern for Detectors/Sorters**:

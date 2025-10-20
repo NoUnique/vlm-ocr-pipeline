@@ -82,7 +82,7 @@ def pipeline_fixture(tmp_path):
 
     # Initialize components
     # Note: converter is now function-based, no instance needed
-    pipeline.detector = LayoutDetector.__new__(LayoutDetector)
+    pipeline.detector = cast(Any, LayoutDetector.__new__(LayoutDetector))
     pipeline.recognizer = TextRecognizer.__new__(TextRecognizer)
 
     fake_prompt_manager = FakePromptManager()

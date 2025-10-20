@@ -4,6 +4,7 @@ import pytest
 from pipeline import Pipeline
 from pipeline.conversion.input import pdf as pdf_converter
 from pipeline.layout.ordering import ReadingOrderAnalyzer
+from pipeline.types import BBox, Block
 
 
 def make_pipeline():
@@ -12,28 +13,27 @@ def make_pipeline():
 
 def test_compose_page_raw_text_orders_and_preserves_blocks():
     analyzer = ReadingOrderAnalyzer()
-    regions = [
-        {"type": "plain text", "coords": [30, 20, 40, 10], "text": "Second block"},
-        {"type": "plain text", "coords": [10, 20, 40, 10], "text": "First block"},
-        {"type": "title", "coords": [5, 80, 40, 10], "text": " Title heading\nSubtitle "},
-        {"type": "figure", "coords": [0, 0, 10, 10], "text": "Ignored"},
+    blocks = [
+        Block(type="plain text", bbox=BBox(30, 20, 70, 30), text="Second block"),
+        Block(type="plain text", bbox=BBox(10, 20, 50, 30), text="First block"),
+        Block(type="title", bbox=BBox(5, 80, 45, 90), text=" Title heading\nSubtitle "),
+        Block(type="figure", bbox=BBox(0, 0, 10, 10), text="Ignored"),
     ]
 
-    result = analyzer.compose_page_text(regions)
+    result = analyzer.compose_page_text(blocks)
 
     assert result == "First block\n\nSecond block\n\nTitle heading\nSubtitle"
 
 
 def test_compose_page_raw_text_skips_invalid_entries():
     analyzer = ReadingOrderAnalyzer()
-    regions = [
-        "not-a-dict",
-        {"type": "plain text", "coords": [0, 0, 0, 0], "text": ""},
-        {"type": "table", "coords": [0, 0, 0, 0], "text": "Table"},
-        {"coords": [0, 0, 0, 0], "text": "Missing type"},
+    blocks = [
+        Block(type="plain text", bbox=BBox(0, 0, 0, 0), text=""),
+        Block(type="table", bbox=BBox(0, 0, 0, 0), text="Table"),
+        Block(type="plain text", bbox=BBox(0, 0, 0, 0)),  # Missing text
     ]
 
-    result = analyzer.compose_page_text(regions)
+    result = analyzer.compose_page_text(blocks)
 
     assert result == ""
 

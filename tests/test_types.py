@@ -49,7 +49,7 @@ class TestBBoxCreation:
 
     def test_from_list_invalid_format(self):
         """Test BBox creation with invalid format raises error."""
-        with pytest.raises(ValueError, match="Unknown bbox format"):
+        with pytest.raises(ValueError, match="Unknown bbox coord_format"):
             BBox.from_list([100, 50, 200, 150], coord_format="invalid")
 
     def test_from_mineru_bbox(self):
@@ -451,6 +451,7 @@ class TestPageDataclass:
 
         assert page.status == "failed"
         assert page.blocks == []
+        assert page.auxiliary_info is not None
         assert "error" in page.auxiliary_info
 
 
@@ -500,6 +501,7 @@ class TestDocumentDataclass:
         assert document.ordered_by == "mineru-xycut"
         assert document.recognized_by == "gemini/gemini-2.5-flash"
         assert document.rendered_by == "markdown"
+        assert document.status_summary is not None
         assert document.status_summary["completed"] == 5
 
     def test_document_to_dict(self):

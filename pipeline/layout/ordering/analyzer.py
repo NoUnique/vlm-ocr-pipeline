@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Sequence
+
+from pipeline.types import Block
 
 __all__ = ["ReadingOrderAnalyzer", "ColumnOrderingInfo"]
 
@@ -10,15 +12,15 @@ __all__ = ["ReadingOrderAnalyzer", "ColumnOrderingInfo"]
 class ReadingOrderAnalyzer:
     """Analyzes and composes text from document blocks in reading order."""
 
-    def compose_page_text(self, processed_blocks: list[dict[str, Any]]) -> str:
+    def compose_page_text(self, processed_blocks: Sequence[Block]) -> str:
         """Compose page-level raw text from processed blocks in reading order.
 
-        Reading order: Uses reading_order_rank if available, otherwise top-to-bottom (y),
+        Reading order: Uses order field if available, otherwise top-to-bottom (y),
         then left-to-right (x). Includes text-like blocks only and preserves internal
         newlines within each block's text.
 
         Args:
-            processed_blocks: List of processed blocks with text content
+            processed_blocks: List of processed Block objects with text content
 
         Returns:
             Composed text from all text-like blocks in reading order
@@ -28,19 +30,16 @@ class ReadingOrderAnalyzer:
 
         # Filter text-like blocks (excludes table, figure, equation, etc.)
         text_like_types = {"plain text", "text", "title", "list"}
-        text_blocks = [
-            r for r in processed_blocks if isinstance(r, dict) and r.get("type") in text_like_types and r.get("text")
-        ]
+        text_blocks = [b for b in processed_blocks if b.type in text_like_types and b.text]
 
         if not text_blocks:
             return ""
 
-        # Sort by reading order rank if available, otherwise by position
-        def sort_key(block: dict[str, Any]) -> tuple[int, float, float]:
-            rank = block.get("reading_order_rank", float("inf"))
-            coords = block.get("coords", [0, 0, 0, 0])
-            y = coords[1] if len(coords) > 1 else 0
-            x = coords[0] if len(coords) > 0 else 0
+        # Sort by reading order (order field) if available, otherwise by position
+        def sort_key(block: Block) -> tuple[float, int, int]:
+            rank: float = float(block.order) if block.order is not None else float("inf")
+            y = block.bbox.y0
+            x = block.bbox.x0
             return (rank, y, x)
 
         sorted_blocks = sorted(text_blocks, key=sort_key)
@@ -48,7 +47,7 @@ class ReadingOrderAnalyzer:
         # Compose text
         texts = []
         for block in sorted_blocks:
-            text = block.get("text", "").strip()
+            text = (block.text or "").strip()
             if text:
                 texts.append(text)
 

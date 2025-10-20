@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from pipeline import Pipeline
 from pipeline.misc import tz_now
 from pipeline.recognition.api.ratelimit import rate_limiter
+from pipeline.types import Document
 
 # Load environment variables from .env file
 load_dotenv()
@@ -438,12 +439,13 @@ def _process_input_file(
 
     if file_ext == ".pdf":
         logger.info("Processing PDF file: %s", input_path)
-        return pipeline.process_pdf(
+        document = pipeline.process_pdf(
             input_path,
             max_pages=max_pages,
             page_range=page_range,
             pages=specific_pages,
         )
+        return document.to_dict() if document else None
 
     if file_ext in [".jpg", ".jpeg", ".png", ".tiff", ".bmp"]:
         logger.info("Processing image file: %s", input_path)
@@ -451,8 +453,13 @@ def _process_input_file(
 
         model_output_dir = Path(args.output) / pipeline.model
         output_path = model_output_dir / f"{input_path.stem}.json"
-        pipeline._save_results(result, output_path)
-        return result
+
+        # Handle both Document and dict return types
+        if result is None:
+            return None
+        result_dict: dict[str, Any] = result.to_dict() if isinstance(result, Document) else result
+        pipeline._save_results(result_dict, output_path)
+        return result_dict
 
     logger.error("Unsupported file format: %s", file_ext)
     return None

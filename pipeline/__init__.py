@@ -376,7 +376,7 @@ class Pipeline:
 
         return processed_pages, processing_stopped
 
-    def _process_pdf_page(
+    def _process_pdf_page(  # noqa: PLR0912
         self,
         pdf_path: Path,
         page_num: int,

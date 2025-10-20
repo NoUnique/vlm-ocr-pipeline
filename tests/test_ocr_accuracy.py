@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from pipeline import Pipeline
+from pipeline.conversion.output.markdown import document_dict_to_markdown
 
 
 def levenshtein_distance(s1: str, s2: str) -> int:
@@ -383,8 +384,6 @@ def test_markdown_output_comparison(
             f"Run test_markdown_baseline first to generate ground truth."
         )
 
-    from pipeline.conversion.output.markdown import document_dict_to_markdown
-
     # Initialize pipeline with MinerU 2.5 VLM + Gemini 2.5 Flash
     pipeline = Pipeline(
         use_cache=False,
@@ -556,8 +555,6 @@ def test_markdown_baseline(sample_pdf_path: Path, test_output_dir: Path) -> None
     # Skip if sample file doesn't exist
     if not sample_pdf_path.exists():
         pytest.skip(f"Sample PDF not found: {sample_pdf_path}")
-
-    from pipeline.conversion.output.markdown import document_dict_to_markdown
 
     # Use tests/output instead of tmp_path for persistent storage
     # test_output_dir passed as fixture

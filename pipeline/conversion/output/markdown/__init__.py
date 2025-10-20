@@ -1,10 +1,10 @@
 """Markdown output conversion utilities.
 
-This module provides region type-based Markdown conversion,
+This module provides block type-based Markdown conversion,
 the default conversion strategy for this pipeline.
 
 Key principles:
-1. Object-first: Primary functions work with Region/Page/Document objects
+1. Object-first: Primary functions work with Block/Page/Document objects
 2. Dict wrappers: Convenience functions for dict inputs
 3. Clear naming: Function names indicate whether they process objects or dicts
 """
@@ -21,16 +21,16 @@ logger = logging.getLogger(__name__)
 
 
 class RegionTypeHeaderIdentifier:
-    """Identify header levels based on region types.
+    """Identify header levels based on block types.
 
-    This is the default header identifier that uses region type classification
+    This is the default header identifier that uses block type classification
     from layout detection to determine Markdown header levels.
 
     Note: Only "title" is actively used by detectors. Other mappings are
     reserved for future use or custom detectors.
     """
 
-    # Region type to header level mapping
+    # Block type to header level mapping
     HEADER_MAPPING: dict[str, int] = {
         "title": 1,  # # - Used by all detectors
         # Reserved for future use:
@@ -42,11 +42,11 @@ class RegionTypeHeaderIdentifier:
         "subheading": 3,  # ###
     }
 
-    def get_header_level(self, region_type: str) -> int | None:
-        """Get header level for a region type.
+    def get_header_level(self, block_type: str) -> int | None:
+        """Get header level for a block type.
 
         Args:
-            region_type: Region type string
+            block_type: Block type string
 
         Returns:
             Header level (1-6) or None if not a header
@@ -58,13 +58,13 @@ class RegionTypeHeaderIdentifier:
             >>> identifier.get_header_level("text")
             None
         """
-        return self.HEADER_MAPPING.get(region_type.lower())
+        return self.HEADER_MAPPING.get(block_type.lower())
 
-    def get_header_prefix(self, region_type: str) -> str:
-        """Get Markdown header prefix for a region type.
+    def get_header_prefix(self, block_type: str) -> str:
+        """Get Markdown header prefix for a block type.
 
         Args:
-            region_type: Region type string
+            block_type: Block type string
 
         Returns:
             Markdown header prefix (e.g., "# ", "## ") or empty string
@@ -76,7 +76,7 @@ class RegionTypeHeaderIdentifier:
             >>> identifier.get_header_prefix("text")
             ''
         """
-        level = self.get_header_level(region_type)
+        level = self.get_header_level(block_type)
         if level is None:
             return ""
         return "#" * level + " "
@@ -333,7 +333,7 @@ def page_to_markdown(
         >>> from pipeline.types import Page, Block, BBox
         >>> page = Page(
         ...     page_num=1,
-        ...     regions=[Region(type="title", bbox=BBox(0, 0, 100, 20), confidence=0.9, text="Title")]
+        ...     blocks=[Block(type="title", bbox=BBox(0, 0, 100, 20), detection_confidence=0.9, text="Title")]
         ... )
         >>> md = page_to_markdown(page)
         >>> print(md)
@@ -420,17 +420,17 @@ def document_to_markdown(
 
 
 def region_dict_to_markdown(data: dict[str, Any], **kwargs: Any) -> str:
-    """Convert region dict to Markdown (convenience wrapper).
+    """Convert block dict to Markdown (convenience wrapper).
 
     Args:
-        data: Region dictionary
-        **kwargs: Additional arguments for region_to_markdown
+        data: Block dictionary
+        **kwargs: Additional arguments for block_to_markdown
 
     Returns:
         Markdown-formatted string
 
     Example:
-        >>> data = {"type": "title", "xywh": [0, 0, 100, 20], "confidence": 0.9, "text": "Hello"}
+        >>> data = {"type": "title", "xywh": [0, 0, 100, 20], "detection_confidence": 0.9, "text": "Hello"}
         >>> region_dict_to_markdown(data)
         '# Hello'
     """
