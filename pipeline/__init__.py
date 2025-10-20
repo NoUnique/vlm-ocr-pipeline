@@ -62,6 +62,8 @@ class Pipeline:
         mineru_model: str | None = None,
         mineru_backend: str = "transformers",
         olmocr_model: str | None = None,
+        # Renderer option
+        renderer: str = "markdown",
     ):
         """Initialize VLM OCR processing pipeline.
 
@@ -81,11 +83,17 @@ class Pipeline:
             mineru_model: MinerU model path (for mineru-vlm detector/sorter)
             mineru_backend: MinerU backend ("transformers", "vllm-engine", "vllm-async-engine")
             olmocr_model: olmOCR model path (for olmocr-vlm sorter)
+            renderer: Output format renderer ("markdown" or "plaintext")
         """
         self.backend = backend.lower()
         self.model = model
         self.gemini_tier = gemini_tier
         self.enable_multi_column_ordering = enable_multi_column_ordering
+        self.renderer = renderer.lower()
+
+        # Validate renderer
+        if self.renderer not in ["markdown", "plaintext"]:
+            raise ValueError(f"Invalid renderer: {renderer}. Must be 'markdown' or 'plaintext'.")
 
         # Auto-select sorter based on legacy option if not explicitly provided
         if sorter is None:
@@ -430,12 +438,21 @@ class Pipeline:
                         block.corrected_text = corrected
                         block.correction_ratio = 0.0  # No ratio info available
 
-            # Compose page-level text
-            raw_text = self._compose_page_text(processed_blocks)
+            # Build a temporary Page object for rendering
+            temp_page = Page(
+                page_num=page_num,
+                blocks=list(processed_blocks),
+            )
 
-            # Correct text
+            # Compose page-level text using selected renderer
+            if self.renderer == "markdown":
+                text = page_to_markdown(temp_page, include_page_header=False)
+            else:  # plaintext
+                text = blocks_to_plaintext(processed_blocks)
+
+            # Correct the rendered text with VLM
             corrected_text, correction_ratio, stop_due_to_correction = self._perform_page_correction(
-                raw_text, page_num
+                text, page_num
             )
 
             if stop_due_to_correction:
@@ -451,7 +468,7 @@ class Pipeline:
                 page_image,
                 sorted_blocks,
                 processed_blocks,
-                raw_text,
+                text,
                 corrected_text,
                 correction_ratio,
                 column_layout,
@@ -536,7 +553,7 @@ class Pipeline:
         page_image: Any,
         regions: Sequence[Block],
         processed_blocks: Sequence[Block],
-        raw_text: str,
+        text: str,
         corrected_text: str,
         correction_ratio: float,
         column_layout: dict[str, Any] | None,
@@ -550,7 +567,7 @@ class Pipeline:
             page_image: Page image array
             regions: Detected blocks
             processed_blocks: Blocks with extracted text
-            raw_text: Raw extracted text
+            text: Rendered text (markdown or plaintext based on renderer setting)
             corrected_text: VLM-corrected text
             correction_ratio: How much text was changed (0.0 = no change, 1.0 = completely different)
             column_layout: Column layout information
@@ -567,7 +584,7 @@ class Pipeline:
             "image_path": str(self.temp_dir / f"{pdf_path.stem}_page_{page_num}.jpg"),
             "width": int(page_width),
             "height": int(page_height),
-            "raw_text": raw_text,
+            "text": text,
             "corrected_text": corrected_text,
             "correction_ratio": correction_ratio,
         })
@@ -582,13 +599,6 @@ class Pipeline:
             status="completed",
             processed_at=tz_now().isoformat(),
         )
-
-        # Generate markdown rendering of the page
-        try:
-            rendered_text = page_to_markdown(page, include_page_header=False)
-            page.auxiliary_info["rendered_text"] = rendered_text  # type: ignore
-        except Exception as e:
-            logger.warning("Failed to render page %d to markdown: %s", page_num, e)
 
         return page
 
@@ -638,7 +648,7 @@ class Pipeline:
             "detected_by": self.detector_name,
             "ordered_by": self.sorter_name,
             "recognized_by": f"{self.backend}/{self.model}",
-            "rendered_by": "markdown",  # Default rendering format
+            "rendered_by": self.renderer,  # Rendering format (markdown or plaintext)
             "output_directory": str(summary_output_dir),
             "processed_at": tz_now().isoformat(),
             "status_summary": {k: v for k, v in status_counts.items() if v > 0},
@@ -877,20 +887,6 @@ class Pipeline:
             return None
 
         return {"columns": columns}
-
-    def _compose_page_text(self, processed_blocks: Sequence[Block]) -> str:
-        """Compose page-level raw text from processed blocks using plaintext converter.
-
-        This method uses the plaintext converter which joins blocks with double newlines
-        in reading order. This is a simple concatenation strategy without formatting.
-
-        Args:
-            processed_blocks: List of processed blocks with text content
-
-        Returns:
-            Composed text in natural reading order (plaintext format)
-        """
-        return blocks_to_plaintext(processed_blocks)
 
     def _save_results(self, result: dict[str, Any], output_path: Path) -> None:
         """Save processing results to JSON file."""
