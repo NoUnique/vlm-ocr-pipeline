@@ -408,7 +408,7 @@ class Pipeline:
             raw_text = self._compose_page_text(processed_blocks)
 
             # Correct text
-            corrected_text, correction_confidence, stop_due_to_correction = self._perform_page_correction(
+            corrected_text, correction_ratio, stop_due_to_correction = self._perform_page_correction(
                 raw_text, page_num
             )
 
@@ -427,7 +427,7 @@ class Pipeline:
                 processed_blocks,
                 raw_text,
                 corrected_text,
-                correction_confidence,
+                correction_ratio,
                 column_layout,
                 auxiliary_info,
             )
@@ -451,13 +451,18 @@ class Pipeline:
             gc.collect()
 
     def _perform_page_correction(self, raw_text: str, page_num: int) -> tuple[str, float, bool]:
-        """Perform page-level text correction."""
+        """Perform page-level text correction.
+
+        Returns:
+            tuple: (corrected_text, correction_ratio, should_stop)
+                correction_ratio: 0.0 = no change, 1.0 = completely different
+        """
         correction_result = self.recognizer.correct_text(raw_text)
 
         if isinstance(correction_result, dict):
             corrected_text = correction_result.get("corrected_text", raw_text)
-            confidence = float(correction_result.get("confidence", 1.0))
-            return corrected_text, confidence, False
+            correction_ratio = float(correction_result.get("correction_ratio", 0.0))
+            return corrected_text, correction_ratio, False
 
         corrected_text = str(correction_result)
         rate_limit_indicators = ["RATE_LIMIT_EXCEEDED", "DAILY_LIMIT_EXCEEDED"]
@@ -466,9 +471,9 @@ class Pipeline:
                 "Rate limit detected during page text correction on page %d. Stopping processing.",
                 page_num,
             )
-            return corrected_text, 1.0, True
+            return corrected_text, 0.0, True
 
-        return corrected_text, 1.0, False
+        return corrected_text, 0.0, False
 
     def _extract_auxiliary_info(self, pdf_path: Path, page_num: int) -> dict[str, Any] | None:
         """Extract auxiliary information from PDF page.
@@ -505,7 +510,7 @@ class Pipeline:
         processed_blocks: Sequence[Region],
         raw_text: str,
         corrected_text: str,
-        correction_confidence: float,
+        correction_ratio: float,
         column_layout: dict[str, Any] | None,
         auxiliary_info: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
@@ -519,7 +524,7 @@ class Pipeline:
             processed_blocks: Regions with extracted text
             raw_text: Raw extracted text
             corrected_text: VLM-corrected text
-            correction_confidence: Correction confidence score
+            correction_ratio: How much text was changed (0.0 = no change, 1.0 = completely different)
             column_layout: Column layout information
             auxiliary_info: Auxiliary information (e.g., text_spans with font info)
 
@@ -535,7 +540,7 @@ class Pipeline:
             "blocks": [b.to_dict() for b in processed_blocks],  # Use processed_blocks (includes text)
             "raw_text": raw_text,
             "corrected_text": corrected_text,
-            "correction_confidence": correction_confidence,
+            "correction_ratio": correction_ratio,
             "processed_at": tz_now().isoformat(),
             "page_number": page_num,
         }

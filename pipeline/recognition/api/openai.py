@@ -322,10 +322,10 @@ class OpenAIClient:
 
             corrected_text = response.choices[0].message.content.strip()
 
-            sm = difflib.SequenceMatcher(None, text, corrected_text)
-            confidence = sm.ratio()
+            similarity = difflib.SequenceMatcher(None, text, corrected_text).ratio()
+            correction_ratio = 1.0 - similarity  # How much was changed (0.0 = no change, 1.0 = completely different)
 
-            return self._text_correction_result(corrected_text, confidence)
+            return self._text_correction_result(corrected_text, correction_ratio)
 
         except Exception as e:
             error_str = str(e)
@@ -364,11 +364,11 @@ class OpenAIClient:
     def _text_correction_result(
         self,
         corrected_text: str,
-        confidence: float,
+        correction_ratio: float,
         error: str | None = None,
         error_message: str | None = None,
     ) -> dict[str, Any]:
-        result: dict[str, Any] = {"corrected_text": corrected_text, "confidence": confidence}
+        result: dict[str, Any] = {"corrected_text": corrected_text, "correction_ratio": correction_ratio}
         if error:
             result["error"] = error
         if error_message:
