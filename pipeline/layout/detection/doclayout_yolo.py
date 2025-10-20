@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ...types import BBox, Block, BlockTypeMapper
+from ...types import BBox, Block, BlockTypeMapper, Detector
 
 if TYPE_CHECKING:
     import numpy as np
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class DocLayoutYOLODetector:
+class DocLayoutYOLODetector(Detector):
     """Detector using DocLayout-YOLO model.
 
     This detector wraps the existing DocLayoutYOLO model and provides

@@ -13,6 +13,8 @@ import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, TypedDict, cast
 
+from pipeline.types import Sorter
+
 if TYPE_CHECKING:
     import numpy as np
 
@@ -313,7 +315,7 @@ class ColumnInfo(TypedDict):
     width: float
 
 
-class MultiColumnSorter:
+class MultiColumnSorter(Sorter):
     """Multi-column aware reading order sorter using PyMuPDF.
 
     Detects columns using PyMuPDF text block extraction (column_boxes),

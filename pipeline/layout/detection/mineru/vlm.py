@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from mineru.backend.vlm.vlm_analyze import ModelSingleton
 
-from ....types import BBox, Block, BlockTypeMapper
+from ....types import BBox, Block, BlockTypeMapper, Detector
 
 if TYPE_CHECKING:
     import numpy as np
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class MinerUVLMDetector:
+class MinerUVLMDetector(Detector):
     """Detector using MinerU VLM model.
 
     MinerU VLM can be used in two modes:

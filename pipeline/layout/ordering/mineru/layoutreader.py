@@ -14,7 +14,7 @@ import logging
 import statistics
 from typing import TYPE_CHECKING, Any
 
-from pipeline.types import Block
+from pipeline.types import Block, Sorter
 
 if TYPE_CHECKING:
     import numpy as np
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 MAX_LINES = 200  # LayoutReader maximum line limit
 
 
-class MinerULayoutReaderSorter:
+class MinerULayoutReaderSorter(Sorter):
     """Sorter using MinerU's LayoutReader (LayoutLMv3) model.
 
     LayoutReader uses a transformer-based model to predict reading order

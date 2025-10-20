@@ -11,6 +11,8 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from pipeline.types import Detector
+
 from .detector import LayoutDetector
 from .doclayout_yolo import DocLayoutYOLODetector
 from .mineru import MinerUDocLayoutYOLODetector, MinerUVLMDetector
@@ -26,7 +28,7 @@ __all__ = [
     "list_available_detectors",
 ]
 
-_DETECTOR_REGISTRY: dict[str, Callable[..., Any]] = {
+_DETECTOR_REGISTRY: dict[str, Callable[..., Detector]] = {
     "doclayout-yolo": DocLayoutYOLODetector,
 }
 
@@ -37,7 +39,7 @@ if MinerUDocLayoutYOLODetector is not None:
     _DETECTOR_REGISTRY["mineru-doclayout-yolo"] = MinerUDocLayoutYOLODetector
 
 
-def create_detector(name: str, **kwargs: Any) -> Any:
+def create_detector(name: str, **kwargs: Any) -> Detector:
     """Create a detector instance.
 
     Args:

@@ -12,6 +12,8 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from pipeline.types import Sorter
+
 from .analyzer import ReadingOrderAnalyzer
 from .mineru import MinerULayoutReaderSorter, MinerUVLMSorter, MinerUXYCutSorter
 from .olmocr import OlmOCRVLMSorter
@@ -31,7 +33,7 @@ __all__ = [
     "validate_combination",
 ]
 
-_SORTER_REGISTRY: dict[str, Callable[..., Any]] = {
+_SORTER_REGISTRY: dict[str, Callable[..., Sorter]] = {
     "pymupdf": MultiColumnSorter,  # Legacy name for backward compatibility
 }
 
@@ -48,7 +50,7 @@ if OlmOCRVLMSorter is not None:
     _SORTER_REGISTRY["olmocr-vlm"] = OlmOCRVLMSorter
 
 
-def create_sorter(name: str, **kwargs: Any) -> Any:
+def create_sorter(name: str, **kwargs: Any) -> Sorter:
     """Create a sorter instance.
 
     Args:

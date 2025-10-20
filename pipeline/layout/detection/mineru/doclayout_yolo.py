@@ -17,7 +17,7 @@ from mineru.model.layout.doclayoutyolo import DocLayoutYOLOModel
 from mineru.utils.enum_class import ModelPath
 from mineru.utils.models_download_utils import auto_download_and_get_model_root_path
 
-from ....types import BBox, Block, BlockTypeMapper
+from ....types import BBox, Block, BlockTypeMapper, Detector
 
 if TYPE_CHECKING:
     import numpy as np
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class MinerUDocLayoutYOLODetector:
+class MinerUDocLayoutYOLODetector(Detector):
     """Detector using MinerU's DocLayout-YOLO implementation.
 
     This uses MinerU's DocLayoutYOLOModel which may have different

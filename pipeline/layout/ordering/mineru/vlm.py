@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from pipeline.types import Block
+from pipeline.types import Block, Sorter
 
 if TYPE_CHECKING:
     import numpy as np
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class MinerUVLMSorter:
+class MinerUVLMSorter(Sorter):
     """Sorter using MinerU VLM model's built-in ordering.
 
     This sorter is designed to work with regions that already have

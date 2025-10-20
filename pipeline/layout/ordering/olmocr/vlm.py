@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from pipeline.types import BBox, Block, blocks_to_olmocr_anchor_text
+from pipeline.types import BBox, Block, Sorter, blocks_to_olmocr_anchor_text
 
 if TYPE_CHECKING:
     import numpy as np
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class OlmOCRVLMSorter:
+class OlmOCRVLMSorter(Sorter):
     """Sorter using olmOCR VLM model.
 
     This sorter uses olmOCR's VLM to process the entire page and determine

@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from pipeline.types import Block
+from pipeline.types import Block, Sorter
 
 if TYPE_CHECKING:
     import numpy as np
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class MinerUXYCutSorter:
+class MinerUXYCutSorter(Sorter):
     """Sorter using MinerU's XY-Cut algorithm.
 
     XY-Cut is a recursive projection-based algorithm that splits blocks
