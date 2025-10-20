@@ -1094,13 +1094,13 @@ class Page:
             "blocks": [b.to_dict() for b in self.blocks],
         }
 
-        # Add optional fields (only if not None or non-default)
+        # Add optional fields (only if not None)
         if self.image_path is not None:
             result["image_path"] = self.image_path
         if self.auxiliary_info is not None:
             result["auxiliary_info"] = self.auxiliary_info
-        if self.status != "completed":
-            result["status"] = self.status
+        # Always include status for consistency
+        result["status"] = self.status
         if self.processed_at is not None:
             result["processed_at"] = self.processed_at
         if self.page_path is not None:
