@@ -11,7 +11,7 @@ from typing import Any
 import numpy as np
 
 from ..prompt import PromptManager
-from ..types import Block
+from ..types import Block, Recognizer
 from .api.gemini import GeminiClient
 from .api.openai import OpenAIClient
 from .cache import RecognitionCache
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 __all__ = ["TextRecognizer"]
 
 
-class TextRecognizer:
+class TextRecognizer(Recognizer):
     """Handles text recognition and extraction from document blocks.
 
     This class manages the text extraction pipeline using VLM APIs

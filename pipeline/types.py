@@ -10,7 +10,7 @@ This module provides:
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -1289,6 +1289,84 @@ class Sorter(Protocol):
             0
         """
         ...
+
+
+class Recognizer(Protocol):
+    """Text recognition interface.
+
+    All recognizers must implement this interface to extract and correct
+    text from blocks using various OCR or VLM backends.
+    """
+
+    def process_blocks(self, image: np.ndarray, blocks: Sequence[Block]) -> list[Block]:
+        """Process blocks to extract text.
+
+        Args:
+            image: Full page image as numpy array (H, W, C)
+            blocks: Detected blocks with bbox
+
+        Returns:
+            Blocks with text field populated
+
+        Example:
+            >>> recognizer = TextRecognizer(backend="gemini")
+            >>> blocks_with_text = recognizer.process_blocks(image, blocks)
+            >>> blocks_with_text[0].text
+            'Sample text content'
+        """
+        ...
+
+    def correct_text(self, text: str) -> str | dict[str, Any]:
+        """Correct extracted text using VLM.
+
+        Args:
+            text: Raw extracted text to correct
+
+        Returns:
+            Corrected text string or dict with correction metadata
+
+        Example:
+            >>> recognizer = TextRecognizer(backend="gemini")
+            >>> corrected = recognizer.correct_text("sampel txt")
+            >>> corrected
+            'sample text'
+        """
+        ...
+
+
+class Renderer(Protocol):
+    """Output rendering interface.
+
+    Renderers convert processed blocks/pages/documents to various output
+    formats (markdown, plaintext, HTML, etc.).
+
+    This is a callable protocol - any function matching the signature can be used.
+    """
+
+    def __call__(self, blocks: Sequence[Block], **kwargs: Any) -> str:
+        """Render blocks to output format.
+
+        Args:
+            blocks: Processed blocks with text
+            **kwargs: Additional rendering options
+
+        Returns:
+            Rendered output string
+
+        Example:
+            >>> renderer = blocks_to_markdown
+            >>> output = renderer(blocks)
+            >>> print(output)
+            # Title
+
+            Sample content...
+        """
+        ...
+
+
+# Type alias for renderer functions (alternative to Protocol)
+# Use this when you need a simple type hint without Protocol overhead
+RendererFunc = Callable[[Sequence[Block]], str]
 
 
 # ==================== Utility Functions ====================

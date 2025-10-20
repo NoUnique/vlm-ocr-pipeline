@@ -24,7 +24,7 @@ from .layout.ordering import create_sorter as create_sorter_impl, validate_combi
 from .misc import tz_now
 from .recognition import TextRecognizer
 from .recognition.api.ratelimit import rate_limiter
-from .types import Block, Detector, Document, Page, Sorter
+from .types import Block, Detector, Document, Page, Recognizer, Sorter
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +166,7 @@ class Pipeline:
         self.sorter: Sorter | None = create_sorter_impl(sorter, **sorter_kwargs) if sorter else None
 
         # Recognizer (for traditional pipeline)
-        self.recognizer = TextRecognizer(
+        self.recognizer: Recognizer = TextRecognizer(
             cache_dir=self.cache_dir,
             use_cache=use_cache,
             backend=backend,
