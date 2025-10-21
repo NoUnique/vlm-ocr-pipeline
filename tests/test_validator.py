@@ -7,37 +7,35 @@ from pipeline.layout.ordering import validate_combination
 
 def test_validate_combination_valid():
     """Test validate_combination accepts valid combinations."""
-    # Valid combination should not raise error
-    try:
-        validate_combination("doclayout-yolo", "mineru-xycut")
-        valid = True
-    except ValueError:
-        valid = False
+    is_valid, message = validate_combination("doclayout-yolo", "mineru-xycut")
 
-    assert valid is True
+    assert is_valid is True
+    assert message  # Should have a message
 
 
 def test_validate_combination_invalid_detector():
     """Test validate_combination rejects unknown detector."""
-    # Unknown detector should raise ValueError
-    try:
-        validate_combination("unknown-detector", "none")
-        raised = False
-    except ValueError as e:
-        raised = True
-        assert "detector" in str(e).lower()
+    is_valid, message = validate_combination("unknown-detector", "none")
 
-    assert raised is True
+    assert is_valid is False
+    assert "detector" in message.lower()
 
 
 def test_validate_combination_incompatible():
     """Test validate_combination detects incompatible combinations."""
-    # Some combinations may have warnings but should still work
-    # Just test that the function runs without error
-    try:
-        validate_combination("doclayout-yolo", "pymupdf")
-        passed = True
-    except Exception:
-        passed = False
+    # MinerU VLM requires mineru-vlm sorter
+    is_valid, message = validate_combination("mineru-vlm", "mineru-xycut")
 
-    assert passed is True
+    # This should be invalid or at least have a warning
+    # But valid combinations should work
+    is_valid_good, message_good = validate_combination("doclayout-yolo", "pymupdf")
+    assert is_valid_good is True
+
+
+def test_validate_combination_paddleocr():
+    """Test validate_combination accepts PaddleOCR PP-DocLayoutV2 detector."""
+    is_valid, message = validate_combination("paddleocr-doclayout-v2", "mineru-xycut")
+
+    assert is_valid is True
+    # Should be a recommended combination
+    assert "PaddleOCR" in message or "PP-DocLayoutV2" in message or "Valid" in message

@@ -612,6 +612,187 @@ def test_markdown_baseline(sample_pdf_path: Path, test_output_dir: Path) -> None
     print(f"{'=' * 60}")
 
 
+# ==================== PaddleOCR Tests ====================
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+def test_paddleocr_doclayout_v2_with_gemini(
+    sample_pdf_path: Path,
+    test_output_dir: Path,
+) -> None:
+    """Test PP-DocLayoutV2 detector with Gemini 2.5 Flash recognizer.
+
+    This test:
+    1. Uses PP-DocLayoutV2 for layout detection (25 categories, built-in reading order)
+    2. Uses Gemini 2.5 Flash for text recognition and correction
+    3. Verifies the pipeline works end-to-end
+    4. Saves output for inspection
+
+    Configuration:
+        - Detector: paddleocr-doclayout-v2
+        - Sorter: Not needed (PP-DocLayoutV2 has built-in reading order)
+        - Recognizer: gemini (gemini-2.5-flash)
+    """
+    # Skip if sample file doesn't exist
+    if not sample_pdf_path.exists():
+        pytest.skip(f"Sample PDF not found: {sample_pdf_path}")
+
+    # Initialize pipeline with PP-DocLayoutV2 + Gemini 2.5 Flash
+    pipeline = Pipeline(
+        use_cache=False,
+        cache_dir=test_output_dir / "cache",
+        output_dir=test_output_dir,
+        temp_dir=test_output_dir / "tmp",
+        backend="gemini",  # ✅ Use Gemini backend for text correction
+        model="gemini-2.5-flash",
+        gemini_tier="free",  # Adjust based on your tier
+        detector="paddleocr-doclayout-v2",  # ✅ PP-DocLayoutV2 (25 categories)
+        # No sorter needed - PP-DocLayoutV2 has built-in reading order
+    )
+
+    # Process first page
+    result = pipeline.process_pdf(sample_pdf_path, max_pages=1)
+
+    # Verify basic processing
+    assert result.processed_pages == 1
+    assert len(result.pages) == 1
+
+    # Save result JSON
+    result_file = test_output_dir / "paddleocr_doclayout_v2_gemini_result.json"
+    result_file.write_text(json.dumps(result.to_dict(), indent=2, ensure_ascii=False))
+
+    # Convert to Markdown
+    markdown_output = document_dict_to_markdown(result.to_dict())
+    markdown_file = test_output_dir / "paddleocr_doclayout_v2_gemini_result.md"
+    markdown_file.write_text(markdown_output, encoding="utf-8")
+
+    # Get page data
+    page = result.pages[0]
+    num_blocks = len(page.blocks)
+
+    # Verify blocks have text
+    blocks_with_text = sum(1 for block in page.blocks if block.text or block.corrected_text)
+
+    print(f"\n{'=' * 60}")
+    print("PP-DocLayoutV2 + Gemini 2.5 Flash Test Results:")
+    print(f"{'=' * 60}")
+    print("Configuration:")
+    print("  - Detector: paddleocr-doclayout-v2 (PP-DocLayoutV2)")
+    print("  - Recognizer: gemini (gemini-2.5-flash)")
+    print("  - Reading Order: Built-in pointer network")
+    print("\nOutput files:")
+    print(f"  JSON: {result_file}")
+    print(f"  Markdown: {markdown_file}")
+    print("\nResults:")
+    print(f"  Pages processed: {result.processed_pages}")
+    print(f"  Blocks detected: {num_blocks}")
+    print(f"  Blocks with text: {blocks_with_text}")
+    print(f"  Markdown length: {len(markdown_output)} characters")
+    print(f"{'=' * 60}")
+
+    # Basic assertions
+    assert num_blocks > 0, "No blocks detected"
+    assert blocks_with_text > 0, "No text extracted"
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+def test_paddleocr_full_pipeline(
+    sample_pdf_path: Path,
+    test_output_dir: Path,
+) -> None:
+    """Test full PaddleOCR pipeline: PP-DocLayoutV2 detector + PaddleOCR-VL-0.9B recognizer.
+
+    This test:
+    1. Uses PP-DocLayoutV2 for layout detection (25 categories, built-in reading order)
+    2. Uses PaddleOCR-VL-0.9B for text recognition (local VLM, 109 languages)
+    3. Verifies the end-to-end PaddleOCR pipeline
+    4. Saves output for inspection
+
+    Configuration:
+        - Detector: paddleocr-doclayout-v2
+        - Sorter: Not needed (built-in reading order)
+        - Recognizer: paddleocr-vl (PaddleOCR-VL-0.9B)
+
+    Note: This test requires PaddleX v3.3.1 installed in external/PaddleX/
+    """
+    # Skip if sample file doesn't exist
+    if not sample_pdf_path.exists():
+        pytest.skip(f"Sample PDF not found: {sample_pdf_path}")
+
+    # Check if PaddleOCR is available
+    try:
+        from paddleocr import PaddleOCRVL  # noqa: F401
+    except ImportError:
+        pytest.skip("PaddleOCR not available - skipping PaddleOCR-VL test")
+
+    # Initialize pipeline with full PaddleOCR stack
+    pipeline = Pipeline(
+        use_cache=False,
+        cache_dir=test_output_dir / "cache",
+        output_dir=test_output_dir,
+        temp_dir=test_output_dir / "tmp",
+        backend="paddleocr-vl",  # ✅ Use PaddleOCR-VL-0.9B for recognition
+        detector="paddleocr-doclayout-v2",  # ✅ PP-DocLayoutV2 (25 categories)
+        # No sorter needed - PP-DocLayoutV2 has built-in reading order
+    )
+
+    # Process first page
+    result = pipeline.process_pdf(sample_pdf_path, max_pages=1)
+
+    # Verify basic processing
+    assert result.processed_pages == 1
+    assert len(result.pages) == 1
+
+    # Save result JSON
+    result_file = test_output_dir / "paddleocr_full_pipeline_result.json"
+    result_file.write_text(json.dumps(result.to_dict(), indent=2, ensure_ascii=False))
+
+    # Convert to Markdown
+    markdown_output = document_dict_to_markdown(result.to_dict())
+    markdown_file = test_output_dir / "paddleocr_full_pipeline_result.md"
+    markdown_file.write_text(markdown_output, encoding="utf-8")
+
+    # Get page data
+    page = result.pages[0]
+    num_blocks = len(page.blocks)
+
+    # Verify blocks have text
+    blocks_with_text = sum(1 for block in page.blocks if block.text)
+
+    # Count block types
+    block_types: dict[str, int] = {}
+    for block in page.blocks:
+        block_types[block.type] = block_types.get(block.type, 0) + 1
+
+    print(f"\n{'=' * 60}")
+    print("Full PaddleOCR Pipeline Test Results:")
+    print(f"{'=' * 60}")
+    print("Configuration:")
+    print("  - Detector: paddleocr-doclayout-v2 (PP-DocLayoutV2)")
+    print("  - Recognizer: paddleocr-vl (PaddleOCR-VL-0.9B)")
+    print("  - Reading Order: Built-in pointer network")
+    print("  - Model: PaddleOCR-VL-0.9B (NaViT + ERNIE-4.5-0.3B)")
+    print("  - Languages: 109 languages supported")
+    print("\nOutput files:")
+    print(f"  JSON: {result_file}")
+    print(f"  Markdown: {markdown_file}")
+    print("\nResults:")
+    print(f"  Pages processed: {result.processed_pages}")
+    print(f"  Blocks detected: {num_blocks}")
+    print(f"  Blocks with text: {blocks_with_text}")
+    print(f"  Markdown length: {len(markdown_output)} characters")
+    print("\nBlock types detected:")
+    for block_type, count in sorted(block_types.items()):
+        print(f"  - {block_type}: {count}")
+    print(f"{'=' * 60}")
+
+    # Basic assertions
+    assert num_blocks > 0, "No blocks detected"
+    assert blocks_with_text > 0, "No text extracted from PaddleOCR-VL"
+
+
 # ==================== Unit Tests ====================
 
 

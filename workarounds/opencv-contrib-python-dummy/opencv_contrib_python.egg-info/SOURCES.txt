@@ -1,0 +1,6 @@
+README.md
+setup.py
+opencv_contrib_python.egg-info/PKG-INFO
+opencv_contrib_python.egg-info/SOURCES.txt
+opencv_contrib_python.egg-info/dependency_links.txt
+opencv_contrib_python.egg-info/top_level.txt

@@ -3,6 +3,7 @@
 Detectors organized by framework:
 - doclayout_yolo.py: This project's DocLayout-YOLO
 - mineru/: MinerU detectors (DocLayout-YOLO, VLM)
+- paddleocr/: PaddleOCR detectors (PP-DocLayoutV2)
 """
 
 from __future__ import annotations
@@ -19,11 +20,18 @@ from .mineru import MinerUDocLayoutYOLODetector, MinerUVLMDetector
 
 logger = logging.getLogger(__name__)
 
+# Lazy import for PaddleOCR (optional dependency)
+try:
+    from .paddleocr import PPDocLayoutV2Detector  # noqa: PLC0415
+except ImportError:
+    PPDocLayoutV2Detector = None  # type: ignore[assignment, misc]
+
 __all__ = [
     "LayoutDetector",
     "DocLayoutYOLODetector",
     "MinerUVLMDetector",
     "MinerUDocLayoutYOLODetector",
+    "PPDocLayoutV2Detector",
     "create_detector",
     "list_available_detectors",
 ]
@@ -37,6 +45,9 @@ if MinerUVLMDetector is not None:
 
 if MinerUDocLayoutYOLODetector is not None:
     _DETECTOR_REGISTRY["mineru-doclayout-yolo"] = MinerUDocLayoutYOLODetector
+
+if PPDocLayoutV2Detector is not None:
+    _DETECTOR_REGISTRY["paddleocr-doclayout-v2"] = PPDocLayoutV2Detector
 
 
 def create_detector(name: str, **kwargs: Any) -> Detector:

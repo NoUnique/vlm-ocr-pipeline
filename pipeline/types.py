@@ -153,6 +153,41 @@ class BlockTypeMapper:
         "text": BlockType.TEXT,
     }
 
+    # PaddleOCR PP-DocLayoutV2 (PP-DocLayout-L/M/S with 23 categories)
+    PADDLEOCR_DOCLAYOUT_V2_MAP: dict[str, str] = {
+        # Titles and text
+        "doc_title": BlockType.TITLE,
+        "paragraph_title": BlockType.TITLE,
+        "text": BlockType.TEXT,
+        "sidebar_text": BlockType.ASIDE_TEXT,
+        # Page elements
+        "page_number": BlockType.PAGE_NUMBER,
+        "header": BlockType.HEADER,
+        "footer": BlockType.FOOTER,
+        "header_image": BlockType.HEADER,
+        "footer_image": BlockType.FOOTER,
+        # Structural elements
+        "abstract": BlockType.TEXT,
+        "contents": BlockType.TEXT,
+        "reference": BlockType.REF_TEXT,
+        "reference_content": BlockType.REF_TEXT,
+        "footnote": BlockType.PAGE_FOOTNOTE,
+        # Math and code
+        "formula": BlockType.INTERLINE_EQUATION,
+        "formula_number": BlockType.INTERLINE_EQUATION,
+        "algorithm": BlockType.ALGORITHM,
+        # Figures and images
+        "image": BlockType.IMAGE,
+        # Tables
+        "table": BlockType.TABLE,
+        "table_title": BlockType.TABLE_CAPTION,
+        # Charts
+        "chart": BlockType.IMAGE,
+        "chart_title": BlockType.IMAGE_CAPTION,
+        # Special
+        "seal": BlockType.IMAGE,
+    }
+
     @classmethod
     def map_type(cls, region_type: str, detector_name: str) -> str:
         """Map a detector-specific type to standardized type.
@@ -160,7 +195,7 @@ class BlockTypeMapper:
         Args:
             region_type: Original block type from detector
             detector_name: Name of detector ("doclayout-yolo", "mineru-doclayout-yolo",
-                          "mineru-vlm", "olmocr-vlm")
+                          "mineru-vlm", "olmocr-vlm", "paddleocr-doclayout-v2")
 
         Returns:
             Standardized block type (falls back to original if no mapping found)
@@ -170,6 +205,8 @@ class BlockTypeMapper:
             'text'
             >>> BlockTypeMapper.map_type("abandon", "mineru-doclayout-yolo")
             'discarded'
+            >>> BlockTypeMapper.map_type("doc_title", "paddleocr-doclayout-v2")
+            'title'
         """
         mapping_dict: dict[str, str] | None = None
 
@@ -181,6 +218,8 @@ class BlockTypeMapper:
             mapping_dict = cls.MINERU_VLM_MAP
         elif detector_name == "olmocr-vlm":
             mapping_dict = cls.OLMOCR_VLM_MAP
+        elif detector_name == "paddleocr-doclayout-v2":
+            mapping_dict = cls.PADDLEOCR_DOCLAYOUT_V2_MAP
 
         if mapping_dict:
             return mapping_dict.get(region_type.lower(), region_type)

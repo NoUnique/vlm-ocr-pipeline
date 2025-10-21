@@ -44,6 +44,10 @@ python main.py --input doc.pdf --detector doclayout-yolo --sorter mineru-xycut
 python main.py --input doc.pdf --detector mineru-vlm --sorter mineru-vlm \
     --mineru-model opendatalab/PDF-Extract-Kit-1.0
 
+# PaddleOCR pipeline (PP-DocLayoutV2 detector + PaddleOCR-VL-0.9B recognizer)
+python main.py --input doc.pdf --detector paddleocr-doclayout-v2 \
+    --recognizer paddleocr-vl --sorter mineru-xycut
+
 # Page limiting (for testing/cost control)
 python main.py --input doc.pdf --max-pages 5
 python main.py --input doc.pdf --page-range 10-20
@@ -67,7 +71,7 @@ The system follows a clear separation of concerns through five distinct stages:
 2. **Layout Detection** (`pipeline/layout/detection/`)
    - Factory pattern: `create_detector(name, **kwargs)` in `__init__.py`
    - Returns `list[Block]` with detected bounding boxes
-   - Detectors: `doclayout-yolo` (this project's YOLO), `mineru-doclayout-yolo`, `mineru-vlm`
+   - Detectors: `doclayout-yolo` (this project's YOLO), `mineru-doclayout-yolo`, `mineru-vlm`, `paddleocr-doclayout-v2` (PP-DocLayoutV2)
    - Protocol interface: `Detector.detect(image) -> list[Block]`
 
 3. **Reading Order Analysis** (`pipeline/layout/ordering/`)
@@ -80,7 +84,13 @@ The system follows a clear separation of concerns through five distinct stages:
 4. **Text Recognition & Correction** (`pipeline/recognition/`)
    - VLM-powered text extraction per block: `TextRecognizer.process_blocks()`
    - Page-level correction: `TextRecognizer.correct_text()`
-   - Multi-backend support (OpenAI/Gemini) with prompt templates in `settings/prompts/{model}/`
+   - Multi-backend support (OpenAI/Gemini/PaddleOCR-VL) with prompt templates in `settings/prompts/{model}/`
+   - **PaddleOCR-VL Recognizer**: Uses PaddleOCR-VL-0.9B model for block-level text recognition
+     - **Architecture**: NaViT-style dynamic resolution vision encoder (SiglipVisionModel) + ERNIE-4.5-0.3B language model
+     - **Model Size**: 0.9B parameters (compact but powerful)
+     - **Features**: 109 languages support, SOTA on OmniDocBench v1.5 (text, formula, table, reading order)
+     - **Query-based**: Different prompts for different block types ("OCR:", "Table Recognition:", "Formula Recognition:", "Chart Recognition:")
+     - **Backends**: native (default), vllm-server, sglang-server
    - Intelligent caching system to avoid re-processing identical content
 
 5. **Result Conversion (Output)** (`pipeline/conversion/output/`)
@@ -127,14 +137,19 @@ class Block:
 
 **Detectors**:
 - `pipeline/layout/detection/doclayout_yolo.py` - This project's DocLayout-YOLO
-- `pipeline/layout/detection/mineru/` - MinerU detectors
+- `pipeline/layout/detection/mineru/` - MinerU detectors (DocLayout-YOLO, VLM)
+- `pipeline/layout/detection/paddleocr/` - PaddleOCR PP-DocLayoutV2
 
 **Sorters**:
 - `pipeline/layout/ordering/pymupdf/multi_column.py` - Multi-column detection
 - `pipeline/layout/ordering/mineru/` - LayoutReader, XY-Cut, VLM
 - `pipeline/layout/ordering/olmocr/` - olmOCR VLM ordering
 
-**Recognition**: `pipeline/recognition/__init__.py` - TextRecognizer with VLM backends
+**Recognition**:
+- `pipeline/recognition/__init__.py` - TextRecognizer with VLM backends (OpenAI, Gemini)
+- `pipeline/recognition/paddleocr/` - PaddleOCR-VL Recognizer
+  - `paddleocr_vl.py` - PaddleOCRVLRecognizer using PaddleOCR-VL-0.9B (0.9B params, NaViT + ERNIE-4.5-0.3B)
+  - Requires PaddleX v3.3.1 in `external/PaddleX/`
 
 **Conversion** (Stages 1 & 5):
 - Input (Stage 1): `pipeline/conversion/input/` - PDF/image loading
@@ -184,7 +199,11 @@ class Block:
 - **Never use `pip` directly** - Always `uv pip install <package>`
 - **After install**: Update `requirements.txt` with exact versions
 - **Run commands**: Prefix with `uv run` (e.g., `uv run pytest`, `uv run python main.py`)
-- **External frameworks**: `external/` contains git submodules (MinerU, olmOCR) - excluded from type checking
+- **External frameworks**: `external/` contains git submodules - excluded from type checking
+  - `external/PaddleOCR/` - PaddleOCR v3.3.0 (for PP-DocLayoutV2 detector)
+  - `external/PaddleX/` - PaddleX v3.3.1 (for PaddleOCR-VL-0.9B recognizer)
+  - `external/MinerU/` - MinerU framework (for detectors and sorters)
+  - `external/olmOCR/` - olmOCR framework (for VLM sorter)
 - **Type checking**: Use `npx pyright`, not global pyright
 
 ### Rate Limiting & Caching
@@ -219,6 +238,6 @@ The Result Conversion stage (Stage 5) currently implements two Markdown conversi
 ## Reference Documentation
 
 - **BBox Formats**: See `BBOX_FORMATS.md` for detailed conversion examples
-- **Region Types**: See `DETECTOR_REGION_TYPES.md` for detector-specific type mappings
+- **Block Types**: See `DETECTOR_BLOCK_TYPES.md` for detector-specific type mappings
 - **README.md**: User-facing documentation with installation, usage, API examples
 - **Cursor Rules**: `.cursorrules` contains detailed coding standards (Google docstrings, type hints, testing requirements)

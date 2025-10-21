@@ -6,17 +6,18 @@ A unified OCR processing pipeline that leverages Vision Language Models (VLMs) f
 
 ## Features
 
-- **Document Layout Detection**: Automatically detects text, tables, figures, and other elements using DocLayout-YOLO
+- **Document Layout Detection**: Automatically detects text, tables, figures, and other elements using DocLayout-YOLO, PaddleOCR PP-DocLayoutV2, or MinerU
 - **Multi-VLM Backend Support**: Support for OpenAI, OpenRouter, and Gemini VLM APIs for text extraction and processing
-- **Modular Detection & Ordering**: Flexible detector and sorter combinations (DocLayout-YOLO, MinerU, olmOCR)
+- **Local VLM Recognition**: PaddleOCR-VL-0.9B for local text recognition (NaViT + ERNIE-4.5-0.3B, 109 languages)
+- **Modular Detection & Ordering**: Flexible detector and sorter combinations (DocLayout-YOLO, PaddleOCR, MinerU, olmOCR)
 - **Advanced Ordering Algorithms**: Support for multi-column, LayoutReader (LayoutLMv3), XY-Cut, and VLM-based ordering
 - **Unified BBox System**: Integer-based bounding box (internal: xyxy, JSON: xywh) with automatic conversion between 6+ different formats (YOLO, MinerU, PyMuPDF, PyPDF, olmOCR)
 - **VLM-Powered Text Extraction**: Advanced text extraction using Vision Language Models with intelligent context understanding
-- **Multi-Language Support**: Supports English, Korean, and Japanese text extraction
+- **Multi-Language Support**: Supports English, Korean, Japanese, and 109+ languages (PaddleOCR-VL)
 - **AI-Powered Correction**: Intelligent text correction and content analysis
 - **Special Content Processing**: Enhanced analysis of tables and figures with structured output
 - **Model-Specific Prompts**: YAML-based prompt templates organized by model family for optimal results
-- **Local Processing**: All processing runs locally with results stored on your filesystem
+- **Local & Cloud Processing**: Choose between local models (PaddleOCR-VL) or cloud APIs (OpenAI, Gemini)
 - **Caching System**: Intelligent caching to avoid reprocessing identical content
 - **Flexible Input**: Supports single images, PDFs, or batch processing of directories
 
@@ -36,6 +37,8 @@ vlm-ocr-pipeline/
 │   │   ├── detection/         # Layout detection strategies
 │   │   │   ├── __init__.py    # create_detector()
 │   │   │   ├── doclayout_yolo.py  # This project's DocLayout-YOLO
+│   │   │   ├── paddleocr/     # PaddleOCR detectors
+│   │   │   │   └── detector.py  # PP-DocLayoutV2
 │   │   │   └── mineru/        # MinerU detectors
 │   │   │       ├── doclayout_yolo.py  # MinerU's DocLayout-YOLO
 │   │   │       └── vlm.py     # MinerU VLM
@@ -57,6 +60,8 @@ vlm-ocr-pipeline/
 │   └── recognition/           # Text recognition and correction
 │       ├── __init__.py        # TextRecognizer
 │       ├── cache.py
+│       ├── paddleocr/         # PaddleOCR recognizers
+│       │   └── paddleocr_vl.py  # PaddleOCR-VL-0.9B
 │       └── api/               # VLM API clients (OpenAI, Gemini)
 │
 ├── models/
@@ -64,7 +69,9 @@ vlm-ocr-pipeline/
 │
 ├── external/                  # External frameworks (git submodules)
 │   ├── MinerU/                # MinerU 2.5
-│   └── olmocr/                # olmOCR
+│   ├── olmocr/                # olmOCR
+│   ├── PaddleOCR/             # PaddleOCR v3.3.0 (PP-DocLayoutV2)
+│   └── PaddleX/               # PaddleX v3.3.1 (PaddleOCR-VL-0.9B)
 │
 ├── settings/
 │   └── prompts/               # YAML prompt templates by model
@@ -274,6 +281,67 @@ python main.py --input document.pdf --log-level DEBUG
 
 # Combined advanced usage
 python main.py --input /docs/ --max-pages 3 --confidence 0.8
+```
+
+#### Modular Detector and Sorter Combinations
+
+```bash
+# Use different detector + sorter combinations
+python main.py --input document.pdf --detector doclayout-yolo --sorter mineru-xycut
+
+# Use PaddleOCR PP-DocLayoutV2 detector with XY-Cut sorter
+python main.py --input document.pdf --detector paddleocr-doclayout-v2 --sorter mineru-xycut
+
+# Use MinerU VLM for both detection and ordering (tightly coupled)
+python main.py --input document.pdf --detector mineru-vlm --sorter mineru-vlm \
+    --mineru-model opendatalab/PDF-Extract-Kit-1.0
+
+# Use multi-column aware PyMuPDF sorter
+python main.py --input document.pdf --detector doclayout-yolo --sorter pymupdf
+```
+
+#### PaddleOCR End-to-End Pipeline
+
+```bash
+# Use PaddleOCR PP-DocLayoutV2 detector + PaddleOCR-VL-0.9B recognizer
+# This provides a complete PaddleOCR-based pipeline with 109 language support
+python main.py --input document.pdf \
+    --detector paddleocr-doclayout-v2 \
+    --recognizer paddleocr-vl \
+    --sorter mineru-xycut
+
+# With custom backend (vLLM or SGLang for acceleration)
+python main.py --input document.pdf \
+    --detector paddleocr-doclayout-v2 \
+    --recognizer paddleocr-vl \
+    --paddleocr-vl-backend vllm-server \
+    --sorter mineru-xycut
+
+# With custom query templates for specific block types
+python main.py --input document.pdf \
+    --detector paddleocr-doclayout-v2 \
+    --recognizer paddleocr-vl \
+    --paddleocr-vl-query-table "Extract this table in markdown:" \
+    --sorter mineru-xycut
+```
+
+**Available Detectors:**
+- `doclayout-yolo`: This project's DocLayout-YOLO (default)
+- `paddleocr-doclayout-v2`: PaddleOCR PP-DocLayoutV2 (25 categories, requires PaddleOCR v3.3.0)
+- `mineru-doclayout-yolo`: MinerU's DocLayout-YOLO implementation
+- `mineru-vlm`: MinerU VLM-based detection
+
+**Available Recognizers:**
+- `openai`: OpenAI VLM backend (default, uses API)
+- `gemini`: Gemini VLM backend (uses API)
+- `paddleocr-vl`: PaddleOCR-VL-0.9B local model (109 languages, requires PaddleX v3.3.1)
+
+**Available Sorters:**
+- `mineru-xycut`: Fast XY-Cut algorithm (default, recommended)
+- `pymupdf`: Multi-column aware sorting
+- `mineru-layoutreader`: LayoutLMv3-based reading order
+- `mineru-vlm`: MinerU VLM-based ordering (requires `mineru-vlm` detector)
+- `olmocr-vlm`: olmOCR VLM-based ordering
 ```
 
 ### Python API Usage

@@ -18,7 +18,15 @@ from .cache import RecognitionCache
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["TextRecognizer"]
+# Lazy import for PaddleOCR-VL (optional dependency)
+try:
+    from .paddleocr import PaddleOCRVLRecognizer  # noqa: PLC0415
+    _HAS_PADDLEOCR_VL = True
+except ImportError:
+    PaddleOCRVLRecognizer = None  # type: ignore[misc, assignment]
+    _HAS_PADDLEOCR_VL = False
+
+__all__ = ["TextRecognizer", "PaddleOCRVLRecognizer"]
 
 
 class TextRecognizer(Recognizer):
@@ -63,6 +71,9 @@ class TextRecognizer(Recognizer):
             self.client = GeminiClient(gemini_model=model)
         elif self.backend == "openai":
             self.client = OpenAIClient(model=model)
+        elif self.backend == "paddleocr-vl":
+            # PaddleOCR-VL is handled separately, no client needed
+            self.client = None  # type: ignore[assignment]
         else:
             raise ValueError(f"Unknown backend: {backend}")
 

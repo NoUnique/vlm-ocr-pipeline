@@ -76,12 +76,14 @@ VALID_COMBINATIONS = {
     "doclayout-yolo": ["pymupdf", "mineru-layoutreader", "mineru-xycut", "olmocr-vlm"],
     "mineru-doclayout-yolo": ["pymupdf", "mineru-layoutreader", "mineru-xycut", "olmocr-vlm"],
     "mineru-vlm": ["mineru-vlm"],  # Only mineru-vlm sorter (tightly coupled)
+    "paddleocr-doclayout-v2": ["pymupdf", "mineru-layoutreader", "mineru-xycut", "olmocr-vlm"],
 }
 
 RECOMMENDED_COMBINATIONS = {
     ("mineru-vlm", "mineru-vlm"): "Tightly coupled - detection and ordering by same VLM!",
     ("doclayout-yolo", "mineru-xycut"): "Fast and accurate - good default!",
     ("mineru-doclayout-yolo", "mineru-xycut"): "MinerU detection with fast ordering!",
+    ("paddleocr-doclayout-v2", "mineru-xycut"): "PaddleOCR PP-DocLayoutV2 with fast XY-Cut ordering!",
 }
 
 REQUIRED_COMBINATIONS = {

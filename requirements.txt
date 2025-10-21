@@ -2,7 +2,7 @@
 torch==2.0.1
 torchvision==0.15.2
 numpy==1.26.4
-opencv-python-headless==4.7.0.72  # Headless version for server environments (no GUI dependencies)
+opencv-python-headless==4.10.0.84  # Headless version for server environments (no GUI dependencies)
 Pillow==9.4.0
 
 # Document Processing
@@ -33,8 +33,18 @@ requests==2.31.0
 PyYAML==6.0.1
 protobuf==3.20.3
 
+# PaddlePaddle OCR
+# Install paddlepaddle-gpu from Paddle's repository (CUDA 12.9):
+# uv pip install paddlepaddle-gpu==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu129/
+paddlepaddle-gpu==3.2.0
+paddleocr==3.3.0
+paddlex==3.3.4
+# Paddle-specific safetensors (supports framework="paddle"):
+# uv pip install https://paddle-whl.bj.bcebos.com/nightly/cu126/safetensors/safetensors-0.6.2.dev0-cp38-abi3-linux_x86_64.whl
+safetensors @ https://paddle-whl.bj.bcebos.com/nightly/cu126/safetensors/safetensors-0.6.2.dev0-cp38-abi3-linux_x86_64.whl
+
 # Development Dependencies (optional)
-python-dotenv 
+python-dotenv
 ruff==0.13.1
 pytest==8.2.0
 Levenshtein==0.25.0

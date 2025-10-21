@@ -13,6 +13,8 @@ def test_list_available_detectors():
     available = list_available_detectors()
 
     assert "doclayout-yolo" in available
+    # PaddleOCR detector should be available if installed
+    # assert "paddleocr-ppdoclayout" in available  # Optional dependency
 
 
 def test_create_detector_doclayout():

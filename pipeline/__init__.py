@@ -44,7 +44,7 @@ class Pipeline:
     4. Recognition: Extract and correct text from blocks
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0912, PLR0915
         self,
         model_path: str | Path | None = None,
         confidence_threshold: float = 0.5,
@@ -86,7 +86,11 @@ class Pipeline:
             renderer: Output format renderer ("markdown" or "plaintext")
         """
         self.backend = backend.lower()
-        self.model = model
+        # Override model name for paddleocr-vl backend
+        if self.backend == "paddleocr-vl":
+            self.model = "paddleocr-vl"
+        else:
+            self.model = model
         self.gemini_tier = gemini_tier
         self.enable_multi_column_ordering = enable_multi_column_ordering
         self.renderer = renderer.lower()
@@ -167,14 +171,25 @@ class Pipeline:
 
         self.sorter: Sorter | None = create_sorter_impl(sorter, **sorter_kwargs) if sorter else None
 
-        # Recognizer (for traditional pipeline)
-        self.recognizer: Recognizer = TextRecognizer(
-            cache_dir=self.cache_dir,
-            use_cache=use_cache,
-            backend=backend,
-            model=model,
-            gemini_tier=gemini_tier,
-        )
+        # Recognizer (backend-dependent)
+        if backend == "paddleocr-vl":
+            # Use PaddleOCR-VL recognizer
+            from .recognition import PaddleOCRVLRecognizer  # noqa: PLC0415
+
+            self.recognizer: Recognizer = PaddleOCRVLRecognizer(
+                device=None,  # Auto-detect
+                vl_rec_backend="native",
+                use_layout_detection=False,  # We handle layout detection separately
+            )
+        else:
+            # Use traditional VLM-based recognizer
+            self.recognizer = TextRecognizer(
+                cache_dir=self.cache_dir,
+                use_cache=use_cache,
+                backend=backend,
+                model=model,
+                gemini_tier=gemini_tier,
+            )
 
         logger.info(
             "Pipeline initialized: detector=%s, sorter=%s, recognizer=%s (model=%s)",
@@ -430,15 +445,17 @@ class Pipeline:
                 return None, True
 
             # Block-level text correction for text blocks
-            for block in processed_blocks:
-                if block.type in ["plain text", "title", "list", "text"] and block.text:
-                    corrected = self.recognizer.correct_text(block.text)
-                    if isinstance(corrected, dict):
-                        block.corrected_text = corrected.get("corrected_text", block.text)
-                        block.correction_ratio = corrected.get("correction_ratio", 0.0)
-                    elif isinstance(corrected, str):
-                        block.corrected_text = corrected
-                        block.correction_ratio = 0.0  # No ratio info available
+            # Skip correction for paddleocr-vl (already does direct VLM extraction, no correction needed)
+            if self.backend != "paddleocr-vl":
+                for block in processed_blocks:
+                    if block.type in ["plain text", "title", "list", "text"] and block.text:
+                        corrected = self.recognizer.correct_text(block.text)
+                        if isinstance(corrected, dict):
+                            block.corrected_text = corrected.get("corrected_text", block.text)
+                            block.correction_ratio = corrected.get("correction_ratio", 0.0)
+                        elif isinstance(corrected, str):
+                            block.corrected_text = corrected
+                            block.correction_ratio = 0.0  # No ratio info available
 
             # Build a temporary Page object for rendering
             temp_page = Page(
@@ -504,6 +521,10 @@ class Pipeline:
             tuple: (corrected_text, correction_ratio, should_stop)
                 correction_ratio: 0.0 = no change, 1.0 = completely different
         """
+        # Skip page correction for PaddleOCR-VL (it already extracts text directly)
+        if self.backend == "paddleocr-vl":
+            return raw_text, 0.0, False
+
         correction_result = self.recognizer.correct_text(raw_text)
 
         if isinstance(correction_result, dict):
