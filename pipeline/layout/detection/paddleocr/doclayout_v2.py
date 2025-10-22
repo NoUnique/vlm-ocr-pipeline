@@ -1,11 +1,10 @@
 """PaddleOCR PP-DocLayoutV2 layout analysis implementation.
 
-PP-DocLayoutV2 is a unified layout analysis model that performs both:
-1. Layout detection (identifying document elements)
-2. Reading order restoration (sorting elements in correct reading order)
+PP-DocLayoutV2 is a unified layout analysis model for document element detection.
 
-Based on PP-DocLayout_plus-L (RT-DETR-L) cascaded with a lightweight pointer network,
-PP-DocLayoutV2 provides high-precision layout localization and reading order recovery.
+Model Architecture:
+- Detection: PP-DocLayout_plus-L based on RT-DETR-L (81.4% mAP)
+- Pointer Network: 6 Transformer layers for reading order (NOT exposed by Python API)
 
 Model Specifications:
 - mAP(0.5): 81.4%
@@ -21,7 +20,11 @@ Categories (from PaddleOCR docs):
 - seal, chart, aside_text
 
 BBox Format: [xmin, ymin, xmax, ymax] (xyxy)
-Output: Boxes are already sorted in reading order by the pointer network!
+
+API Limitation:
+The PP-DocLayoutV2 model includes a pointer network for reading order,
+but PaddleOCR/PaddleX Python API does NOT expose this information.
+This detector sorts blocks by Y-coordinate (top-to-bottom) as fallback.
 """
 
 from __future__ import annotations
@@ -41,18 +44,19 @@ logger = logging.getLogger(__name__)
 class PPDocLayoutV2Detector(Detector):
     """Layout analysis detector using PaddleOCR PP-DocLayoutV2.
 
-    PP-DocLayoutV2 combines layout detection with reading order restoration:
-    - Detection: RT-DETR-L based PP-DocLayout_plus-L (81.4 mAP)
-    - Ordering: Lightweight pointer network (6 Transformer layers)
+    PP-DocLayoutV2 is a high-precision layout detection model:
+    - Detection: RT-DETR-L based PP-DocLayout_plus-L (81.4% mAP)
+    - Model includes pointer network for reading order (not exposed by API)
 
     Key Features:
     - Detects 25 document element categories
-    - Automatically sorts elements in reading order
     - Trained on diverse datasets (papers, magazines, PPTs, contracts, etc.)
     - Supports Chinese, English, Japanese, and vertical text documents
 
-    Note: The output boxes are already sorted in reading order, so no
-    additional sorting step is needed when using this detector.
+    Reading Order Handling:
+    While the model includes a pointer network for reading order restoration,
+    PaddleOCR/PaddleX Python API does NOT expose this information in results.
+    This detector sorts blocks by Y-coordinate (top-to-bottom) as fallback.
 
     BBox Format: [xmin, ymin, xmax, ymax] - Top-Left to Bottom-Right corners
     """
@@ -129,6 +133,9 @@ class PPDocLayoutV2Detector(Detector):
         # Lazy import to avoid loading PaddleOCR unless needed
         from paddleocr import LayoutDetection  # noqa: PLC0415  # type: ignore[import-untyped]
 
+        # IMPORTANT: Must use "PP-DocLayoutV2" for pointer network reading order!
+        # PaddleOCR's default model "PP-DocLayout_plus-L" is detection-only without reading order.
+        # Using 'or' operator handles None, empty string, and other falsy values robustly.
         self.model_name = model_name or "PP-DocLayoutV2"
         self.model_dir = Path(model_dir) if model_dir else None
         self.threshold = threshold
@@ -139,16 +146,19 @@ class PPDocLayoutV2Detector(Detector):
         self.device = device
 
         # Initialize PaddleOCR LayoutDetection with PP-DocLayoutV2
+        # Explicitly pass model_name to ensure pointer network is enabled
         init_kwargs = {"model_name": self.model_name}
         if model_dir:
             init_kwargs["model_dir"] = str(model_dir)
         if device:
             init_kwargs["device"] = device
 
+        logger.info("Initializing PaddleOCR LayoutDetection with model_name='%s'", self.model_name)
         self.model = LayoutDetection(**init_kwargs)
 
         logger.info(
-            "PP-DocLayoutV2 layout analysis model initialized (threshold: %.2f)",
+            "PP-DocLayoutV2 layout analysis model initialized (model: %s, threshold: %.2f)",
+            self.model_name,
             self.threshold,
         )
 
@@ -193,19 +203,43 @@ class PPDocLayoutV2Detector(Detector):
             return []
 
         result_item = raw_results[0]
+
         boxes = result_item.get("boxes", [])
 
-        logger.debug(
-            "PP-DocLayoutV2 detected %d blocks (already sorted in reading order)",
-            len(boxes),
-        )
+        logger.debug("PP-DocLayoutV2 detected %d blocks", len(boxes))
 
-        # IMPORTANT: Boxes are already sorted by the pointer network!
-        # We just need to assign order indices
-        blocks = []
-        for order_idx, box_data in enumerate(boxes):
-            block = self._to_block(box_data, order_idx)
-            blocks.append(block)
+        # IMPORTANT: PaddleOCR Python API does NOT expose pointer network reading order!
+        # The API only returns boxes in detection order, not reading order.
+        # We need to sort by Y-coordinate (top to bottom) as fallback.
+        #
+        # Note: The PP-DocLayoutV2 model HAS a pointer network for reading order,
+        # but PaddleOCR/PaddleX Python API doesn't expose it in the results.
+        # See investigation: raw_results only contains ['input_path', 'page_index', 'input_img', 'boxes']
+        # with no reading_order or order field.
+
+        # Convert to Block objects first
+        blocks = [self._to_block(box_data, idx) for idx, box_data in enumerate(boxes)]
+
+        # Sort by Y-coordinate (top to bottom), then X-coordinate (left to right)
+        sorted_blocks = sorted(blocks, key=lambda b: (b.bbox.y0, b.bbox.x0))
+
+        # Reassign order based on sorted position
+        for order_idx, block in enumerate(sorted_blocks):
+            block.order = order_idx
+
+        blocks = sorted_blocks
+
+        # Debug: Log first few blocks to verify reading order
+        if blocks and logger.isEnabledFor(logging.DEBUG):
+            logger.debug("First 3 blocks (verify reading order):")
+            for i, block in enumerate(blocks[:3]):
+                logger.debug(
+                    "  [%d] %s at y=%d (bbox: %s)",
+                    i,
+                    block.type,
+                    block.bbox.y0,
+                    block.bbox,
+                )
 
         return blocks
 

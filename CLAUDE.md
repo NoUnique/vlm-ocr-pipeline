@@ -78,7 +78,7 @@ The system follows a clear separation of concerns through five distinct stages:
 3. **Reading Order Analysis** (`pipeline/layout/ordering/`)
    - Factory pattern: `create_sorter(name, **kwargs)` in `__init__.py`
    - Adds `order` and optionally `column_index` to blocks
-   - Sorters: `pymupdf` (multi-column), `mineru-layoutreader` (LayoutLMv3), `mineru-xycut` (fast, default), `mineru-vlm`, `olmocr-vlm`, `paddleocr-doclayout-v2` (passthrough for pointer network ordering)
+   - Sorters: `pymupdf` (multi-column), `mineru-layoutreader` (LayoutLMv3), `mineru-xycut` (fast, default), `mineru-vlm`, `olmocr-vlm`, `paddleocr-doclayout-v2` (preserves pointer network ordering)
    - Protocol interface: `Sorter.sort(blocks, image, **kwargs) -> list[Block]`
    - Combination validator: `validate_combination(detector, sorter)` ensures compatibility
 
@@ -145,7 +145,7 @@ class Block:
 - `pipeline/layout/ordering/pymupdf/multi_column.py` - Multi-column detection
 - `pipeline/layout/ordering/mineru/` - LayoutReader, XY-Cut, VLM
 - `pipeline/layout/ordering/olmocr/` - olmOCR VLM ordering
-- `pipeline/layout/ordering/paddleocr/` - PP-DocLayoutV2 passthrough (preserves pointer network ordering)
+- `pipeline/layout/ordering/paddleocr/` - PP-DocLayoutV2 sorter (preserves pointer network ordering)
 
 **Recognition**:
 - `pipeline/recognition/__init__.py` - TextRecognizer with VLM backends (OpenAI, Gemini)

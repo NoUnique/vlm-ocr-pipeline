@@ -1,7 +1,8 @@
-"""PP-DocLayoutV2 passthrough sorter.
+"""PP-DocLayoutV2 sorter.
 
-PP-DocLayoutV2 already provides reading order via its pointer network,
-so this sorter simply preserves the order from the detector.
+PP-DocLayoutV2 detector uses a lightweight pointer network (6 Transformer layers)
+to restore reading order during detection. This sorter preserves that ordering
+instead of re-sorting with a different algorithm.
 """
 
 from __future__ import annotations
@@ -18,30 +19,35 @@ logger = logging.getLogger(__name__)
 
 
 class PPDocLayoutV2Sorter(Sorter):
-    """Passthrough sorter for PP-DocLayoutV2 detector.
+    """Sorter for PP-DocLayoutV2 detector that preserves detector's ordering.
 
-    PP-DocLayoutV2 uses a lightweight pointer network (6 Transformer layers)
-    to restore reading order during detection. This sorter preserves that
-    ordering instead of re-sorting with a different algorithm.
+    PP-DocLayoutV2 detector sorts blocks by Y-coordinate (top-to-bottom) during detection.
+    This sorter simply preserves that pre-sorted ordering without re-sorting.
 
-    Note: This sorter is tightly coupled with the paddleocr-doclayout-v2 detector.
-    It assumes blocks already have their 'order' field set by the detector.
+    Note on Pointer Network:
+    While the PP-DocLayoutV2 model includes a pointer network for reading order,
+    PaddleOCR/PaddleX Python API does NOT expose this information.
+    The detector falls back to Y-coordinate sorting, which this sorter preserves.
+
+    Coupling:
+        This sorter is tightly coupled with the paddleocr-doclayout-v2 detector.
+        It assumes blocks already have their 'order' field set by the detector.
     """
 
     def __init__(self) -> None:
-        """Initialize PP-DocLayoutV2 passthrough sorter."""
-        logger.info("PP-DocLayoutV2 passthrough sorter initialized (preserves pointer network ordering)")
+        """Initialize PP-DocLayoutV2 sorter."""
+        logger.info("PP-DocLayoutV2 sorter initialized (preserves detector's Y-coordinate ordering)")
 
     def sort(self, blocks: list[Block], image: np.ndarray, **kwargs: Any) -> list[Block]:
-        """Preserve reading order from PP-DocLayoutV2 detector.
+        """Preserve Y-coordinate ordering from PP-DocLayoutV2 detector.
 
         Args:
-            blocks: Detected blocks with 'order' already set by PP-DocLayoutV2
+            blocks: Detected blocks with 'order' already set by PP-DocLayoutV2 detector
             image: Page image (unused, included for interface compatibility)
             **kwargs: Additional context (unused)
 
         Returns:
-            Blocks in their original order (as provided by PP-DocLayoutV2)
+            Blocks in their original order (Y-coordinate sorted by detector)
 
         Note:
             If blocks don't have 'order' set (e.g., from a different detector),
@@ -54,11 +60,11 @@ class PPDocLayoutV2Sorter(Sorter):
         has_order = all(block.order is not None for block in blocks)
 
         if has_order:
-            # Blocks are already ordered by PP-DocLayoutV2's pointer network
+            # Blocks are already ordered by PP-DocLayoutV2 detector (Y-coordinate sorting)
             # Just ensure they're sorted by the order field
             sorted_blocks = sorted(blocks, key=lambda b: b.order if b.order is not None else 0)
             logger.debug(
-                "Preserved reading order from PP-DocLayoutV2 for %d blocks (pointer network ordering)",
+                "Preserved Y-coordinate ordering from PP-DocLayoutV2 for %d blocks",
                 len(sorted_blocks),
             )
             return sorted_blocks
