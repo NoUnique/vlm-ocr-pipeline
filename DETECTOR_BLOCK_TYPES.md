@@ -76,58 +76,48 @@ Based on MinerU 2.5 VLM (`external/MinerU/mineru/utils/enum_class.py`):
 
 ## Detector Support Matrix
 
-| Block Type | DocLayoutYOLO | PaddleOCR PP-DocLayoutV2 | MinerU DocLayoutYOLO | MinerU VLM 2.5 | Standardized Type |
-|-------------|:-------------:|:------------------------:|:--------------------:|:--------------:|:------------------|
-| **Content** |
-| `text` | ✓ | ✓ | - | ✓ | `text` |
-| `plain text` | ✓ | - | ✓ | - | `text` |
-| `vertical_text` | - | ✓ | - | - | `text` |
-| `title` | ✓ | ✓ (doc_title, paragraph_title) | ✓ | ✓ | `title` |
-| **Figures** |
-| `image` | ✓ | ✓ (image, chart, seal) | - | ✓ | `image` |
-| `figure` | ✓ | - | ✓ | - | `image` |
-| `image_body` | - | - | - | ✓ | `image_body` |
-| `image_caption` | - | ✓ (figure_title) | - | ✓ | `image_caption` |
-| `figure_caption` | - | - | ✓ | - | `image_caption` |
-| `image_footnote` | - | - | - | ✓ | `image_footnote` |
-| **Tables** |
-| `table` | ✓ | ✓ | ✓ | ✓ | `table` |
-| `table_body` | - | - | - | ✓ | `table_body` |
-| `table_caption` | - | ✓ (via figure_title) | ✓ | ✓ | `table_caption` |
-| `table_footnote` | - | - | ✓ | ✓ | `table_footnote` |
-| **Equations** |
-| `equation` | ✓ | - | - | - | `interline_equation` |
-| `interline_equation` | - | ✓ (display_formula, formula_number) | - | ✓ | `interline_equation` |
-| `inline_equation` | - | ✓ (inline_formula) | - | ✓ | `inline_equation` |
-| `isolate_formula` | - | - | ✓ | - | `interline_equation` |
-| `formula_caption` | - | - | ✓ | - | `image_caption` |
-| **Code** |
-| `code` | - | - | - | ✓ | `code` |
-| `code_body` | - | - | - | ✓ | `code_body` |
-| `code_caption` | - | - | - | ✓ | `code_caption` |
-| `algorithm` | - | ✓ | - | ✓ | `algorithm` |
-| **Lists** |
-| `list` | ✓ | - | - | ✓ | `list` |
-| `list_item` | ✓ | - | - | - | `list` |
+| Block Type | DocLayoutYOLO | MinerU DocLayoutYOLO | MinerU VLM 2.5 | PaddleOCR PP-DocLayoutV2 |
+|------------|---------------|---------------------|----------------|--------------------------|
+| **Content Types** |
+| `text` | `plain text` | `plain text` | `text` | `text`<br>`vertical_text`<br>`abstract`<br>`contents` |
+| `title` | `title` | `title` | `title` | `doc_title`<br>`paragraph_title` |
+| **Figure Types** |
+| `image` | `figure` | `figure` | `image` | `image`<br>`chart`<br>`seal` |
+| `image_body` | - | - | `image_body` | - |
+| `image_caption` | - | `figure_caption`<br>`formula_caption` | `image_caption` | `figure_title` |
+| `image_footnote` | - | - | `image_footnote` | - |
+| **Table Types** |
+| `table` | `table` | `table` | `table` | `table` |
+| `table_body` | - | - | `table_body` | - |
+| `table_caption` | - | `table_caption` | `table_caption` | `figure_title` |
+| `table_footnote` | - | `table_footnote` | `table_footnote` | - |
+| **Equation Types** |
+| `interline_equation` | `equation` | `isolate_formula` | `interline_equation` | `display_formula`<br>`formula_number` |
+| `inline_equation` | - | - | `inline_equation` | `inline_formula` |
+| **Code Types** |
+| `code` | - | - | `code` | - |
+| `code_body` | - | - | `code_body` | - |
+| `code_caption` | - | - | `code_caption` | - |
+| `algorithm` | - | - | `algorithm` | `algorithm` |
+| **List Types** |
+| `list` | `list`<br>`list_item` | - | `list` | - |
 | **Page Elements** |
-| `header` | - | ✓ (header, header_image) | - | ✓ | `header` |
-| `footer` | - | ✓ (footer, footer_image) | - | ✓ | `footer` |
-| `page_number` | - | ✓ | - | ✓ | `page_number` |
-| `page_footnote` | - | ✓ (footnote) | - | ✓ | `page_footnote` |
-| **References** |
-| `ref_text` | - | ✓ (reference, reference_content) | - | ✓ | `ref_text` |
-| `phonetic` | - | - | - | ✓ | `phonetic` |
-| `aside_text` | - | ✓ | - | ✓ | `aside_text` |
-| `index` | - | - | - | ✓ | `index` |
-| **Special** |
-| `abstract` | - | ✓ | - | - | `text` |
-| `contents` | - | ✓ | - | - | `text` |
-| `abandon` | - | - | ✓ | - | `discarded` |
-| `discarded` | - | - | - | ✓ | `discarded` |
+| `header` | - | - | `header` | `header`<br>`header_image` |
+| `footer` | - | - | `footer` | `footer`<br>`footer_image` |
+| `page_number` | - | - | `page_number` | `page_number` |
+| `page_footnote` | - | - | `page_footnote` | `footnote` |
+| **Reference Types** |
+| `ref_text` | - | - | `ref_text` | `reference`<br>`reference_content` |
+| `phonetic` | - | - | `phonetic` | - |
+| `aside_text` | - | - | `aside_text` | `aside_text` |
+| `index` | - | - | `index` | - |
+| **Special Types** |
+| `discarded` | - | `abandon` | `discarded` | - |
 
 **Legend:**
-- ✓ = Natively supported by detector
-- `-` = Not supported
+- Detector-specific type names shown in backticks
+- `-` = Not supported by detector
+- Multiple types per cell separated by line breaks
 
 ---
 
