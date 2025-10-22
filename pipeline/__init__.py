@@ -99,12 +99,43 @@ class Pipeline:
         if self.renderer not in ["markdown", "plaintext"]:
             raise ValueError(f"Invalid renderer: {renderer}. Must be 'markdown' or 'plaintext'.")
 
-        # Auto-select sorter based on legacy option if not explicitly provided
+        # Import REQUIRED_COMBINATIONS for bidirectional auto-selection
+        from .layout.ordering import REQUIRED_COMBINATIONS  # noqa: PLC0415
+
+        # Default detector
+        detector_default = "doclayout-yolo"
+        detector_is_default = detector == detector_default
+
+        # Bidirectional auto-selection for tightly coupled detector/sorter pairs
+        # Case 1: Sorter is specified and requires a specific detector
+        if sorter is not None and sorter in REQUIRED_COMBINATIONS:
+            required_detector = REQUIRED_COMBINATIONS[sorter]
+            if not detector_is_default and detector != required_detector:
+                # User explicitly specified incompatible detector
+                raise ValueError(
+                    f"Sorter '{sorter}' requires detector '{required_detector}' (tightly coupled), "
+                    f"but detector '{detector}' was specified. "
+                    f"Either omit --detector or use --detector {required_detector}."
+                )
+            if detector_is_default:
+                # Auto-select required detector
+                detector = required_detector
+                logger.info("Auto-selected detector='%s' for '%s' sorter (tightly coupled)", detector, sorter)
+
+        # Case 2: Sorter is not specified, auto-select based on detector or legacy options
         if sorter is None:
-            sorter = "pymupdf" if enable_multi_column_ordering else "mineru-xycut"
-            if enable_multi_column_ordering:
+            # Special case: tightly coupled detectors require their own sorter
+            if detector == "paddleocr-doclayout-v2":
+                sorter = "paddleocr-doclayout-v2"
+                logger.info("Auto-selected sorter='paddleocr-doclayout-v2' for paddleocr-doclayout-v2 detector")
+            elif detector == "mineru-vlm":
+                sorter = "mineru-vlm"
+                logger.info("Auto-selected sorter='mineru-vlm' for mineru-vlm detector")
+            elif enable_multi_column_ordering:
+                sorter = "pymupdf"
                 logger.info("Legacy option: enable_multi_column_ordering=True → using sorter='pymupdf'")
             else:
+                sorter = "mineru-xycut"
                 logger.info("Using default sorter='mineru-xycut' (fast and accurate)")
 
         # Store detector/sorter choices

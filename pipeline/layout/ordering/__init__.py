@@ -17,6 +17,7 @@ from pipeline.types import Sorter
 from .analyzer import ReadingOrderAnalyzer
 from .mineru import MinerULayoutReaderSorter, MinerUVLMSorter, MinerUXYCutSorter
 from .olmocr import OlmOCRVLMSorter
+from .paddleocr import PPDocLayoutV2Sorter
 from .pymupdf import MultiColumnSorter
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ __all__ = [
     "MinerUXYCutSorter",
     "MinerUVLMSorter",
     "OlmOCRVLMSorter",
+    "PPDocLayoutV2Sorter",
     "create_sorter",
     "list_available_sorters",
     "validate_combination",
@@ -48,6 +50,9 @@ if MinerUVLMSorter is not None:
 
 if OlmOCRVLMSorter is not None:
     _SORTER_REGISTRY["olmocr-vlm"] = OlmOCRVLMSorter
+
+if PPDocLayoutV2Sorter is not None:
+    _SORTER_REGISTRY["paddleocr-doclayout-v2"] = PPDocLayoutV2Sorter
 
 
 def create_sorter(name: str, **kwargs: Any) -> Sorter:
@@ -76,18 +81,19 @@ VALID_COMBINATIONS = {
     "doclayout-yolo": ["pymupdf", "mineru-layoutreader", "mineru-xycut", "olmocr-vlm"],
     "mineru-doclayout-yolo": ["pymupdf", "mineru-layoutreader", "mineru-xycut", "olmocr-vlm"],
     "mineru-vlm": ["mineru-vlm"],  # Only mineru-vlm sorter (tightly coupled)
-    "paddleocr-doclayout-v2": ["pymupdf", "mineru-layoutreader", "mineru-xycut", "olmocr-vlm"],
+    "paddleocr-doclayout-v2": ["paddleocr-doclayout-v2"],  # Only paddleocr-doclayout-v2 sorter (tightly coupled)
 }
 
 RECOMMENDED_COMBINATIONS = {
     ("mineru-vlm", "mineru-vlm"): "Tightly coupled - detection and ordering by same VLM!",
     ("doclayout-yolo", "mineru-xycut"): "Fast and accurate - good default!",
     ("mineru-doclayout-yolo", "mineru-xycut"): "MinerU detection with fast ordering!",
-    ("paddleocr-doclayout-v2", "mineru-xycut"): "PaddleOCR PP-DocLayoutV2 with fast XY-Cut ordering!",
+    ("paddleocr-doclayout-v2", "paddleocr-doclayout-v2"): "Tightly coupled - preserves pointer network ordering!",
 }
 
 REQUIRED_COMBINATIONS = {
     "mineru-vlm": "mineru-vlm",  # sorter → required detector
+    "paddleocr-doclayout-v2": "paddleocr-doclayout-v2",  # sorter → required detector
 }
 
 

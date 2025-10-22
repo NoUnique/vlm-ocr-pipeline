@@ -196,20 +196,29 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     # New modular detector/sorter options
     parser.add_argument(
         "--detector",
-        choices=["doclayout-yolo", "mineru-doclayout-yolo", "mineru-vlm"],
+        choices=["doclayout-yolo", "mineru-doclayout-yolo", "mineru-vlm", "paddleocr-doclayout-v2"],
         default="doclayout-yolo",
         help=(
             "Layout detection method (default: doclayout-yolo). "
-            "Options: doclayout-yolo (this project), mineru-doclayout-yolo (MinerU's YOLO), mineru-vlm (MinerU VLM)."
+            "Options: doclayout-yolo (this project), mineru-doclayout-yolo (MinerU's YOLO), "
+            "mineru-vlm (MinerU VLM), paddleocr-doclayout-v2 (PaddleOCR PP-DocLayoutV2 with pointer network)."
         ),
     )
     parser.add_argument(
         "--sorter",
-        choices=["pymupdf", "mineru-layoutreader", "mineru-xycut", "mineru-vlm", "olmocr-vlm"],
+        choices=[
+            "pymupdf",
+            "mineru-layoutreader",
+            "mineru-xycut",
+            "mineru-vlm",
+            "olmocr-vlm",
+            "paddleocr-doclayout-v2",
+        ],
         help=(
             "Reading order sorting method. If not specified, defaults to mineru-xycut (fast and accurate). "
             "Options: pymupdf (multi-column), mineru-layoutreader (LayoutLMv3), "
-            "mineru-xycut (XY-Cut algorithm, default), mineru-vlm (VLM ordering), olmocr-vlm (VLM full-page)."
+            "mineru-xycut (XY-Cut algorithm, default), mineru-vlm (VLM ordering), olmocr-vlm (VLM full-page), "
+            "paddleocr-doclayout-v2 (passthrough for PP-DocLayoutV2 pointer network ordering)."
         ),
     )
 
@@ -233,6 +242,17 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         help="olmOCR model path (for --sorter olmocr-vlm)",
     )
 
+    # Recognition options
+    recognition_group = parser.add_argument_group("Recognition options")
+    recognition_group.add_argument(
+        "--recognizer",
+        choices=["openai", "gemini", "paddleocr-vl"],
+        help=(
+            "Text recognition method. If not specified, uses --backend value. "
+            "Options: openai (OpenAI API), gemini (Google Gemini), paddleocr-vl (PaddleOCR-VL-0.9B local model)."
+        ),
+    )
+
     parser.add_argument(
         "--rate-limit-status",
         action="store_true",
@@ -251,6 +271,9 @@ def _execute_command(args: argparse.Namespace, parser: argparse.ArgumentParser, 
         return 1  # pragma: no cover - parser.error raises SystemExit
 
     try:
+        # Use --recognizer if specified, otherwise fall back to --backend
+        backend = args.recognizer if args.recognizer else args.backend
+
         pipeline = Pipeline(
             model_path=args.model_path,
             confidence_threshold=args.confidence,
@@ -258,7 +281,7 @@ def _execute_command(args: argparse.Namespace, parser: argparse.ArgumentParser, 
             cache_dir=args.cache_dir,
             output_dir=args.output,
             temp_dir=args.temp_dir,
-            backend=args.backend,
+            backend=backend,
             model=args.model,
             gemini_tier=args.gemini_tier,
             enable_multi_column_ordering=args.multi_column_ordering,

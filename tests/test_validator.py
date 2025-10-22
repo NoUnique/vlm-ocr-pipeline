@@ -32,10 +32,19 @@ def test_validate_combination_incompatible():
     assert is_valid_good is True
 
 
-def test_validate_combination_paddleocr():
-    """Test validate_combination accepts PaddleOCR PP-DocLayoutV2 detector."""
-    is_valid, message = validate_combination("paddleocr-doclayout-v2", "mineru-xycut")
-
+def test_validate_combination_paddleocr_tightly_coupled():
+    """Test validate_combination enforces paddleocr-doclayout-v2 detector/sorter coupling."""
+    # Valid: paddleocr-doclayout-v2 detector with paddleocr-doclayout-v2 sorter
+    is_valid, message = validate_combination("paddleocr-doclayout-v2", "paddleocr-doclayout-v2")
     assert is_valid is True
-    # Should be a recommended combination
-    assert "PaddleOCR" in message or "PP-DocLayoutV2" in message or "Valid" in message
+    assert "Tightly coupled" in message or "pointer network" in message
+
+    # Invalid: paddleocr-doclayout-v2 detector with other sorters
+    is_valid_xycut, message_xycut = validate_combination("paddleocr-doclayout-v2", "mineru-xycut")
+    assert is_valid_xycut is False
+    assert "paddleocr-doclayout-v2" in message_xycut.lower()
+
+    # Invalid: paddleocr-doclayout-v2 sorter with other detectors
+    is_valid_yolo, message_yolo = validate_combination("doclayout-yolo", "paddleocr-doclayout-v2")
+    assert is_valid_yolo is False
+    assert "tightly coupled" in message_yolo.lower()
