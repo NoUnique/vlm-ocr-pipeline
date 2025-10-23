@@ -9,21 +9,24 @@ import logging
 import sys
 import textwrap
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from dotenv import load_dotenv
-
-from pipeline import Pipeline
-from pipeline.misc import tz_now
-from pipeline.recognition.api.ratelimit import rate_limiter
-from pipeline.types import Document
 
 # Load environment variables from .env file
 load_dotenv()
 
+# Note: Pipeline and related imports are moved to function-level
+# to improve CLI startup time (--help, argument validation, etc.)
+# Type hints use TYPE_CHECKING to avoid runtime import cost
+if TYPE_CHECKING:
+    from pipeline import Pipeline
+
 
 def setup_logging(level: str = "INFO") -> None:
     """Setup logging configuration with timestamped log files."""
+    from pipeline.misc import tz_now  # noqa: PLC0415 - lazy import for startup performance
+
     logs_dir = Path(".logs")
     logs_dir.mkdir(exist_ok=True)
 
@@ -271,6 +274,9 @@ def _execute_command(args: argparse.Namespace, parser: argparse.ArgumentParser, 
         return 1  # pragma: no cover - parser.error raises SystemExit
 
     try:
+        # Lazy import: only load Pipeline when actually processing input
+        from pipeline import Pipeline  # noqa: PLC0415
+
         # Use --recognizer if specified, otherwise fall back to --backend
         backend = args.recognizer if args.recognizer else args.backend
 
@@ -310,6 +316,8 @@ def _handle_rate_limit_status(args: argparse.Namespace) -> bool:
         print("\n⚠️  Rate limit status is only available for Gemini backend")
         print(f"Current backend: {args.backend}")
         return True
+
+    from pipeline.recognition.api.ratelimit import rate_limiter  # noqa: PLC0415
 
     rate_limiter.set_tier_and_model(args.gemini_tier, args.model)
     status = rate_limiter.get_status()
@@ -471,6 +479,8 @@ def _process_input_file(
         return document.to_dict() if document else None
 
     if file_ext in [".jpg", ".jpeg", ".png", ".tiff", ".bmp"]:
+        from pipeline.types import Document  # noqa: PLC0415
+
         logger.info("Processing image file: %s", input_path)
         result = pipeline.process_image(input_path)
 
