@@ -723,7 +723,7 @@ def test_paddleocr_full_pipeline(
 
     # Check if PaddleOCR is available
     try:
-        from paddleocr import PaddleOCRVL  # noqa: F401
+        from paddleocr import PaddleOCRVL  # noqa: F401, PLC0415
     except ImportError:
         pytest.skip("PaddleOCR not available - skipping PaddleOCR-VL test")
 

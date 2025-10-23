@@ -32,7 +32,7 @@ def output_dir():
 def test_paddleocr_doclayout_v2_detector_only(test_image_path, output_dir):
     """Test PP-DocLayoutV2 detector with passthrough sorter."""
     # Load test image
-    image = load_image(str(test_image_path))
+    image = load_image(test_image_path)
 
     # Create pipeline with PaddleOCR detector + sorter
     pipeline = Pipeline(
@@ -42,6 +42,8 @@ def test_paddleocr_doclayout_v2_detector_only(test_image_path, output_dir):
     )
 
     # Run detection + sorting only
+    assert pipeline.detector is not None, "Detector should be initialized"
+    assert pipeline.sorter is not None, "Sorter should be initialized"
     blocks = pipeline.detector.detect(image)
     sorted_blocks = pipeline.sorter.sort(blocks, image)
 
@@ -53,7 +55,7 @@ def test_paddleocr_doclayout_v2_detector_only(test_image_path, output_dir):
         assert block.order is not None, f"Block {block.type} missing order"
 
     # Verify blocks are sorted by order
-    orders = [block.order for block in sorted_blocks]
+    orders = [block.order for block in sorted_blocks if block.order is not None]
     assert orders == sorted(orders), "Blocks should be sorted by order field"
 
     # Save results to JSON
@@ -90,11 +92,8 @@ def test_paddleocr_full_pipeline_with_paddleocr_vl(test_image_path, output_dir):
         output_dir=str(output_dir / "full_pipeline"),
     )
 
-    # Process single page
-    result = pipeline.process_page(
-        image_path=str(test_image_path),
-        page_num=1,
-    )
+    # Process single image
+    result = pipeline.process_single_image(image_path=test_image_path)
 
     # Verify results
     assert result is not None, "Pipeline should return result"
@@ -136,7 +135,7 @@ def test_paddleocr_full_pipeline_with_paddleocr_vl(test_image_path, output_dir):
 def test_paddleocr_reading_order_verification(test_image_path, output_dir):
     """Verify that PP-DocLayoutV2 pointer network provides correct reading order."""
     # Load test image
-    image = load_image(str(test_image_path))
+    image = load_image(test_image_path)
 
     # Create pipeline
     pipeline = Pipeline(
@@ -146,6 +145,8 @@ def test_paddleocr_reading_order_verification(test_image_path, output_dir):
     )
 
     # Run detection + sorting
+    assert pipeline.detector is not None, "Detector should be initialized"
+    assert pipeline.sorter is not None, "Sorter should be initialized"
     blocks = pipeline.detector.detect(image)
     sorted_blocks = pipeline.sorter.sort(blocks, image)
 

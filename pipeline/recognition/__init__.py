@@ -144,6 +144,11 @@ class TextRecognizer(Recognizer):
 
         # Extract text
         try:
+            if self.client is None:
+                raise RuntimeError(
+                    f"API client not initialized for backend '{self.backend}'. "
+                    "Cannot extract text without a configured client."
+                )
             result = self.client.extract_text(block_image, block.to_dict(), prompt)
             block.text = result.get("text", "") if isinstance(result, dict) else str(result)
         except Exception as e:
@@ -200,6 +205,11 @@ class TextRecognizer(Recognizer):
             return text
 
         try:
+            if self.client is None:
+                raise RuntimeError(
+                    f"API client not initialized for backend '{self.backend}'. "
+                    "Cannot correct text without a configured client."
+                )
             system_prompt = self.prompt_manager.get_prompt("text_correction", "system")
             user_prompt = self.prompt_manager.get_prompt("text_correction", "user", text=text)
             corrected = self.client.correct_text(text, system_prompt, user_prompt)

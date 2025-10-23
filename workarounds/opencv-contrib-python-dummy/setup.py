@@ -27,7 +27,7 @@ setup(
     name="opencv-contrib-python",
     version="4.7.0.72",  # Match opencv-python-headless version
     description="Dummy package to satisfy PaddleX opencv-contrib-python dependency",
-    long_description=__doc__,
+    long_description=__doc__ or "",
     author="VLM OCR Pipeline",
     py_modules=[],  # No actual Python modules
     install_requires=[],  # Don't install anything
