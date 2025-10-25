@@ -222,6 +222,52 @@ OPENROUTER_API_KEY=your_openrouter_api_key_here
 # OPENAI_BASE_URL=https://openrouter.ai/api/v1
 ```
 
+## Configuration
+
+VLM OCR Pipeline uses YAML configuration files in the `settings/` directory to customize behavior without modifying code.
+
+### Configuration Files
+
+All configuration files are in `settings/`:
+
+- **`models.yaml`**: Default model paths (e.g., `opendatalab/MinerU2.5-2509-1.2B` for mineru-vlm detector)
+- **`detection_config.yaml`**: Detector parameters
+  - `confidence_threshold`: Detection sensitivity (0.0-1.0, default: 0.5)
+  - `nms_threshold`: Non-Maximum Suppression for overlapping boxes (default: 0.45)
+- **`ordering_config.yaml`**: Sorter parameters
+  - `overlap_threshold`: IoU threshold for duplicate removal (default: 0.7)
+  - `temperature`, `max_new_tokens`: VLM sorter settings
+- **`api_config.yaml`**: API client parameters
+  - `max_tokens`: Response length limit (default: 2000)
+  - `temperature`: Sampling temperature (0.0 = deterministic, default: 0.1)
+  - `estimated_tokens`: For Gemini rate limiting
+
+### Examples
+
+**Adjust detection sensitivity**:
+```yaml
+# settings/detection_config.yaml
+detectors:
+  doclayout-yolo:
+    confidence_threshold: 0.7  # Stricter (default: 0.5)
+```
+
+**Customize API parameters**:
+```yaml
+# settings/api_config.yaml
+openai:
+  text_extraction:
+    max_tokens: 3000      # Longer responses (default: 2000)
+    temperature: 0.0      # Fully deterministic (default: 0.1)
+```
+
+### Configuration Priority
+
+1. **Explicit parameters** (highest) - passed directly to functions/CLI
+2. **YAML configuration files** - loaded from `settings/`
+3. **Hardcoded constants** (fallback) - in `pipeline/constants.py`
+
+Missing configuration files automatically fall back to safe defaults with a warning.
 
 ## Usage
 

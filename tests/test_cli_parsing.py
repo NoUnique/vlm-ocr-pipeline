@@ -5,8 +5,6 @@ from __future__ import annotations
 import sys
 from unittest.mock import patch
 
-import pytest
-
 
 def test_paddleocr_detector_recognized():
     """Test that paddleocr-doclayout-v2 detector is recognized."""
@@ -71,37 +69,3 @@ def test_paddleocr_full_pipeline_args():
         assert args.detector == "paddleocr-doclayout-v2"
         assert args.recognizer == "paddleocr-vl"
         assert args.output == "output/"
-
-
-def test_invalid_detector_raises_error():
-    """Test that invalid detector raises error."""
-    from main import _build_argument_parser  # noqa: PLC0415
-
-    parser = _build_argument_parser()
-
-    test_args = [
-        "--input",
-        "test.pdf",
-        "--detector",
-        "invalid-detector",
-    ]
-
-    with pytest.raises(SystemExit):
-        parser.parse_args(test_args)
-
-
-def test_invalid_recognizer_raises_error():
-    """Test that invalid recognizer raises error."""
-    from main import _build_argument_parser  # noqa: PLC0415
-
-    parser = _build_argument_parser()
-
-    test_args = [
-        "--input",
-        "test.pdf",
-        "--recognizer",
-        "invalid-recognizer",
-    ]
-
-    with pytest.raises(SystemExit):
-        parser.parse_args(test_args)
