@@ -99,4 +99,3 @@ def load_png(image_path: Path) -> np.ndarray:
 
     logger.info("Loaded PNG image: %s, shape: %s", image_path, image.shape)
     return image
-

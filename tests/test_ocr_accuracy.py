@@ -16,14 +16,14 @@ from pipeline.conversion.output.markdown import document_dict_to_markdown
 
 def levenshtein_distance(s1: str, s2: str) -> int:
     """Calculate Levenshtein distance between two strings.
-    
+
     Args:
         s1: First string
         s2: Second string
-        
+
     Returns:
         Levenshtein distance (minimum number of edits needed to transform s1 into s2)
-        
+
     Examples:
         >>> levenshtein_distance("kitten", "sitting")
         3
@@ -52,11 +52,11 @@ def levenshtein_distance(s1: str, s2: str) -> int:
 
 def calculate_accuracy(predicted: str, expected: str) -> dict[str, Any]:
     """Calculate accuracy metrics using Levenshtein distance.
-    
+
     Args:
         predicted: Predicted text from OCR
         expected: Expected (ground truth) text
-        
+
     Returns:
         Dictionary containing:
             - distance: Levenshtein distance
@@ -87,10 +87,10 @@ def calculate_accuracy(predicted: str, expected: str) -> dict[str, Any]:
 
 def normalize_json(data: dict[str, Any]) -> dict[str, Any]:
     """Normalize JSON data for comparison by removing volatile fields.
-    
+
     Args:
         data: JSON data to normalize
-        
+
     Returns:
         Normalized JSON data with volatile fields removed
     """
@@ -118,10 +118,10 @@ def normalize_json(data: dict[str, Any]) -> dict[str, Any]:
 
 def extract_text_from_result(result: dict[str, Any]) -> str:
     """Extract all text from OCR result.
-    
+
     Args:
         result: OCR result dictionary
-        
+
     Returns:
         Concatenated text from all regions
     """
@@ -164,7 +164,7 @@ def sample_pdf_path() -> Path:
 @pytest.fixture
 def expected_json_path(test_output_dir: Path) -> Path:
     """Path to expected JSON output (ground truth).
-    
+
     This file should be created by running the baseline test first,
     then manually verifying and saving it as ground truth.
     """
@@ -176,7 +176,7 @@ def expected_json_path(test_output_dir: Path) -> Path:
 @pytest.fixture
 def expected_markdown_path(test_output_dir: Path) -> Path:
     """Path to expected Markdown output (ground truth).
-    
+
     This file should be created after implementing markdown conversion logic.
     """
     # Get fixtures directory relative to this test file
@@ -187,7 +187,7 @@ def expected_markdown_path(test_output_dir: Path) -> Path:
 @pytest.fixture
 def expected_text() -> str:
     """Expected text from the first page of sample PDF.
-    
+
     This should be manually verified and updated with the actual expected content.
     For now, this is a placeholder that should be replaced with ground truth.
     """
@@ -225,8 +225,7 @@ def test_json_output_comparison(
     # Skip if expected JSON doesn't exist
     if not expected_json_path.exists():
         pytest.skip(
-            f"Expected JSON not found: {expected_json_path}\n"
-            f"Run test_json_baseline first to generate ground truth."
+            f"Expected JSON not found: {expected_json_path}\nRun test_json_baseline first to generate ground truth."
         )
 
     # Initialize pipeline with MinerU 2.5 VLM + Gemini 2.5 Flash
@@ -239,7 +238,7 @@ def test_json_output_comparison(
         model="gemini-2.5-flash",
         gemini_tier="free",  # Adjust based on your tier
         detector="mineru-vlm",  # ✅ MinerU 2.5 VLM detector (1.2B model)
-        sorter="mineru-vlm",    # ✅ MinerU VLM sorter
+        sorter="mineru-vlm",  # ✅ MinerU VLM sorter
         # mineru_model defaults to "opendatalab/MinerU2.5-2509-1.2B"
         mineru_backend="transformers",  # or "vllm-engine" for 20-30x speedup
     )
@@ -304,12 +303,12 @@ def test_json_output_comparison(
 
 def _compare_json_deep(expected: Any, actual: Any, path: str = "root") -> list[str]:
     """Deep comparison of two JSON structures.
-    
+
     Args:
         expected: Expected JSON data
         actual: Actual JSON data
         path: Current path in JSON structure
-        
+
     Returns:
         List of difference descriptions
     """
@@ -394,7 +393,7 @@ def test_markdown_output_comparison(
         model="gemini-2.5-flash",
         gemini_tier="free",  # Adjust based on your tier
         detector="mineru-vlm",  # ✅ MinerU 2.5 VLM detector
-        sorter="mineru-vlm",    # ✅ MinerU VLM sorter
+        sorter="mineru-vlm",  # ✅ MinerU VLM sorter
         mineru_model="opendatalab/PDF-Extract-Kit-1.0",  # MinerU model
         mineru_backend="transformers",  # or "vllm-engine" if available
     )
@@ -481,7 +480,7 @@ def test_json_baseline(sample_pdf_path: Path, test_output_dir: Path) -> None:
         model="gemini-2.5-flash",
         gemini_tier="free",  # Adjust based on your tier
         detector="mineru-vlm",  # ✅ MinerU 2.5 VLM detector (1.2B model)
-        sorter="mineru-vlm",    # ✅ MinerU VLM sorter
+        sorter="mineru-vlm",  # ✅ MinerU VLM sorter
         # mineru_model defaults to "opendatalab/MinerU2.5-2509-1.2B"
         mineru_backend="transformers",  # or "vllm-engine" for 20-30x speedup
     )
@@ -570,7 +569,7 @@ def test_markdown_baseline(sample_pdf_path: Path, test_output_dir: Path) -> None
         model="gemini-2.5-flash",
         gemini_tier="free",  # Adjust based on your tier
         detector="mineru-vlm",  # ✅ MinerU 2.5 VLM detector
-        sorter="mineru-vlm",    # ✅ MinerU VLM sorter
+        sorter="mineru-vlm",  # ✅ MinerU VLM sorter
         mineru_model="opendatalab/PDF-Extract-Kit-1.0",  # MinerU model
         mineru_backend="transformers",  # or "vllm-engine" if available
     )

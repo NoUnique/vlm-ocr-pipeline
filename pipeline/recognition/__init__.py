@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 # Lazy import for PaddleOCR-VL (optional dependency)
 try:
     from .paddleocr import PaddleOCRVLRecognizer  # noqa: PLC0415
+
     _HAS_PADDLEOCR_VL = True
 except ImportError:
     PaddleOCRVLRecognizer = None  # type: ignore[misc, assignment]
@@ -126,8 +127,7 @@ class TextRecognizer(Recognizer):
         # This ensures we use the recognizer's extraction, not the detector's content
         if block.text:
             logger.debug(
-                "Clearing detector-provided text for block (source=%s). Will use recognizer instead.",
-                block.source
+                "Clearing detector-provided text for block (source=%s). Will use recognizer instead.", block.source
             )
             block.text = None
 

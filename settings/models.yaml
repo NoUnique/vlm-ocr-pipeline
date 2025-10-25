@@ -1,0 +1,58 @@
+# Model Configuration
+# Default models and alternative options for detectors, sorters, and recognizers
+#
+# Note: Models with null default_model either use bundled models or don't require models
+
+detectors:
+  mineru-vlm:
+    default_model: "opendatalab/MinerU2.5-2509-1.2B"
+    description: "MinerU 2.5 VLM detector (1.2B parameters)"
+    alternative_models:
+      - "opendatalab/PDF-Extract-Kit-1.0"
+      - "opendatalab/MinerU2.0-1.5B"
+
+  doclayout-yolo:
+    default_model: "models/doclayout_yolo_docstructbench_imgsz1024.pt"
+    description: "DocLayout-YOLO trained on DocStructBench"
+
+  mineru-doclayout-yolo:
+    default_model: null  # Uses MinerU's bundled model
+    description: "MinerU's DocLayout-YOLO implementation"
+
+  paddleocr-doclayout-v2:
+    default_model: null  # Uses PaddleOCR's bundled model
+    description: "PP-DocLayoutV2 with pointer network"
+
+sorters:
+  olmocr-vlm:
+    default_model: "allenai/olmOCR-7B-0825-FP8"
+    description: "olmOCR VLM sorter (7B parameters, FP8 quantized)"
+    alternative_models:
+      - "allenai/olmOCR-7B-1024-FP8"
+
+  mineru-vlm:
+    default_model: "opendatalab/MinerU2.5-2509-1.2B"
+    description: "MinerU 2.5 VLM (detector + sorter)"
+
+  mineru-layoutreader:
+    default_model: null  # Uses MinerU's bundled LayoutLMv3 model
+    description: "LayoutReader based on LayoutLMv3"
+
+  mineru-xycut:
+    default_model: null  # No model required (algorithm-based)
+    description: "Fast XY-Cut algorithm"
+
+  pymupdf:
+    default_model: null  # No model required (uses PyMuPDF)
+    description: "Multi-column detection with PyMuPDF"
+
+  paddleocr-doclayout-v2:
+    default_model: null  # Uses detector's ordering
+    description: "PP-DocLayoutV2 sorter (preserves pointer network order)"
+
+recognizers:
+  paddleocr-vl:
+    default_model: "PaddlePaddle/PaddleOCR-VL-0.9B"
+    description: "PaddleOCR-VL recognizer (0.9B parameters)"
+    alternative_models:
+      - "PaddleOCR-VL-0.9B-local"

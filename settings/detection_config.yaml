@@ -1,0 +1,28 @@
+# Detection Configuration
+# Confidence thresholds and detection parameters for layout detectors
+
+detectors:
+  doclayout-yolo:
+    confidence_threshold: 0.5  # Minimum confidence for detections (0.0-1.0)
+    nms_threshold: 0.45  # Non-Maximum Suppression threshold for overlapping boxes
+    description: "DocLayout-YOLO from this project"
+
+  mineru-doclayout-yolo:
+    confidence_threshold: 0.3  # Lower threshold to capture more potential regions
+    description: "MinerU's DocLayout-YOLO implementation"
+
+  paddleocr-doclayout-v2:
+    confidence_threshold: 0.5
+    description: "PP-DocLayoutV2 detector with pointer network (ResNet50 backbone)"
+
+  mineru-vlm:
+    confidence_threshold: 0.6  # Higher threshold for VLM-based detection
+    description: "MinerU 2.5 VLM detector"
+
+# Default detector (used when detector is not specified)
+default_detector: "doclayout-yolo"
+
+# Global detection settings
+global:
+  min_box_size: 10  # Minimum bounding box dimension (width or height) in pixels
+  max_overlap_ratio: 0.7  # Maximum overlap ratio for duplicate removal

@@ -503,8 +503,6 @@ def document_dict_to_markdown(data: dict[str, Any], **kwargs: Any) -> str:
     return document_to_markdown(doc, **kwargs)
 
 
-
-
 # ==================== File I/O ====================
 
 

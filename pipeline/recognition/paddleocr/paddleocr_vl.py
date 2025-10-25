@@ -96,8 +96,7 @@ class PaddleOCRVLRecognizer(Recognizer):
             from paddleocr import PaddleOCRVL  # noqa: PLC0415  # type: ignore[import-untyped]
         except ImportError as e:
             raise ImportError(
-                "PaddleOCR is required for PaddleOCR-VL recognizer. "
-                "Please install it: pip install paddleocr"
+                "PaddleOCR is required for PaddleOCR-VL recognizer. Please install it: pip install paddleocr"
             ) from e
 
         self.vl_rec_model_name = vl_rec_model_name

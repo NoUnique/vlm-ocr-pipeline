@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+import yaml
 
 from pipeline.types import BBox, Block, Sorter, blocks_to_olmocr_anchor_text
 
@@ -29,20 +32,35 @@ class OlmOCRVLMSorter(Sorter):
 
     def __init__(
         self,
-        model: str = "allenai/olmOCR-7B-0825-FP8",
+        model: str | None = None,
         use_anchoring: bool = True,
         use_vllm: bool = False,
     ) -> None:
         """Initialize olmOCR VLM sorter.
 
         Args:
-            model: olmOCR model path or name
+            model: olmOCR model path or name (None = load from config)
             use_anchoring: Whether to use anchor text (detection bbox → anchor)
             use_vllm: Whether to use vLLM for faster inference
 
         Raises:
             ImportError: If required dependencies not available
         """
+        # Load default model from config if not provided
+        if model is None:
+            try:
+                config_path = Path("settings") / "models.yaml"
+                if config_path.exists():
+                    with open(config_path, encoding="utf-8") as f:
+                        models_config = yaml.safe_load(f) or {}
+                        sorter_config = models_config.get("sorters", {}).get("olmocr-vlm", {})
+                        model = sorter_config.get("default_model", "allenai/olmOCR-7B-0825-FP8")
+                else:
+                    model = "allenai/olmOCR-7B-0825-FP8"
+            except Exception as e:
+                logger.warning("Failed to load model from config: %s. Using default.", e)
+                model = "allenai/olmOCR-7B-0825-FP8"
+
         self.model_path = model
         self.use_anchoring = use_anchoring
         self.use_vllm = use_vllm

@@ -9,6 +9,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 # Load environment variables if not already loaded
 try:
     from dotenv import load_dotenv
@@ -17,6 +19,7 @@ try:
 except ImportError:
     pass
 
+from .constants import DEFAULT_CONFIDENCE_THRESHOLD
 from .conversion.output.markdown import page_to_markdown
 from .conversion.output.plaintext import blocks_to_plaintext
 from .layout.detection import create_detector as create_detector_impl
@@ -27,6 +30,27 @@ from .recognition.api.ratelimit import rate_limiter
 from .types import Block, Detector, Document, Page, Recognizer, Sorter
 
 logger = logging.getLogger(__name__)
+
+
+def _load_yaml_config(config_path: Path) -> dict[str, Any]:
+    """Load YAML configuration file with error handling.
+
+    Args:
+        config_path: Path to YAML config file
+
+    Returns:
+        Configuration dict, or empty dict if file not found or invalid
+    """
+    try:
+        if config_path.exists():
+            with open(config_path, encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
+        logger.debug("Config file not found: %s", config_path)
+        return {}
+    except Exception as e:
+        logger.warning("Failed to load config file %s: %s", config_path, e)
+        return {}
+
 
 try:
     import fitz  # type: ignore
@@ -47,7 +71,7 @@ class Pipeline:
     def __init__(  # noqa: PLR0912, PLR0915
         self,
         model_path: str | Path | None = None,
-        confidence_threshold: float = 0.5,
+        confidence_threshold: float | None = None,
         use_cache: bool = True,
         cache_dir: str | Path = ".cache",
         output_dir: str | Path = "output",
@@ -69,7 +93,7 @@ class Pipeline:
 
         Args:
             model_path: DocLayout-YOLO model path (used if detector="doclayout-yolo")
-            confidence_threshold: Detection confidence threshold
+            confidence_threshold: Detection confidence threshold (None = load from config)
             use_cache: Whether to use caching
             cache_dir: Cache directory path
             output_dir: Output directory path
@@ -85,6 +109,10 @@ class Pipeline:
             olmocr_model: olmOCR model path (for olmocr-vlm sorter)
             renderer: Output format renderer ("markdown" or "plaintext")
         """
+        # Load configuration files
+        models_config = _load_yaml_config(Path("settings") / "models.yaml")
+        detection_config = _load_yaml_config(Path("settings") / "detection_config.yaml")
+
         self.backend = backend.lower()
         # Override model name for paddleocr-vl backend
         if self.backend == "paddleocr-vl":
@@ -170,6 +198,14 @@ class Pipeline:
         # Initialize components using new factory system
         # Note: Converter is now function-based, no instance needed
 
+        # Resolve confidence_threshold from config if not explicitly provided
+        if confidence_threshold is None:
+            # Try to get from detection_config, fall back to constant
+            detectors_config = detection_config.get("detectors", {})
+            detector_specific_config = detectors_config.get(detector, {})
+            confidence_threshold = detector_specific_config.get("confidence_threshold", DEFAULT_CONFIDENCE_THRESHOLD)
+            logger.debug("Using confidence_threshold=%.2f from config for detector=%s", confidence_threshold, detector)
+
         # Create detector
         detector_kwargs = {}
         if detector == "doclayout-yolo":
@@ -178,7 +214,9 @@ class Pipeline:
                 "confidence_threshold": confidence_threshold,
             }
         elif detector == "mineru-vlm":
-            default_model = "opendatalab/MinerU2.5-2509-1.2B"
+            # Get default model from models_config
+            mineru_detector_config = models_config.get("detectors", {}).get("mineru-vlm", {})
+            default_model = mineru_detector_config.get("default_model", "opendatalab/MinerU2.5-2509-1.2B")
             final_model = mineru_model if mineru_model is not None else default_model
             logger.debug("MinerU VLM detector: mineru_model=%s, final_model=%s", mineru_model, final_model)
             detector_kwargs = {
@@ -195,8 +233,11 @@ class Pipeline:
         # Create sorter
         sorter_kwargs = {}
         if sorter == "olmocr-vlm":
+            # Get default model from models_config
+            olmocr_sorter_config = models_config.get("sorters", {}).get("olmocr-vlm", {})
+            default_olmocr_model = olmocr_sorter_config.get("default_model", "allenai/olmOCR-7B-0825-FP8")
             sorter_kwargs = {
-                "model": olmocr_model or "allenai/olmOCR-7B-0825-FP8",
+                "model": olmocr_model or default_olmocr_model,
                 "use_anchoring": True,
             }
 
@@ -446,9 +487,7 @@ class Pipeline:
             # Stage 1: Convert PDF page to image
             from .conversion.input import pdf as pdf_converter
 
-            page_image, temp_image_path = pdf_converter.render_pdf_page(
-                pdf_path, page_num, temp_dir=self.temp_dir
-            )
+            page_image, temp_image_path = pdf_converter.render_pdf_page(pdf_path, page_num, temp_dir=self.temp_dir)
 
             # Stage 2: Detect layout blocks (new detector interface)
             blocks: list[Block] = self.detector.detect(page_image) if self.detector else []
@@ -501,9 +540,7 @@ class Pipeline:
                 text = blocks_to_plaintext(processed_blocks)
 
             # Correct the rendered text with VLM
-            corrected_text, correction_ratio, stop_due_to_correction = self._perform_page_correction(
-                text, page_num
-            )
+            corrected_text, correction_ratio, stop_due_to_correction = self._perform_page_correction(text, page_num)
 
             if stop_due_to_correction:
                 return None, True
@@ -634,14 +671,16 @@ class Pipeline:
 
         # Build auxiliary_info dict that includes all additional metadata
         full_auxiliary_info = auxiliary_info.copy() if auxiliary_info else {}
-        full_auxiliary_info.update({
-            "image_path": str(self.temp_dir / f"{pdf_path.stem}_page_{page_num}.jpg"),
-            "width": int(page_width),
-            "height": int(page_height),
-            "text": text,
-            "corrected_text": corrected_text,
-            "correction_ratio": correction_ratio,
-        })
+        full_auxiliary_info.update(
+            {
+                "image_path": str(self.temp_dir / f"{pdf_path.stem}_page_{page_num}.jpg"),
+                "width": int(page_width),
+                "height": int(page_height),
+                "text": text,
+                "corrected_text": corrected_text,
+                "correction_ratio": correction_ratio,
+            }
+        )
 
         if column_layout is not None:
             full_auxiliary_info["column_layout"] = column_layout
@@ -734,9 +773,7 @@ class Pipeline:
 
         return document
 
-    def _build_pages_summary(
-        self, processed_pages: list[Page]
-    ) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    def _build_pages_summary(self, processed_pages: list[Page]) -> tuple[list[dict[str, Any]], dict[str, int]]:
         """Build summary of processed pages.
 
         Args:
@@ -754,9 +791,7 @@ class Pipeline:
             if status == "failed":
                 status = "partial"
             status_counts[status] += 1
-            pages_summary.append(
-                {"id": page_no, "status": status}
-            )
+            pages_summary.append({"id": page_no, "status": status})
 
         return pages_summary, status_counts
 

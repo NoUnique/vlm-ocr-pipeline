@@ -251,4 +251,3 @@ def determine_pages_to_process(
     else:
         # Process all pages
         return list(range(1, total_pages + 1))
-

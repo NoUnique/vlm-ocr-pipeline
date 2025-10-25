@@ -11,8 +11,12 @@ matching the behavior of PaddleOCR-VL's original implementation.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import yaml
+
+from pipeline.constants import DEFAULT_OVERLAP_THRESHOLD
 from pipeline.types import BBox, Block, Sorter
 
 if TYPE_CHECKING:
@@ -37,18 +41,35 @@ class PPDocLayoutV2Sorter(Sorter):
         It assumes blocks already have their 'order' field set by the detector.
     """
 
-    def __init__(self, overlap_threshold: float = 0.7) -> None:
+    def __init__(self, overlap_threshold: float | None = None) -> None:
         """Initialize PP-DocLayoutV2 sorter.
 
         Args:
             overlap_threshold: Overlap ratio threshold for filtering duplicate detections.
-                             Default 0.7 matches PaddleOCR-VL's implementation.
+                             If None, loads from settings/ordering_config.yaml (default: 0.7).
         """
-        self.overlap_threshold = overlap_threshold
+        # Load from config if not provided
+        resolved_threshold: float
+        if overlap_threshold is None:
+            try:
+                config_path = Path("settings") / "ordering_config.yaml"
+                if config_path.exists():
+                    with open(config_path, encoding="utf-8") as f:
+                        config = yaml.safe_load(f) or {}
+                        sorter_config = config.get("sorters", {}).get("paddleocr-doclayout-v2", {})
+                        resolved_threshold = float(sorter_config.get("overlap_threshold", DEFAULT_OVERLAP_THRESHOLD))
+                else:
+                    resolved_threshold = DEFAULT_OVERLAP_THRESHOLD
+            except Exception as e:
+                logger.warning("Failed to load overlap_threshold from config: %s. Using default.", e)
+                resolved_threshold = DEFAULT_OVERLAP_THRESHOLD
+        else:
+            resolved_threshold = overlap_threshold
+
+        self.overlap_threshold: float = resolved_threshold
         logger.info(
-            "PP-DocLayoutV2 sorter initialized (preserves detector's Y-coordinate ordering, "
-            "overlap_threshold=%.2f)",
-            overlap_threshold,
+            "PP-DocLayoutV2 sorter initialized (preserves detector's Y-coordinate ordering, overlap_threshold=%.2f)",
+            resolved_threshold,
         )
 
     def sort(self, blocks: list[Block], image: np.ndarray, **kwargs: Any) -> list[Block]:
@@ -100,8 +121,7 @@ class PPDocLayoutV2Sorter(Sorter):
 
         # Fallback: If order is not set, apply simple geometric sorting
         logger.warning(
-            "Blocks from non-PP-DocLayoutV2 detector detected. "
-            "Applying fallback top-to-bottom, left-to-right sorting."
+            "Blocks from non-PP-DocLayoutV2 detector detected. Applying fallback top-to-bottom, left-to-right sorting."
         )
         sorted_blocks = sorted(blocks, key=lambda b: (b.bbox.y0, b.bbox.x0))
 
@@ -180,9 +200,7 @@ class PPDocLayoutV2Sorter(Sorter):
                         )
 
         # Filter out dropped blocks
-        filtered_blocks = [
-            block for idx, block in enumerate(filterable_blocks) if idx not in dropped_indexes
-        ]
+        filtered_blocks = [block for idx, block in enumerate(filterable_blocks) if idx not in dropped_indexes]
 
         # Re-add excluded blocks (ref_text)
         return filtered_blocks + excluded_blocks

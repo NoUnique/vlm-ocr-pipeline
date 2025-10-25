@@ -11,12 +11,21 @@ import io
 import json
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 import cv2
 import numpy as np
+import yaml
 from openai import OpenAI
 from PIL import Image
+
+from pipeline.constants import (
+    DEFAULT_MAX_TOKENS,
+    DEFAULT_TEMPERATURE,
+    SPECIAL_BLOCK_MAX_TOKENS,
+    TEXT_CORRECTION_MAX_TOKENS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +55,51 @@ class OpenAIClient:
             if not self.api_key:
                 self.api_key = os.environ.get("OPENROUTER_API_KEY")
 
+        # Load API config for max_tokens and temperature
+        self._load_api_config()
+
         self.client: Any = self._setup_openai_client()  # Use Any to avoid strict type checking
+
+    def _load_api_config(self) -> None:
+        """Load API configuration from settings/api_config.yaml"""
+        try:
+            config_path = Path("settings") / "api_config.yaml"
+            if config_path.exists():
+                with open(config_path, encoding="utf-8") as f:
+                    api_config = yaml.safe_load(f) or {}
+                    openai_config = api_config.get("openai", {})
+
+                    # Extract config values with fallbacks
+                    text_extraction = openai_config.get("text_extraction", {})
+                    special_blocks = openai_config.get("special_blocks", {})
+                    text_correction = openai_config.get("text_correction", {})
+
+                    self.text_extraction_max_tokens = text_extraction.get("max_tokens", DEFAULT_MAX_TOKENS)
+                    self.text_extraction_temperature = text_extraction.get("temperature", DEFAULT_TEMPERATURE)
+
+                    self.special_blocks_max_tokens = special_blocks.get("max_tokens", SPECIAL_BLOCK_MAX_TOKENS)
+                    self.special_blocks_temperature = special_blocks.get("temperature", DEFAULT_TEMPERATURE)
+
+                    self.text_correction_max_tokens = text_correction.get("max_tokens", TEXT_CORRECTION_MAX_TOKENS)
+                    self.text_correction_temperature = text_correction.get("temperature", 0.0)
+
+                    logger.debug("Loaded API config from %s", config_path)
+            else:
+                # Use default constants
+                self._set_default_config()
+                logger.debug("API config file not found, using defaults")
+        except Exception as e:
+            logger.warning("Failed to load API config: %s. Using defaults.", e)
+            self._set_default_config()
+
+    def _set_default_config(self) -> None:
+        """Set default API configuration from constants"""
+        self.text_extraction_max_tokens = DEFAULT_MAX_TOKENS
+        self.text_extraction_temperature = DEFAULT_TEMPERATURE
+        self.special_blocks_max_tokens = SPECIAL_BLOCK_MAX_TOKENS
+        self.special_blocks_temperature = DEFAULT_TEMPERATURE
+        self.text_correction_max_tokens = TEXT_CORRECTION_MAX_TOKENS
+        self.text_correction_temperature = 0.0
 
     def _setup_openai_client(self) -> OpenAI | None:
         """Setup OpenAI API client"""
@@ -136,7 +189,10 @@ class OpenAIClient:
                 return {"type": region_info["type"], "xywh": region_info["xywh"], "text": "", "confidence": 0.0}
 
             response = client.chat.completions.create(
-                model=self.model, messages=messages, max_tokens=2000, temperature=0.1
+                model=self.model,
+                messages=messages,
+                max_tokens=self.text_extraction_max_tokens,
+                temperature=self.text_extraction_temperature,
             )
 
             text = response.choices[0].message.content.strip()
@@ -240,7 +296,10 @@ class OpenAIClient:
                 }
 
             response = client.chat.completions.create(
-                model=self.model, messages=messages, max_tokens=3000, temperature=0.1
+                model=self.model,
+                messages=messages,
+                max_tokens=self.special_blocks_max_tokens,
+                temperature=self.special_blocks_temperature,
             )
 
             response_text = response.choices[0].message.content.strip()
@@ -313,11 +372,14 @@ class OpenAIClient:
                     error_message="OpenAI client not initialized",
                 )
 
+            # Calculate max_tokens based on text length, with a minimum from config
+            calculated_max_tokens = max(len(text.split()) * 3, self.text_correction_max_tokens)
+
             response = client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                max_tokens=len(text.split()) * 3,  # Allow for expansion
-                temperature=0.1,
+                max_tokens=calculated_max_tokens,  # Allow for expansion
+                temperature=self.text_correction_temperature,
             )
 
             corrected_text = response.choices[0].message.content.strip()

@@ -69,33 +69,28 @@ class PPDocLayoutV2Detector(Detector):
         "text": "text",
         "vertical_text": "text",
         "aside_text": "aside_text",
-
         # Page elements
         "page_number": "page_number",
         "header": "header",
         "footer": "footer",
         "header_image": "header",
         "footer_image": "footer",
-
         # Structural elements
         "abstract": "text",
         "contents": "text",
         "reference": "ref_text",
         "reference_content": "ref_text",
         "footnote": "page_footnote",
-
         # Math and formulas
         "inline_formula": "inline_equation",
         "display_formula": "interline_equation",
         "formula_number": "interline_equation",
         "algorithm": "algorithm",
-
         # Visual elements
         "image": "image",
         "table": "table",
         "chart": "image",
         "seal": "image",
-
         # Captions (unified as figure_title in PaddleOCR)
         "figure_title": "image_caption",  # Includes figure/table/chart captions
     }

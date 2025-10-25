@@ -9,13 +9,17 @@ import io
 import json
 import logging
 import os
+from pathlib import Path
 from typing import Any, cast
 
 import cv2
 import numpy as np
+import yaml
 from google import genai
 from google.genai import types
 from PIL import Image
+
+from pipeline.constants import ESTIMATED_IMAGE_TOKENS
 
 from .ratelimit import rate_limiter
 
@@ -35,7 +39,50 @@ class GeminiClient:
         """
         self.gemini_model = gemini_model
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
+
+        # Load API config for estimated tokens
+        self._load_api_config()
+
         self.client = self._setup_gemini_api()
+
+    def _load_api_config(self) -> None:
+        """Load API configuration from settings/api_config.yaml"""
+        try:
+            config_path = Path("settings") / "api_config.yaml"
+            if config_path.exists():
+                with open(config_path, encoding="utf-8") as f:
+                    api_config = yaml.safe_load(f) or {}
+                    gemini_config = api_config.get("gemini", {})
+
+                    # Extract estimated tokens values
+                    text_extraction = gemini_config.get("text_extraction", {})
+                    special_blocks = gemini_config.get("special_blocks", {})
+                    text_correction = gemini_config.get("text_correction", {})
+
+                    self.text_extraction_estimated_tokens = text_extraction.get(
+                        "estimated_tokens", ESTIMATED_IMAGE_TOKENS
+                    )
+                    self.special_blocks_estimated_tokens = special_blocks.get(
+                        "estimated_tokens", ESTIMATED_IMAGE_TOKENS
+                    )
+                    self.text_correction_estimated_tokens = text_correction.get(
+                        "estimated_tokens", ESTIMATED_IMAGE_TOKENS
+                    )
+
+                    logger.debug("Loaded Gemini API config from %s", config_path)
+            else:
+                # Use default constants
+                self._set_default_config()
+                logger.debug("Gemini API config file not found, using defaults")
+        except Exception as e:
+            logger.warning("Failed to load Gemini API config: %s. Using defaults.", e)
+            self._set_default_config()
+
+    def _set_default_config(self) -> None:
+        """Set default API configuration from constants"""
+        self.text_extraction_estimated_tokens = ESTIMATED_IMAGE_TOKENS
+        self.special_blocks_estimated_tokens = ESTIMATED_IMAGE_TOKENS
+        self.text_correction_estimated_tokens = ESTIMATED_IMAGE_TOKENS
 
     def _setup_gemini_api(self) -> genai.Client | None:
         """Setup Gemini API client"""
@@ -106,7 +153,7 @@ class GeminiClient:
             ]
 
             # Apply rate limiting
-            estimated_tokens = 2000  # Estimated tokens for image + text
+            estimated_tokens = self.text_extraction_estimated_tokens  # Estimated tokens for image + text
             if not rate_limiter.wait_if_needed(estimated_tokens):
                 return {
                     "type": region_info["type"],

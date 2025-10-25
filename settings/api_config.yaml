@@ -1,0 +1,38 @@
+# API Configuration
+# Parameters for OpenAI and Gemini API calls
+
+openai:
+  text_extraction:
+    max_tokens: 2000
+    temperature: 0.1
+    description: "Extract text from regular blocks (text, title, list)"
+
+  special_blocks:
+    max_tokens: 3000  # Higher max_tokens for complex table/formula structures
+    temperature: 0.1
+    description: "Process special blocks (table, formula, figure)"
+
+  text_correction:
+    max_tokens: 4000  # Higher max_tokens for full page content
+    temperature: 0.0  # Deterministic corrections
+    description: "Page-level text correction and formatting"
+
+gemini:
+  text_extraction:
+    estimated_tokens: 2000  # For rate limiting
+    description: "Estimated tokens for text extraction"
+
+  special_blocks:
+    estimated_tokens: 3000
+    description: "Estimated tokens for special block processing"
+
+  text_correction:
+    estimated_tokens: 4000  # Actual token usage tracked by rate limiter
+    description: "Estimated tokens for page-level correction"
+
+# Global API settings
+global:
+  retry_attempts: 3
+  retry_delay_seconds: 1.0
+  timeout_seconds: 30.0
+  description: "Retry and timeout settings for API calls"

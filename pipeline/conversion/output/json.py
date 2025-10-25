@@ -134,4 +134,3 @@ def load_pipeline_result_from_json(json_path: Path) -> dict[str, Any]:
 
     logger.info("Loaded pipeline result from JSON: %s", json_path)
     return data
-

@@ -165,10 +165,7 @@ def test_paddleocr_reading_order_verification(test_image_path, output_dir):
             }
             for order, y, block_type in y_coordinates
         ],
-        "is_top_to_bottom": all(
-            y_coordinates[i][1] <= y_coordinates[i + 1][1]
-            for i in range(len(y_coordinates) - 1)
-        ),
+        "is_top_to_bottom": all(y_coordinates[i][1] <= y_coordinates[i + 1][1] for i in range(len(y_coordinates) - 1)),
     }
 
     with open(output_file, "w", encoding="utf-8") as f:

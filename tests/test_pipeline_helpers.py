@@ -1,4 +1,3 @@
-
 import pytest
 
 from pipeline import Pipeline

@@ -1,0 +1,37 @@
+# Reading Order Configuration
+# Parameters for sorters that determine block reading order
+
+sorters:
+  paddleocr-doclayout-v2:
+    overlap_threshold: 0.7  # IoU threshold for duplicate detection filtering (matches PaddleOCR-VL)
+    description: "Overlap filtering for PP-DocLayoutV2"
+
+  mineru-xycut:
+    min_block_height: 10  # Minimum block dimensions for valid regions
+    min_block_width: 10
+    description: "Fast XY-Cut algorithm (suitable for single-column documents)"
+
+  mineru-layoutreader:
+    scale_factor: 1000  # Coordinates are scaled to 1000x1000 for model input
+    description: "LayoutReader (LayoutLMv3-based, best for complex multi-column layouts)"
+
+  pymupdf:
+    column_detection_sensitivity: 0.8  # Higher = more likely to detect columns
+    min_column_gap: 20  # Minimum pixel gap between columns
+    description: "PyMuPDF multi-column detection"
+
+  olmocr-vlm:
+    use_anchoring: true  # Whether to use detection bbox → anchor text
+    use_vllm: false  # Use vLLM for faster inference
+    description: "olmOCR VLM sorter"
+
+  mineru-vlm:
+    description: "MinerU 2.5 VLM sorter (tightly coupled with detector, uses detector settings)"
+
+# Default sorter (used when sorter is not specified)
+default_sorter: "mineru-xycut"
+
+# Global ordering settings
+global:
+  sort_direction: "top-to-bottom"  # or "left-to-right"
+  reading_order: "ltr"  # left-to-right or "rtl" for right-to-left languages

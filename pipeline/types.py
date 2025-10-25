@@ -25,6 +25,7 @@ RGB_IMAGE_NDIM = 3  # RGB image has 3 dimensions (H, W, C)
 # ==================== Standardized Block Types ====================
 # Based on MinerU 2.5 VLM (most comprehensive type system)
 
+
 class BlockType:
     """Standardized block types based on MinerU 2.5 VLM.
 
@@ -226,6 +227,7 @@ class BlockTypeMapper:
 
         # No mapping found - return original
         return region_type
+
 
 # ==================== BBox Format Definitions ====================
 

@@ -1,4 +1,39 @@
 """Shared constants for the VLM OCR pipeline."""
 
+# Rate Limiting
 REQUEST_WINDOW_SECONDS = 60
 """Sliding window size (seconds) for per-minute rate limiting."""
+
+# LayoutReader Scaling
+LAYOUTREADER_SCALE = 1000
+"""Coordinate scaling factor for LayoutReader model (scales to 1000x1000)."""
+
+# API Token Defaults (used when config file is unavailable)
+DEFAULT_MAX_TOKENS = 2000
+"""Default max_tokens for regular text extraction."""
+
+SPECIAL_BLOCK_MAX_TOKENS = 3000
+"""Default max_tokens for special blocks (table, formula, figure)."""
+
+TEXT_CORRECTION_MAX_TOKENS = 4000
+"""Default max_tokens for page-level text correction."""
+
+DEFAULT_TEMPERATURE = 0.1
+"""Default temperature for API calls (0.1 for mostly deterministic output)."""
+
+ESTIMATED_IMAGE_TOKENS = 2000
+"""Estimated tokens for image + text (used for Gemini rate limiting)."""
+
+DEFAULT_ESTIMATED_TOKENS = 1000
+"""Default estimated tokens for rate limiting calculations."""
+
+# Detection Defaults (used when config file is unavailable)
+DEFAULT_CONFIDENCE_THRESHOLD = 0.5
+"""Default confidence threshold for layout detection."""
+
+DEFAULT_OVERLAP_THRESHOLD = 0.7
+"""Default overlap threshold for duplicate filtering."""
+
+# Global Settings
+MIN_BOX_SIZE = 10
+"""Minimum bounding box dimension (width or height) in pixels."""
