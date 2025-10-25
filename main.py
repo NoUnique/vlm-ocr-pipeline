@@ -54,7 +54,7 @@ def parse_page_range(page_range_str: str) -> tuple[int, int] | None:
             raise ValueError("Invalid page range")
 
         return (start_page, end_page)
-    except Exception as exc:  # noqa: BLE001 - broad logging matches previous behaviour
+    except ValueError as exc:
         logging.getLogger(__name__).error("Invalid page range format '%s': %s", page_range_str, exc)
         return None
 
@@ -73,7 +73,7 @@ def parse_specific_pages(pages_str: str) -> list[int] | None:
             raise ValueError("No valid page numbers found")
 
         return sorted(set(pages))
-    except Exception as exc:  # noqa: BLE001 - broad logging matches previous behaviour
+    except ValueError as exc:
         logging.getLogger(__name__).error("Invalid pages format '%s': %s", pages_str, exc)
         return None
 

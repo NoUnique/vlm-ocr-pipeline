@@ -16,6 +16,7 @@ import cv2
 import numpy as np
 import yaml
 from google import genai
+from google.api_core import exceptions as google_exceptions
 from google.genai import types
 from PIL import Image
 
@@ -94,15 +95,20 @@ class GeminiClient:
             client = genai.Client(api_key=self.api_key)
             logger.info("Gemini API client initialized successfully")
             return client
+        except (TypeError, ValueError) as e:
+            # Invalid configuration parameters
+            logger.error("Failed to initialize Gemini API client (invalid config): %s", e)
+            return None
         except Exception as e:
-            logger.error("Failed to initialize Gemini API client: %s", e)
+            # Fallback for unexpected errors
+            logger.error("Failed to initialize Gemini API client (unexpected error): %s", e)
             return None
 
     def is_available(self) -> bool:
         """Check if Gemini API client is available"""
         return self.client is not None
 
-    def extract_text(self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str) -> dict[str, Any]:
+    def extract_text(self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str) -> dict[str, Any]:  # noqa: PLR0911
         """
         Extract text from block using Gemini API
 
@@ -199,33 +205,52 @@ class GeminiClient:
 
             return result
 
+        except google_exceptions.ResourceExhausted as e:
+            # 429 Rate limit errors (RESOURCE_EXHAUSTED)
+            logger.error("Gemini rate limit exceeded: %s", e)
+            return {
+                "type": region_info["type"],
+                "xywh": region_info["xywh"],
+                "text": "[RATE_LIMIT_EXCEEDED]",
+                "confidence": 0.0,
+                "error": "gemini_rate_limit",
+                "error_message": str(e),
+            }
+        except google_exceptions.RetryError as e:
+            # Retry failures (network issues, timeouts)
+            logger.error("Gemini retry error: %s", e)
+            return {
+                "type": region_info["type"],
+                "xywh": region_info["xywh"],
+                "text": "[GEMINI_RETRY_FAILED]",
+                "confidence": 0.0,
+                "error": "gemini_retry_error",
+                "error_message": str(e),
+            }
+        except google_exceptions.GoogleAPIError as e:
+            # Other Google API errors (4xx, 5xx)
+            logger.error("Gemini API error: %s", e)
+            return {
+                "type": region_info["type"],
+                "xywh": region_info["xywh"],
+                "text": "[GEMINI_API_ERROR]",
+                "confidence": 0.0,
+                "error": "gemini_api_error",
+                "error_message": str(e),
+            }
         except Exception as e:
-            error_str = str(e)
-            logger.error("Gemini text extraction error: %s", e)
-
-            # Handle rate limit errors specifically
-            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-                logger.error("Rate limit exceeded. Please wait before retrying or check your API quota.")
-                return {
-                    "type": region_info["type"],
-                    "xywh": region_info["xywh"],
-                    "text": "[RATE_LIMIT_EXCEEDED]",
-                    "confidence": 0.0,
-                    "error": "gemini_rate_limit",
-                    "error_message": "Gemini API rate limit exceeded",
-                }
-
-            # Handle other Gemini API errors
+            # Fallback for unexpected errors
+            logger.error("Unexpected error during Gemini text extraction: %s", e)
             return {
                 "type": region_info["type"],
                 "xywh": region_info["xywh"],
                 "text": "[GEMINI_EXTRACTION_FAILED]",
                 "confidence": 0.0,
-                "error": "gemini_api_error",
+                "error": "unexpected_error",
                 "error_message": str(e),
             }
 
-    def process_special_region(
+    def process_special_region(  # noqa: PLR0911
         self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str
     ) -> dict[str, Any]:
         """
@@ -324,29 +349,52 @@ class GeminiClient:
 
             return parsed_result
 
+        except google_exceptions.ResourceExhausted as e:
+            # 429 Rate limit errors (RESOURCE_EXHAUSTED)
+            logger.error("Gemini rate limit exceeded: %s", e)
+            return {
+                "type": region_info["type"],
+                "xywh": region_info["xywh"],
+                "content": "[RATE_LIMIT_EXCEEDED]",
+                "analysis": "Rate limit exceeded",
+                "confidence": 0.0,
+                "error": "gemini_rate_limit",
+                "error_message": str(e),
+            }
+        except google_exceptions.RetryError as e:
+            # Retry failures (network issues, timeouts)
+            logger.error("Gemini retry error: %s", e)
+            return {
+                "type": region_info["type"],
+                "xywh": region_info["xywh"],
+                "content": "[GEMINI_RETRY_FAILED]",
+                "analysis": "Retry failed",
+                "confidence": 0.0,
+                "error": "gemini_retry_error",
+                "error_message": str(e),
+            }
+        except google_exceptions.GoogleAPIError as e:
+            # Other Google API errors (4xx, 5xx)
+            logger.error("Gemini API error: %s", e)
+            return {
+                "type": region_info["type"],
+                "xywh": region_info["xywh"],
+                "content": "[GEMINI_API_ERROR]",
+                "analysis": "Gemini API error",
+                "confidence": 0.0,
+                "error": "gemini_api_error",
+                "error_message": str(e),
+            }
         except Exception as e:
-            error_str = str(e)
-            logger.error("Gemini special block processing error: %s", e)
-
-            # Handle rate limit errors
-            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-                return {
-                    "type": region_info["type"],
-                    "xywh": region_info["xywh"],
-                    "content": "[RATE_LIMIT_EXCEEDED]",
-                    "analysis": "Rate limit exceeded",
-                    "confidence": 0.0,
-                    "error": "gemini_rate_limit",
-                    "error_message": "Gemini API rate limit exceeded",
-                }
-
+            # Fallback for unexpected errors
+            logger.error("Unexpected error during Gemini special block processing: %s", e)
             return {
                 "type": region_info["type"],
                 "xywh": region_info["xywh"],
                 "content": "[GEMINI_PROCESSING_FAILED]",
                 "analysis": f"Processing failed: {str(e)}",
                 "confidence": 0.0,
-                "error": "gemini_api_error",
+                "error": "unexpected_error",
                 "error_message": str(e),
             }
 
@@ -407,34 +455,51 @@ class GeminiClient:
                     correction_ratio = 1.0 - similarity
                     result = self._text_correction_result(corrected_text, correction_ratio)
 
+        except google_exceptions.ResourceExhausted as e:
+            # 429 Rate limit errors (RESOURCE_EXHAUSTED)
+            logger.error("Gemini rate limit exceeded during text correction: %s", e)
+            result = self._text_correction_result(
+                text,
+                0.0,
+                error="[TEXT_CORRECTION_RATE_LIMIT_EXCEEDED]",
+                error_message=str(e),
+            )
+        except google_exceptions.ServiceUnavailable as e:
+            # 503 Service unavailable errors
+            logger.error("Gemini service unavailable during text correction: %s", e)
+            result = self._text_correction_result(
+                text,
+                0.0,
+                error="[TEXT_CORRECTION_SERVICE_UNAVAILABLE]",
+                error_message=str(e),
+            )
+        except google_exceptions.RetryError as e:
+            # Retry failures (network issues, timeouts)
+            logger.error("Gemini retry error during text correction: %s", e)
+            result = self._text_correction_result(
+                text,
+                0.0,
+                error="[TEXT_CORRECTION_RETRY_FAILED]",
+                error_message=str(e),
+            )
+        except google_exceptions.GoogleAPIError as e:
+            # Other Google API errors (4xx, 5xx)
+            logger.error("Gemini API error during text correction: %s", e)
+            result = self._text_correction_result(
+                text,
+                0.0,
+                error="[TEXT_CORRECTION_API_ERROR]",
+                error_message=str(e),
+            )
         except Exception as e:
-            error_str = str(e)
-            logger.error("Text correction error: %s", e)
-
-            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-                logger.error("Rate limit exceeded during text correction")
-                result = self._text_correction_result(
-                    text,
-                    0.0,
-                    error="[TEXT_CORRECTION_RATE_LIMIT_EXCEEDED]",
-                    error_message=error_str,
-                )
-            elif "503" in error_str or "UNAVAILABLE" in error_str:
-                logger.error("Service unavailable during text correction")
-                result = self._text_correction_result(
-                    text,
-                    0.0,
-                    error="[TEXT_CORRECTION_SERVICE_UNAVAILABLE]",
-                    error_message=error_str,
-                )
-            else:
-                logger.error("Text correction failed with other error")
-                result = self._text_correction_result(
-                    text,
-                    0.0,
-                    error="[TEXT_CORRECTION_FAILED]",
-                    error_message=error_str,
-                )
+            # Fallback for unexpected errors
+            logger.error("Unexpected error during text correction: %s", e)
+            result = self._text_correction_result(
+                text,
+                0.0,
+                error="[TEXT_CORRECTION_FAILED]",
+                error_message=str(e),
+            )
 
         return result
 

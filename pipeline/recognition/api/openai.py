@@ -16,6 +16,7 @@ from typing import Any
 
 import cv2
 import numpy as np
+import openai
 import yaml
 from openai import OpenAI
 from PIL import Image
@@ -115,8 +116,13 @@ class OpenAIClient:
             client = OpenAI(**client_kwargs)  # type: ignore[arg-type]
             logger.info("OpenAI API client initialized successfully (base_url: %s)", self.base_url or "default")
             return client
+        except (TypeError, ValueError) as e:
+            # Invalid configuration parameters
+            logger.error("Failed to initialize OpenAI API client (invalid config): %s", e)
+            return None
         except Exception as e:
-            logger.error("Failed to initialize OpenAI API client: %s", e)
+            # Fallback for unexpected errors
+            logger.error("Failed to initialize OpenAI API client (unexpected error): %s", e)
             return None
 
     def is_available(self) -> bool:
@@ -145,7 +151,7 @@ class OpenAIClient:
 
         return base64.b64encode(img_bytes).decode("utf-8")
 
-    def extract_text(self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str) -> dict[str, Any]:
+    def extract_text(self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str) -> dict[str, Any]:  # noqa: PLR0911
         """
         Extract text from block using OpenAI API
 
@@ -210,33 +216,52 @@ class OpenAIClient:
 
             return result
 
+        except openai.RateLimitError as e:
+            # 429 Rate limit errors
+            logger.error("OpenAI rate limit exceeded: %s", e)
+            return {
+                "type": region_info["type"],
+                "xywh": region_info["xywh"],
+                "text": "[RATE_LIMIT_EXCEEDED]",
+                "confidence": 0.0,
+                "error": "openai_rate_limit",
+                "error_message": str(e),
+            }
+        except (openai.APIConnectionError, openai.APITimeoutError) as e:
+            # Network/timeout errors
+            logger.error("OpenAI connection/timeout error: %s", e)
+            return {
+                "type": region_info["type"],
+                "xywh": region_info["xywh"],
+                "text": "[OPENAI_CONNECTION_ERROR]",
+                "confidence": 0.0,
+                "error": "openai_connection_error",
+                "error_message": str(e),
+            }
+        except openai.APIError as e:
+            # Other OpenAI API errors (4xx, 5xx)
+            logger.error("OpenAI API error: %s", e)
+            return {
+                "type": region_info["type"],
+                "xywh": region_info["xywh"],
+                "text": "[OPENAI_API_ERROR]",
+                "confidence": 0.0,
+                "error": "openai_api_error",
+                "error_message": str(e),
+            }
         except Exception as e:
-            error_str = str(e)
-            logger.error("OpenAI text extraction error: %s", e)
-
-            # Handle rate limit errors specifically
-            if "429" in error_str or "rate_limit" in error_str.lower():
-                logger.error("Rate limit exceeded. Please wait before retrying or check your API quota.")
-                return {
-                    "type": region_info["type"],
-                    "xywh": region_info["xywh"],
-                    "text": "[RATE_LIMIT_EXCEEDED]",
-                    "confidence": 0.0,
-                    "error": "openai_rate_limit",
-                    "error_message": "OpenAI API rate limit exceeded",
-                }
-
-            # Handle other OpenAI API errors
+            # Fallback for unexpected errors
+            logger.error("Unexpected error during OpenAI text extraction: %s", e)
             return {
                 "type": region_info["type"],
                 "xywh": region_info["xywh"],
                 "text": "[OPENAI_EXTRACTION_FAILED]",
                 "confidence": 0.0,
-                "error": "openai_api_error",
+                "error": "unexpected_error",
                 "error_message": str(e),
             }
 
-    def process_special_region(
+    def process_special_region(  # noqa: PLR0911
         self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str
     ) -> dict[str, Any]:
         """
@@ -311,33 +336,56 @@ class OpenAIClient:
 
             return parsed_result
 
+        except openai.RateLimitError as e:
+            # 429 Rate limit errors
+            logger.error("OpenAI rate limit exceeded: %s", e)
+            return {
+                "type": region_info["type"],
+                "xywh": region_info["xywh"],
+                "content": "[RATE_LIMIT_EXCEEDED]",
+                "analysis": "Rate limit exceeded",
+                "confidence": 0.0,
+                "error": "openai_rate_limit",
+                "error_message": str(e),
+            }
+        except (openai.APIConnectionError, openai.APITimeoutError) as e:
+            # Network/timeout errors
+            logger.error("OpenAI connection/timeout error: %s", e)
+            return {
+                "type": region_info["type"],
+                "xywh": region_info["xywh"],
+                "content": "[OPENAI_CONNECTION_ERROR]",
+                "analysis": "Connection or timeout error",
+                "confidence": 0.0,
+                "error": "openai_connection_error",
+                "error_message": str(e),
+            }
+        except openai.APIError as e:
+            # Other OpenAI API errors (4xx, 5xx)
+            logger.error("OpenAI API error: %s", e)
+            return {
+                "type": region_info["type"],
+                "xywh": region_info["xywh"],
+                "content": "[OPENAI_API_ERROR]",
+                "analysis": "OpenAI API error",
+                "confidence": 0.0,
+                "error": "openai_api_error",
+                "error_message": str(e),
+            }
         except Exception as e:
-            error_str = str(e)
-            logger.error("OpenAI special block processing error: %s", e)
-
-            # Handle rate limit errors
-            if "429" in error_str or "rate_limit" in error_str.lower():
-                return {
-                    "type": region_info["type"],
-                    "xywh": region_info["xywh"],
-                    "content": "[RATE_LIMIT_EXCEEDED]",
-                    "analysis": "Rate limit exceeded",
-                    "confidence": 0.0,
-                    "error": "openai_rate_limit",
-                    "error_message": "OpenAI API rate limit exceeded",
-                }
-
+            # Fallback for unexpected errors
+            logger.error("Unexpected error during OpenAI special block processing: %s", e)
             return {
                 "type": region_info["type"],
                 "xywh": region_info["xywh"],
                 "content": "[OPENAI_PROCESSING_FAILED]",
                 "analysis": f"Processing failed: {str(e)}",
                 "confidence": 0.0,
-                "error": "openai_api_error",
+                "error": "unexpected_error",
                 "error_message": str(e),
             }
 
-    def correct_text(self, text: str, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    def correct_text(self, text: str, system_prompt: str, user_prompt: str) -> dict[str, Any]:  # noqa: PLR0911
         """
         Correct OCR text using OpenAI API
 
@@ -389,39 +437,51 @@ class OpenAIClient:
 
             return self._text_correction_result(corrected_text, correction_ratio)
 
+        except openai.RateLimitError as e:
+            # 429 Rate limit errors
+            logger.error("OpenAI rate limit exceeded during text correction: %s", e)
+            return self._text_correction_result(
+                text,
+                0.0,
+                error="[TEXT_CORRECTION_RATE_LIMIT_EXCEEDED]",
+                error_message=str(e),
+            )
+        except openai.InternalServerError as e:
+            # 5xx Server errors (503, 500, etc.)
+            logger.error("OpenAI server error during text correction: %s", e)
+            return self._text_correction_result(
+                text,
+                0.0,
+                error="[TEXT_CORRECTION_SERVICE_UNAVAILABLE]",
+                error_message=str(e),
+            )
+        except (openai.APIConnectionError, openai.APITimeoutError) as e:
+            # Network/timeout errors
+            logger.error("OpenAI connection/timeout error during text correction: %s", e)
+            return self._text_correction_result(
+                text,
+                0.0,
+                error="[TEXT_CORRECTION_CONNECTION_ERROR]",
+                error_message=str(e),
+            )
+        except openai.APIError as e:
+            # Other OpenAI API errors (4xx, 5xx)
+            logger.error("OpenAI API error during text correction: %s", e)
+            return self._text_correction_result(
+                text,
+                0.0,
+                error="[TEXT_CORRECTION_API_ERROR]",
+                error_message=str(e),
+            )
         except Exception as e:
-            error_str = str(e)
-            logger.error("Text correction error: %s", e)
-
-            # Handle rate limit errors specifically
-            if "429" in error_str or "rate_limit" in error_str.lower():
-                logger.error("Rate limit exceeded during text correction")
-                return self._text_correction_result(
-                    text,
-                    0.0,
-                    error="[TEXT_CORRECTION_RATE_LIMIT_EXCEEDED]",
-                    error_message=error_str,
-                )
-
-            # Handle service unavailable errors
-            elif "503" in error_str or "unavailable" in error_str.lower():
-                logger.error("Service unavailable during text correction")
-                return self._text_correction_result(
-                    text,
-                    0.0,
-                    error="[TEXT_CORRECTION_SERVICE_UNAVAILABLE]",
-                    error_message=error_str,
-                )
-
-            # For other errors, return original text with error indicator
-            else:
-                logger.error("Text correction failed with other error")
-                return self._text_correction_result(
-                    text,
-                    0.0,
-                    error="[TEXT_CORRECTION_FAILED]",
-                    error_message=error_str,
-                )
+            # Fallback for unexpected errors
+            logger.error("Unexpected error during text correction: %s", e)
+            return self._text_correction_result(
+                text,
+                0.0,
+                error="[TEXT_CORRECTION_FAILED]",
+                error_message=str(e),
+            )
 
     def _text_correction_result(
         self,
