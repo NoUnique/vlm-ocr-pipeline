@@ -61,12 +61,16 @@ class TestOpenAIClient:
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
             client = OpenAIClient(model="gpt-4o")
 
-            # Mock rate limit error
+            # Mock rate limit error - create actual exception
             with patch.object(client, "client") as mock_client:
-                # Create a proper mock error
-                mock_error = MagicMock(spec=openai.RateLimitError)
-                mock_error.__class__ = openai.RateLimitError  # type: ignore[assignment]
-                mock_client.chat.completions.create.side_effect = mock_error
+                mock_response = MagicMock()
+                mock_response.status_code = 429
+                # Create real exception with minimal required params
+                mock_client.chat.completions.create.side_effect = openai.RateLimitError(
+                    message="Rate limit exceeded",
+                    response=mock_response,
+                    body=None,
+                )
 
                 region_img = np.zeros((100, 100, 3), dtype=np.uint8)
                 region_info = {"type": "text", "xywh": [10, 20, 80, 50]}
@@ -217,9 +221,11 @@ class TestAPIClientExceptionHandling:
             client = OpenAIClient(model="gpt-4o")
 
             with patch.object(client, "client") as mock_client:
-                mock_error = MagicMock(spec=openai.APIConnectionError)
-                mock_error.__class__ = openai.APIConnectionError  # type: ignore[assignment]
-                mock_client.chat.completions.create.side_effect = mock_error
+                # Create real exception with required request parameter
+                mock_request = MagicMock()
+                mock_client.chat.completions.create.side_effect = openai.APIConnectionError(
+                    message="Connection failed", request=mock_request
+                )
 
                 region_img = np.zeros((100, 100, 3), dtype=np.uint8)
                 region_info = {"type": "text", "xywh": [10, 20, 80, 50]}
@@ -255,9 +261,14 @@ class TestAPIClientExceptionHandling:
             client = OpenAIClient(model="gpt-4o")
 
             with patch.object(client, "client") as mock_client:
-                mock_error = MagicMock(spec=openai.InternalServerError)
-                mock_error.__class__ = openai.InternalServerError  # type: ignore[assignment]
-                mock_client.chat.completions.create.side_effect = mock_error
+                # Create real exception
+                mock_response = MagicMock()
+                mock_response.status_code = 500
+                mock_client.chat.completions.create.side_effect = openai.InternalServerError(
+                    message="Internal server error",
+                    response=mock_response,
+                    body=None,
+                )
 
                 result = client.correct_text("text", "system", "user")
 

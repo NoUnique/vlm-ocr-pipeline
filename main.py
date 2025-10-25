@@ -4,6 +4,8 @@ Main entry point for the VLM OCR Pipeline
 Provides command-line interface for processing images and PDFs using Vision Language Models
 """
 
+from __future__ import annotations
+
 import argparse
 import logging
 import sys
