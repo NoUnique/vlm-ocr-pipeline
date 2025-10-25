@@ -79,8 +79,7 @@ class Pipeline:
         backend: str = "openai",
         model: str = "gemini-2.5-flash",
         gemini_tier: str = "free",
-        enable_multi_column_ordering: bool = False,
-        # New options for modular detector/sorter
+        # Modular detector/sorter options
         detector: str = "doclayout-yolo",
         sorter: str | None = None,
         mineru_model: str | None = None,
@@ -101,9 +100,8 @@ class Pipeline:
             backend: Backend API to use ("openai" or "gemini")
             model: Model to use for text processing
             gemini_tier: Gemini API tier for rate limiting (only used with gemini backend)
-            enable_multi_column_ordering: Legacy option - use sorter="pymupdf" instead
             detector: Detector to use ("doclayout-yolo", "mineru-vlm", "none")
-            sorter: Sorter to use (None for auto-selection based on legacy options)
+            sorter: Sorter to use (None for auto-selection, "pymupdf" for multi-column)
             mineru_model: MinerU model path (for mineru-vlm detector/sorter)
             mineru_backend: MinerU backend ("transformers", "vllm-engine", "vllm-async-engine")
             olmocr_model: olmOCR model path (for olmocr-vlm sorter)
@@ -120,7 +118,6 @@ class Pipeline:
         else:
             self.model = model
         self.gemini_tier = gemini_tier
-        self.enable_multi_column_ordering = enable_multi_column_ordering
         self.renderer = renderer.lower()
 
         # Validate renderer
@@ -150,7 +147,7 @@ class Pipeline:
                 detector = required_detector
                 logger.info("Auto-selected detector='%s' for '%s' sorter (tightly coupled)", detector, sorter)
 
-        # Case 2: Sorter is not specified, auto-select based on detector or legacy options
+        # Case 2: Sorter is not specified, auto-select based on detector
         if sorter is None:
             # Special case: tightly coupled detectors require their own sorter
             if detector == "paddleocr-doclayout-v2":
@@ -159,9 +156,6 @@ class Pipeline:
             elif detector == "mineru-vlm":
                 sorter = "mineru-vlm"
                 logger.info("Auto-selected sorter='mineru-vlm' for mineru-vlm detector")
-            elif enable_multi_column_ordering:
-                sorter = "pymupdf"
-                logger.info("Legacy option: enable_multi_column_ordering=True → using sorter='pymupdf'")
             else:
                 sorter = "mineru-xycut"
                 logger.info("Using default sorter='mineru-xycut' (fast and accurate)")
@@ -426,7 +420,8 @@ class Pipeline:
 
         from .conversion.input import pdf as pdf_converter
 
-        pymupdf_doc = pdf_converter.open_pymupdf_document(pdf_path) if self.enable_multi_column_ordering else None
+        # Open PyMuPDF document only if using pymupdf sorter for multi-column ordering
+        pymupdf_doc = pdf_converter.open_pymupdf_document(pdf_path) if self.sorter_name == "pymupdf" else None
         disable_multi_column = False
 
         for page_num in pages_to_process:

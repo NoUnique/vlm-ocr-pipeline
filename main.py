@@ -187,18 +187,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         default="INFO",
         help="Logging level (default: INFO)",
     )
-    parser.add_argument(
-        "--multi-column-ordering",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help=(
-            "Toggle multi-column aware reading order alignment for PDF pages (default: disabled). "
-            "Use --multi-column-ordering to enable or --no-multi-column-ordering to disable. "
-            "LEGACY: Use --sorter pymupdf instead."
-        ),
-    )
-
-    # New modular detector/sorter options
+    # Modular detector/sorter options
     parser.add_argument(
         "--detector",
         choices=["doclayout-yolo", "mineru-doclayout-yolo", "mineru-vlm", "paddleocr-doclayout-v2"],
@@ -292,8 +281,7 @@ def _execute_command(args: argparse.Namespace, parser: argparse.ArgumentParser, 
             backend=backend,
             model=args.model,
             gemini_tier=args.gemini_tier,
-            enable_multi_column_ordering=args.multi_column_ordering,
-            # New modular options
+            # Modular detector/sorter options
             detector=args.detector,
             sorter=args.sorter,
             mineru_model=args.mineru_model,
@@ -369,12 +357,6 @@ def _run_pipeline(pipeline: Pipeline, args: argparse.Namespace, logger: logging.
         logger.info("Gemini Tier: %s", args.gemini_tier)
     logger.info("Detector: %s", args.detector)
     logger.info("Sorter: %s", pipeline.sorter_name)
-    if args.multi_column_ordering:
-        logger.info(
-            "Multi-column ordering (legacy): %s",
-            "enabled (using sorter='pymupdf')" if args.multi_column_ordering else "disabled",
-        )
-
     input_path = Path(args.input)
     if not input_path.exists():
         logger.error("Input path does not exist: %s", input_path)
