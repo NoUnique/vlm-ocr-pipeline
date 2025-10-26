@@ -20,8 +20,6 @@ except ImportError:
     pass
 
 from .constants import DEFAULT_CONFIDENCE_THRESHOLD
-from .conversion.output.markdown import page_to_markdown
-from .conversion.output.plaintext import blocks_to_plaintext
 from .layout.detection import create_detector as create_detector_impl
 from .layout.ordering import create_sorter as create_sorter_impl, validate_combination
 from .misc import tz_now
@@ -265,6 +263,27 @@ class Pipeline:
             self.model,
         )
 
+        # Initialize 8 pipeline stages
+        from pipeline.stages import (
+            BlockCorrectionStage,
+            DetectionStage,
+            InputStage,
+            OrderingStage,
+            OutputStage,
+            PageCorrectionStage,
+            RecognitionStage,
+            RenderingStage,
+        )
+
+        self.input_stage = InputStage(temp_dir=self.temp_dir)
+        self.detection_stage = DetectionStage(self.detector)  # type: ignore[arg-type]
+        self.ordering_stage = OrderingStage(self.sorter)  # type: ignore[arg-type]
+        self.recognition_stage = RecognitionStage(self.recognizer)
+        self.block_correction_stage = BlockCorrectionStage(enable=False)  # Placeholder for future
+        self.rendering_stage = RenderingStage(renderer=self.renderer)
+        self.page_correction_stage = PageCorrectionStage(recognizer=self.recognizer, backend=self.backend, enable=True)
+        self.output_stage = OutputStage(temp_dir=self.temp_dir)
+
     def _setup_directories(self) -> None:
         """Create necessary directories."""
         for directory in [self.cache_dir, self.output_dir, self.temp_dir]:
@@ -458,20 +477,30 @@ class Pipeline:
 
         return processed_pages, processing_stopped
 
-    def _process_pdf_page(  # noqa: PLR0912
+    def _process_pdf_page(
         self,
         pdf_path: Path,
         page_num: int,
         page_output_dir: Path,
         pymupdf_page: Any | None,
     ) -> tuple[Page | None, bool]:
-        """Process a single PDF page through the entire pipeline.
+        """Process a single PDF page through 8-stage pipeline.
+
+        8-Stage Pipeline:
+            1. Input: Load PDF page as image + extract auxiliary info
+            2. Detection: Detect layout blocks
+            3. BlockOrdering: Sort blocks by reading order
+            4. Recognition: Extract text from blocks
+            5. BlockCorrection: Block-level text correction (optional, disabled by default)
+            6. Rendering: Convert blocks to Markdown/plaintext
+            7. PageCorrection: Page-level text correction
+            8. Output: Build Page object and save
 
         Args:
             pdf_path: Path to PDF file
             page_num: Page number to process
             page_output_dir: Directory to save page output
-            pymupdf_page: PyMuPDF page object (optional)
+            pymupdf_page: PyMuPDF page object (optional, for pymupdf sorter)
 
         Returns:
             Tuple of (Page object or None, should_stop)
@@ -479,85 +508,60 @@ class Pipeline:
         page_image = None
 
         try:
-            # Stage 1: Convert PDF page to image
-            from .conversion.input import pdf as pdf_converter
+            # Stage 1: Input - Load PDF page
+            page_image = self.input_stage.load_pdf_page(pdf_path, page_num)
+            auxiliary_info = self.input_stage.extract_auxiliary_info(pdf_path, page_num)
 
-            page_image, temp_image_path = pdf_converter.render_pdf_page(pdf_path, page_num, temp_dir=self.temp_dir)
+            # Stage 2: Detection - Detect layout blocks
+            blocks: list[Block] = self.detection_stage.detect(page_image)
 
-            # Stage 2: Detect layout blocks (new detector interface)
-            blocks: list[Block] = self.detector.detect(page_image) if self.detector else []
+            # Stage 3: BlockOrdering - Sort blocks by reading order
+            sorted_blocks: list[Block] = self.ordering_stage.sort(blocks, page_image, pymupdf_page=pymupdf_page)
 
-            # Stage 3: Sort blocks by reading order (new sorter interface)
-            if self.sorter:
-                sorted_blocks: list[Block] = self.sorter.sort(blocks, page_image, pymupdf_page=pymupdf_page)
-            else:
-                # No sorting - keep original order
-                sorted_blocks = blocks
+            # Extract column layout info (for backward compatibility)
+            column_layout = self.detection_stage.extract_column_layout(sorted_blocks)
 
-            # Extract column layout info if available (for output compatibility)
-            column_layout = self._extract_column_layout(sorted_blocks)
-
-            # Stage 4: Recognition - extract text from blocks
+            # Stage 4: Recognition - Extract text from blocks
             # Note: olmocr-vlm sorter already includes text, skip recognition
             if self.sorter_name == "olmocr-vlm":
                 processed_blocks = sorted_blocks
             else:
-                processed_blocks = self.recognizer.process_blocks(page_image, sorted_blocks)
+                processed_blocks = self.recognition_stage.recognize_blocks(sorted_blocks, page_image)
 
-            # Check for rate limit errors
+            # Check for rate limit errors after recognition
             if self._check_for_rate_limit_errors({"blocks": processed_blocks}):
                 logger.warning("Rate limit detected on page %d. Stopping processing.", page_num)
                 return None, True
 
-            # Block-level text correction for text blocks
-            # Skip correction for paddleocr-vl (already does direct VLM extraction, no correction needed)
-            if self.backend != "paddleocr-vl":
-                for block in processed_blocks:
-                    if block.type in ["plain text", "title", "list", "text"] and block.text:
-                        corrected = self.recognizer.correct_text(block.text)
-                        if isinstance(corrected, dict):
-                            block.corrected_text = corrected.get("corrected_text", block.text)
-                            block.correction_ratio = corrected.get("correction_ratio", 0.0)
-                        elif isinstance(corrected, str):
-                            block.corrected_text = corrected
-                            block.correction_ratio = 0.0  # No ratio info available
+            # Stage 5: BlockCorrection - Block-level correction (optional, currently disabled)
+            processed_blocks = self.block_correction_stage.correct_blocks(processed_blocks)
 
-            # Build a temporary Page object for rendering
-            temp_page = Page(
-                page_num=page_num,
-                blocks=list(processed_blocks),
+            # Stage 6: Rendering - Convert blocks to Markdown/plaintext
+            text = self.rendering_stage.render(processed_blocks, auxiliary_info)
+
+            # Stage 7: PageCorrection - Page-level text correction
+            corrected_text, correction_ratio, stop_due_to_correction = self.page_correction_stage.correct_page(
+                text, page_num
             )
-
-            # Compose page-level text using selected renderer
-            if self.renderer == "markdown":
-                text = page_to_markdown(temp_page, include_page_header=False)
-            else:  # plaintext
-                text = blocks_to_plaintext(processed_blocks)
-
-            # Correct the rendered text with VLM
-            corrected_text, correction_ratio, stop_due_to_correction = self._perform_page_correction(text, page_num)
 
             if stop_due_to_correction:
                 return None, True
 
-            # Extract auxiliary info (text spans with font info for markdown conversion)
-            auxiliary_info = self._extract_auxiliary_info(pdf_path, page_num)
-
-            # Build result
-            page_result = self._build_page_result(
-                pdf_path,
-                page_num,
-                page_image,
-                sorted_blocks,
-                processed_blocks,
-                text,
-                corrected_text,
-                correction_ratio,
-                column_layout,
-                auxiliary_info,
+            # Stage 8: Output - Build Page object and save
+            page_result = self.output_stage.build_page_result(
+                pdf_path=pdf_path,
+                page_num=page_num,
+                page_image=page_image,
+                detected_blocks=sorted_blocks,
+                processed_blocks=processed_blocks,
+                text=text,
+                corrected_text=corrected_text,
+                correction_ratio=correction_ratio,
+                column_layout=column_layout,
+                auxiliary_info=auxiliary_info,
             )
 
-            self._save_page_output(page_output_dir, page_num, page_result)
+            self.output_stage.save_page_output(page_output_dir, page_num, page_result)
 
             return page_result, False
 

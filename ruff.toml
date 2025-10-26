@@ -52,5 +52,6 @@ known-first-party = ["pipeline", "models"]
 "pipeline/layout/ordering/olmocr/*.py" = ["PLC0415"]
 "pipeline/layout/ordering/pymupdf/*.py" = ["PLC0415"]
 "pipeline/__init__.py" = ["PLC0415"]  # Lazy imports for optional conversion modules
+"pipeline/stages/input_stage.py" = ["PLC0415"]  # Lazy imports for conversion modules
 # Test files: allow magic numbers (concrete test values)
 "tests/test_*.py" = ["PLR2004"]

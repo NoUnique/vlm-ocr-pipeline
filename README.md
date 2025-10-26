@@ -33,6 +33,17 @@ vlm-ocr-pipeline/
 │   ├── misc.py
 │   ├── prompt.py
 │   │
+│   ├── stages/                # 8-stage pipeline architecture
+│   │   ├── __init__.py
+│   │   ├── input_stage.py     # Stage 1: Document loading & auxiliary info
+│   │   ├── detection_stage.py # Stage 2: Layout block detection
+│   │   ├── ordering_stage.py  # Stage 3: Reading order analysis
+│   │   ├── recognition_stage.py # Stage 4: Text extraction from blocks
+│   │   ├── block_correction_stage.py # Stage 5: Block-level correction
+│   │   ├── rendering_stage.py # Stage 6: Markdown/plaintext conversion
+│   │   ├── page_correction_stage.py # Stage 7: Page-level VLM correction
+│   │   └── output_stage.py    # Stage 8: Result saving & summary
+│   │
 │   ├── layout/
 │   │   ├── detection/         # Layout detection strategies
 │   │   │   ├── __init__.py    # create_detector()
@@ -85,6 +96,98 @@ vlm-ocr-pipeline/
 ├── .cache/                    # Recognition cache (auto-created)
 ├── .logs/                     # Log files (auto-created)
 └── output/                    # Processing results (auto-created)
+```
+
+## Pipeline Architecture
+
+The VLM OCR Pipeline uses a **8-stage architecture** for document processing. Each stage has a clear responsibility and can be independently tested and modified.
+
+```mermaid
+graph TD
+    A[📄 Input Stage] --> B[🔍 Detection Stage]
+    B --> C[📊 Ordering Stage]
+    C --> D[📝 Recognition Stage]
+    D --> E[✏️ Block Correction Stage]
+    E --> F[📋 Rendering Stage]
+    F --> G[🔧 Page Correction Stage]
+    G --> H[💾 Output Stage]
+
+    A -->|PDF/Image| A1[Load document<br/>Extract auxiliary info]
+    B -->|numpy array| B1[Detect layout blocks<br/>bbox, type, confidence]
+    C -->|list[Block]| C1[Sort by reading order<br/>Add order & column_index]
+    D -->|sorted blocks| D1[Extract text from blocks<br/>VLM or local model]
+    E -->|blocks with text| E1[Block-level correction<br/>Optional, disabled by default]
+    F -->|corrected blocks| F1[Convert to Markdown<br/>or plaintext]
+    G -->|raw text| G1[Page-level VLM correction<br/>Improve overall quality]
+    H -->|corrected text| H1[Save Page object<br/>Generate summary]
+
+    style A fill:#e1f5ff
+    style B fill:#fff3e1
+    style C fill:#e8f5e9
+    style D fill:#f3e5f5
+    style E fill:#fce4ec
+    style F fill:#fff9e1
+    style G fill:#e0f2f1
+    style H fill:#f1f8e9
+```
+
+### Stage Details
+
+1. **Input Stage** (`InputStage`)
+   - Loads PDF pages or images as numpy arrays
+   - Extracts auxiliary information (text spans with font metadata for pymupdf4llm-style markdown)
+   - Handles both PDF rendering and direct image loading
+
+2. **Detection Stage** (`DetectionStage`)
+   - Detects layout blocks using selected detector (DocLayout-YOLO, PaddleOCR, MinerU)
+   - Returns blocks with bounding boxes, types, and confidence scores
+   - Extracts column layout information if available
+
+3. **Ordering Stage** (`OrderingStage`)
+   - Analyzes reading order using selected sorter (PyMuPDF, LayoutReader, XY-Cut, VLM)
+   - Adds `order` field to blocks for correct reading sequence
+   - Optionally adds `column_index` for multi-column documents
+
+4. **Recognition Stage** (`RecognitionStage`)
+   - Extracts text from each block using VLM or local model
+   - Supports multiple backends: OpenAI, Gemini, PaddleOCR-VL
+   - Handles special content types (tables, figures) with appropriate prompts
+
+5. **Block Correction Stage** (`BlockCorrectionStage`)
+   - Block-level text correction (currently a placeholder, disabled by default)
+   - Future: VLM-based correction at individual block level
+   - Currently just copies `text` to `corrected_text`
+
+6. **Rendering Stage** (`RenderingStage`)
+   - Converts processed blocks to output format (Markdown or plaintext)
+   - Supports multiple rendering strategies (region-based, font-based)
+   - Uses auxiliary info for enhanced markdown conversion
+
+7. **Page Correction Stage** (`PageCorrectionStage`)
+   - Page-level text correction using VLM
+   - Analyzes and corrects the entire page text for consistency
+   - Calculates correction ratio and handles rate limits
+   - Skipped for local models (PaddleOCR-VL)
+
+8. **Output Stage** (`OutputStage`)
+   - Builds `Page` objects with all metadata
+   - Saves page results as JSON files
+   - Generates document-level summaries
+   - Creates final output structure
+
+### Pipeline Flow Example
+
+```python
+# Each stage processes data sequentially
+page_image = input_stage.load_pdf_page(pdf_path, page_num)
+blocks = detection_stage.detect(page_image)
+sorted_blocks = ordering_stage.sort(blocks, page_image)
+processed_blocks = recognition_stage.recognize_blocks(sorted_blocks, page_image)
+processed_blocks = block_correction_stage.correct_blocks(processed_blocks)
+text = rendering_stage.render(processed_blocks, auxiliary_info)
+corrected_text, ratio, stop = page_correction_stage.correct_page(text, page_num)
+page_result = output_stage.build_page_result(...)
+output_stage.save_page_output(output_dir, page_num, page_result)
 ```
 
 ## BBox Format Reference
