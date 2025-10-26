@@ -152,7 +152,9 @@ class TextRecognizer(Recognizer):
             result = self.client.extract_text(block_image, block.to_dict(), prompt)
             block.text = result.get("text", "") if isinstance(result, dict) else str(result)
         except Exception as e:
-            logger.error("Failed to extract text: %s", e)
+            # Fallback for unexpected errors - set empty text to continue processing
+            # (allowed per ERROR_HANDLING.md section 3.3)
+            logger.error("Failed to extract text: %s", e, exc_info=True)
             block.text = ""
 
         # Cleanup
@@ -215,5 +217,7 @@ class TextRecognizer(Recognizer):
             corrected = self.client.correct_text(text, system_prompt, user_prompt)
             return corrected
         except Exception as e:
-            logger.error("Text correction failed: %s", e)
+            # Fallback for unexpected errors - return error with original text
+            # (allowed per ERROR_HANDLING.md section 3.3)
+            logger.error("Text correction failed: %s", e, exc_info=True)
             return {"error": "correction_failed", "original_text": text}

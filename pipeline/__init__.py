@@ -48,8 +48,11 @@ def _load_yaml_config(config_path: Path) -> dict[str, Any]:
                 return yaml.safe_load(f) or {}
         logger.debug("Config file not found: %s", config_path)
         return {}
-    except Exception as e:
-        logger.warning("Failed to load config file %s: %s", config_path, e)
+    except yaml.YAMLError as e:
+        logger.warning("Failed to parse config file %s: %s", config_path, e)
+        return {}
+    except (OSError, UnicodeDecodeError) as e:
+        logger.warning("Failed to read config file %s: %s", config_path, e)
         return {}
 
 
@@ -569,6 +572,7 @@ class Pipeline:
             return page_result, False
 
         except Exception as e:
+            # Fallback for unexpected errors (allowed per ERROR_HANDLING.md section 3.3)
             logger.error("Error processing page %d: %s", page_num, e, exc_info=True)
             error_page = Page(
                 page_num=page_num,
@@ -636,6 +640,7 @@ class Pipeline:
                 }
             return None
         except Exception as exc:
+            # Fallback for unexpected errors - auxiliary info is optional (allowed per ERROR_HANDLING.md section 3.3)
             logger.warning("Failed to extract auxiliary info from page %d: %s", page_num, exc)
             return None
 
@@ -923,7 +928,9 @@ class Pipeline:
                 # Continue processing next file regardless
 
             except Exception as e:
-                logger.error("Error processing %s: %s", pdf_file, e)
+                # Fallback for unexpected errors in batch processing - continue with next file
+                # (allowed per ERROR_HANDLING.md section 3.3)
+                logger.error("Error processing %s: %s", pdf_file, e, exc_info=True)
                 results[str(pdf_file)] = {"error": str(e), "processed_at": tz_now().isoformat()}
 
         # Ensure model base directory exists

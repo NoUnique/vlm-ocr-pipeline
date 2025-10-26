@@ -190,7 +190,8 @@ def extract_text_spans_from_pdf(
         return text_spans
 
     except Exception as exc:
-        logger.error("Failed to extract text spans: %s", exc)
+        # Fallback for unexpected errors - text spans are optional (allowed per ERROR_HANDLING.md section 3.3)
+        logger.error("Failed to extract text spans: %s", exc, exc_info=True)
         return []
 
 

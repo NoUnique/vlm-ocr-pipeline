@@ -15,6 +15,7 @@ from typing import Any
 import yaml
 
 from ...constants import REQUEST_WINDOW_SECONDS
+from ...exceptions import InvalidConfigError
 from ...misc import tz_now
 
 logger = logging.getLogger(__name__)
@@ -74,7 +75,7 @@ class RateLimitManager:
     def set_tier_and_model(self, tier: str, model: str):
         """Set the API tier and model for rate limiting"""
         if tier not in ["free", "tier1", "tier2", "tier3"]:
-            raise ValueError(f"Invalid tier: {tier}. Must be one of: free, tier1, tier2, tier3")
+            raise InvalidConfigError(f"Invalid tier: {tier}. Must be one of: free, tier1, tier2, tier3")
 
         if model not in self.rate_limits.get("models", {}):
             logger.warning("Model %s not found in rate limits. Using default model %s.", model, self.default_model)
@@ -104,7 +105,7 @@ class RateLimitManager:
     def _load_rate_limits_config(self) -> dict[str, Any]:
         """Load rate limits configuration from YAML file"""
         if not self.config_file.exists():
-            logger.error("Rate limits config file not found: %s", self.config_file)
+            logger.warning("Rate limits config file not found: %s. Using fallback configuration.", self.config_file)
             return self._get_fallback_config()
 
         try:
@@ -114,8 +115,13 @@ class RateLimitManager:
             logger.info("Loaded rate limits config from %s", self.config_file)
             return config
 
-        except (OSError, yaml.YAMLError, UnicodeDecodeError) as e:
-            logger.error("Failed to load rate limits config: %s", e)
+        except yaml.YAMLError as e:
+            logger.error(
+                "Failed to parse rate limits config %s: %s. Using fallback configuration.", self.config_file, e
+            )
+            return self._get_fallback_config()
+        except (OSError, UnicodeDecodeError) as e:
+            logger.error("Failed to read rate limits config %s: %s. Using fallback configuration.", self.config_file, e)
             return self._get_fallback_config()
 
     def _get_fallback_config(self) -> dict[str, Any]:
@@ -234,8 +240,10 @@ class RateLimitManager:
             with open(self.state_file, "w") as f:
                 json.dump(data, f, indent=2)
 
-        except Exception as e:
-            logger.warning("Failed to save rate limit state: %s", e)
+        except (OSError, PermissionError) as e:
+            logger.warning("Failed to save rate limit state to %s: %s", self.state_file, e)
+        except (TypeError, ValueError) as e:
+            logger.warning("Failed to serialize rate limit state: %s", e)
 
     def _cleanup_old_records(self):
         """Remove old request records outside the time windows for current model"""

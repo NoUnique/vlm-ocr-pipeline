@@ -96,12 +96,11 @@ class GeminiClient:
             logger.info("Gemini API client initialized successfully")
             return client
         except (TypeError, ValueError) as e:
-            # Invalid configuration parameters
-            logger.error("Failed to initialize Gemini API client (invalid config): %s", e)
+            logger.error("Failed to initialize Gemini client with invalid configuration: %s", e)
             return None
         except Exception as e:
-            # Fallback for unexpected errors
-            logger.error("Failed to initialize Gemini API client (unexpected error): %s", e)
+            # Fallback for unexpected errors (allowed per ERROR_HANDLING.md section 3.3)
+            logger.error("Unexpected error initializing Gemini client: %s", e, exc_info=True)
             return None
 
     def is_available(self) -> bool:
@@ -239,8 +238,8 @@ class GeminiClient:
                 "error_message": str(e),
             }
         except Exception as e:
-            # Fallback for unexpected errors
-            logger.error("Unexpected error during Gemini text extraction: %s", e)
+            # Fallback for unexpected errors (allowed per ERROR_HANDLING.md section 3.3)
+            logger.error("Unexpected error during Gemini text extraction: %s", e, exc_info=True)
             return {
                 "type": region_info["type"],
                 "xywh": region_info["xywh"],
@@ -386,8 +385,8 @@ class GeminiClient:
                 "error_message": str(e),
             }
         except Exception as e:
-            # Fallback for unexpected errors
-            logger.error("Unexpected error during Gemini special block processing: %s", e)
+            # Fallback for unexpected errors (allowed per ERROR_HANDLING.md section 3.3)
+            logger.error("Unexpected error during Gemini special block processing: %s", e, exc_info=True)
             return {
                 "type": region_info["type"],
                 "xywh": region_info["xywh"],
@@ -492,8 +491,8 @@ class GeminiClient:
                 error_message=str(e),
             )
         except Exception as e:
-            # Fallback for unexpected errors
-            logger.error("Unexpected error during text correction: %s", e)
+            # Fallback for unexpected errors (allowed per ERROR_HANDLING.md section 3.3)
+            logger.error("Unexpected error during text correction: %s", e, exc_info=True)
             result = self._text_correction_result(
                 text,
                 0.0,

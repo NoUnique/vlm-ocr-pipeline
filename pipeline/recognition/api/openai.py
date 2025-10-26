@@ -121,12 +121,11 @@ class OpenAIClient:
             logger.info("OpenAI API client initialized successfully (base_url: %s)", self.base_url or "default")
             return client
         except (TypeError, ValueError) as e:
-            # Invalid configuration parameters
-            logger.error("Failed to initialize OpenAI API client (invalid config): %s", e)
+            logger.error("Failed to initialize OpenAI client with invalid configuration: %s", e)
             return None
         except Exception as e:
-            # Fallback for unexpected errors
-            logger.error("Failed to initialize OpenAI API client (unexpected error): %s", e)
+            # Fallback for unexpected errors (allowed per ERROR_HANDLING.md section 3.3)
+            logger.error("Unexpected error initializing OpenAI client: %s", e, exc_info=True)
             return None
 
     def is_available(self) -> bool:
@@ -254,8 +253,8 @@ class OpenAIClient:
                 "error_message": str(e),
             }
         except Exception as e:
-            # Fallback for unexpected errors
-            logger.error("Unexpected error during OpenAI text extraction: %s", e)
+            # Fallback for unexpected errors (allowed per ERROR_HANDLING.md section 3.3)
+            logger.error("Unexpected error during OpenAI text extraction: %s", e, exc_info=True)
             return {
                 "type": region_info["type"],
                 "xywh": region_info["xywh"],
@@ -377,8 +376,8 @@ class OpenAIClient:
                 "error_message": str(e),
             }
         except Exception as e:
-            # Fallback for unexpected errors
-            logger.error("Unexpected error during OpenAI special block processing: %s", e)
+            # Fallback for unexpected errors (allowed per ERROR_HANDLING.md section 3.3)
+            logger.error("Unexpected error during OpenAI special block processing: %s", e, exc_info=True)
             return {
                 "type": region_info["type"],
                 "xywh": region_info["xywh"],
@@ -478,8 +477,8 @@ class OpenAIClient:
                 error_message=str(e),
             )
         except Exception as e:
-            # Fallback for unexpected errors
-            logger.error("Unexpected error during text correction: %s", e)
+            # Fallback for unexpected errors (allowed per ERROR_HANDLING.md section 3.3)
+            logger.error("Unexpected error during text correction: %s", e, exc_info=True)
             return self._text_correction_result(
                 text,
                 0.0,
