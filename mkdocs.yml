@@ -1,0 +1,110 @@
+site_name: VLM OCR Pipeline Documentation
+site_description: A modular document processing system combining layout detection with Vision Language Models
+site_author: VLM OCR Pipeline Contributors
+site_url: https://github.com/NoUnique/vlm-ocr-pipeline
+
+repo_name: NoUnique/vlm-ocr-pipeline
+repo_url: https://github.com/NoUnique/vlm-ocr-pipeline
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    # Light mode
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+  - attr_list
+  - md_in_html
+
+plugins:
+  - search
+  - section-index
+  - literate-nav:
+      nav_file: SUMMARY.md
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          options:
+            show_source: true
+            show_root_heading: true
+            show_category_heading: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            docstring_style: google
+            docstring_section_style: table
+            members_order: source
+            show_signature_annotations: true
+            separate_signature: true
+            merge_init_into_class: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quickstart.md
+      - Basic Usage: getting-started/basic-usage.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - Pipeline Stages: architecture/pipeline-stages.md
+      - Detectors: architecture/detectors.md
+      - Sorters: architecture/sorters.md
+      - Recognizers: architecture/recognizers.md
+  - User Guides:
+      - BBox Formats: guides/bbox-formats.md
+      - Detector Block Types: guides/detector-block-types.md
+      - Error Handling: guides/error-handling.md
+      - Advanced Examples: guides/advanced-examples.md
+      - Contributing: guides/contributing.md
+  - API Reference:
+      - Pipeline: api/pipeline.md
+      - Types: api/types.md
+      - Detection: api/detection.md
+      - Ordering: api/ordering.md
+      - Recognition: api/recognition.md
+      - Conversion: api/conversion.md
+  - CLI Reference: reference/cli.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/NoUnique/vlm-ocr-pipeline
