@@ -91,7 +91,7 @@ class OpenAIClient:
                 # Use default constants
                 self._set_default_config()
                 logger.debug("API config file not found, using defaults")
-        except Exception as e:
+        except (yaml.YAMLError, OSError, KeyError, TypeError) as e:
             logger.warning("Failed to load API config: %s. Using defaults.", e)
             self._set_default_config()
 

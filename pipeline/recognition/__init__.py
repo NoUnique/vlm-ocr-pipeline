@@ -134,7 +134,7 @@ class TextRecognizer(Recognizer):
         # Extract block image
         try:
             block_image = self._crop_block(image, block)
-        except Exception as e:
+        except (IndexError, ValueError, TypeError) as e:
             logger.error("Failed to crop block: %s", e)
             # Note: error field not in Block dataclass, just log and continue
             return block

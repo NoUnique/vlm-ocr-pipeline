@@ -127,7 +127,7 @@ class PromptManager:
                     with prompt_file.open("r", encoding="utf-8") as f:
                         prompts[prompt_type] = yaml.safe_load(f)
                     logger.debug("Loaded prompts from %s", prompt_file)
-                except Exception as e:
+                except (yaml.YAMLError, OSError, UnicodeDecodeError) as e:
                     logger.warning("Failed to load prompts from %s: %s", prompt_file, e)
             else:
                 logger.warning("Prompt file not found: %s", prompt_file)
@@ -162,7 +162,7 @@ class PromptManager:
                     return prompt_template.format(**kwargs)
                 return str(prompt_template)
 
-        except Exception as e:
+        except (KeyError, ValueError, TypeError, AttributeError) as e:
             logger.warning("Error getting prompt %s.%s: %s", category, prompt_type, e)
 
         # Fallback to hardcoded prompts
@@ -205,7 +205,7 @@ class PromptManager:
                 if prompt_type in fallback_prompts[category]:
                     prompt = fallback_prompts[category][prompt_type]
                     return prompt.format(**kwargs) if kwargs else prompt
-        except Exception as e:
+        except (KeyError, ValueError) as e:
             logger.error("Error in fallback prompt: %s", e)
 
         return f"Process this content according to {category} guidelines."

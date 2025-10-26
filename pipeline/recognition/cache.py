@@ -72,7 +72,7 @@ class RecognitionCache:
                     cached_data = json.load(f)
                 logger.debug("Cache hit for %s: %s", cache_type, image_hash)
                 return cached_data
-            except Exception as e:
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
                 logger.warning("Failed to load cache file %s: %s", cache_file, e)
 
         return None
@@ -97,5 +97,5 @@ class RecognitionCache:
             with cache_file.open("w", encoding="utf-8") as f:
                 json.dump(cache_data, f, ensure_ascii=False, indent=2)
             logger.debug("Cached result for %s: %s", cache_type, image_hash)
-        except Exception as e:
+        except (OSError, TypeError) as e:
             logger.warning("Failed to save cache file %s: %s", cache_file, e)
