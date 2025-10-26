@@ -120,6 +120,59 @@ After push to `main`, GitHub Actions will automatically:
 - Build documentation
 - Deploy to GitHub Pages (if docs/ or mkdocs.yml changed)
 
+### CI/CD Pipeline
+
+The project uses GitHub Actions for automated testing and deployment.
+
+**Workflows** (`.github/workflows/`):
+- `ci.yml`: Main CI pipeline (lint, type check, test, build docs)
+- `pr-checks.yml`: PR analysis and automated labeling
+- `docs.yml`: Documentation deployment to GitHub Pages
+
+**CI Checks on Every Push/PR**:
+1. ✅ **Lint and Format** - ruff format & check
+2. ✅ **Type Check** - pyright (Python 3.11)
+3. ✅ **Tests** - pytest (Python 3.11 & 3.12)
+4. ✅ **Documentation** - mkdocs build --strict
+
+**PR Automation**:
+- Automatic size labeling (XS/S/M/L/XL based on lines changed)
+- Change analysis comment (Python/test/doc files count)
+- Status checks required before merge
+
+**View CI Status**:
+```bash
+# Check workflow runs
+https://github.com/<user>/<repo>/actions
+
+# Add status badge to README
+[![CI](https://github.com/<user>/<repo>/actions/workflows/ci.yml/badge.svg)](...)
+```
+
+**Local CI Simulation**:
+```bash
+# Run all checks locally (same as CI)
+./scripts/pre-commit-check.sh
+
+# Or run individually
+uv run ruff format --check .  # Format check
+uv run ruff check .           # Lint
+npx pyright                   # Type check
+uv run pytest                 # Tests
+uv run mkdocs build --strict  # Docs
+```
+
+**Branch Protection** (Recommended):
+- Require PR reviews
+- Require status checks to pass:
+  - Lint and Format Check
+  - Type Check
+  - Test (3.11 & 3.12)
+  - Build Documentation
+- Settings → Branches → Add rule for `main`
+
+See [docs/CI_CD.md](docs/CI_CD.md) for detailed documentation.
+
 ## Core Architecture
 
 ### 5-Stage Pipeline Design
