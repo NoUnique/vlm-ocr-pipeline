@@ -74,6 +74,67 @@ def fix_doclayout_yolo_compatibility():
         return False
 
 
+def fix_pytorch26_compatibility():
+    """Fix PyTorch 2.6 weights_only compatibility issue.
+
+    PyTorch 2.6 changed the default value of weights_only from False to True,
+    which breaks loading of models with custom classes like YOLOv10DetectionModel.
+    This patches doclayout_yolo to use weights_only=False.
+    """
+    try:
+        # Find doclayout_yolo tasks.py file
+        site_packages_dirs = site.getsitepackages()
+        if hasattr(site, "getusersitepackages"):
+            site_packages_dirs.append(site.getusersitepackages())
+
+        # Add virtual environment site-packages if exists
+        venv_path = Path(".venv")
+        if venv_path.exists():
+            python_version = f"python{sys.version_info.major}.{sys.version_info.minor}"
+            venv_site_packages = venv_path / "lib" / python_version / "site-packages"
+            if venv_site_packages.exists():
+                site_packages_dirs.insert(0, str(venv_site_packages))
+
+        tasks_file = None
+        for site_dir in site_packages_dirs:
+            candidate = Path(site_dir) / "doclayout_yolo" / "nn" / "tasks.py"
+            if candidate.exists():
+                tasks_file = candidate
+                break
+
+        if not tasks_file:
+            logger.warning("doclayout_yolo/nn/tasks.py not found - skipping PyTorch 2.6 patch")
+            return True  # Not an error if not installed
+
+        logger.info("Found doclayout_yolo tasks.py: %s", tasks_file)
+
+        # Read content
+        content = tasks_file.read_text()
+
+        # Check if already patched
+        if "weights_only=False" in content:
+            logger.info("PyTorch 2.6 compatibility already patched")
+            return True
+
+        # Patch torch.load() calls to use weights_only=False
+        # Line 753: ckpt = torch.load(file, map_location="cpu")
+        original_line = 'ckpt = torch.load(file, map_location="cpu")'
+        patched_line = 'ckpt = torch.load(file, map_location="cpu", weights_only=False)'
+
+        if original_line in content:
+            new_content = content.replace(original_line, patched_line)
+            tasks_file.write_text(new_content)
+            logger.info("PyTorch 2.6 compatibility patch applied successfully")
+            return True
+        else:
+            logger.warning("Could not find expected torch.load() line to patch")
+            return False
+
+    except Exception as e:
+        logger.error("Failed to apply PyTorch 2.6 compatibility patch: %s", e)
+        return False
+
+
 def verify_doclayout_yolo():
     """Verify that DocLayout-YOLO can be imported successfully"""
     try:
@@ -108,14 +169,21 @@ def setup_environment():
 
     # Fix DocLayout-YOLO compatibility
     logger.info("Fixing DocLayout-YOLO compatibility...")
-    if fix_doclayout_yolo_compatibility():
-        if verify_doclayout_yolo():
-            logger.info("✅ DocLayout-YOLO setup completed successfully")
-        else:
-            logger.error("❌ DocLayout-YOLO verification failed")
-            return False
-    else:
+    if not fix_doclayout_yolo_compatibility():
         logger.error("❌ DocLayout-YOLO compatibility fix failed")
+        return False
+
+    # Fix PyTorch 2.6 compatibility
+    logger.info("Fixing PyTorch 2.6 compatibility...")
+    if not fix_pytorch26_compatibility():
+        logger.error("❌ PyTorch 2.6 compatibility fix failed")
+        return False
+
+    # Verify DocLayout-YOLO
+    if verify_doclayout_yolo():
+        logger.info("✅ DocLayout-YOLO setup completed successfully")
+    else:
+        logger.error("❌ DocLayout-YOLO verification failed")
         return False
 
     logger.info("✅ Environment setup completed successfully")

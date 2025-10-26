@@ -323,6 +323,34 @@ class Block:
   - `external/olmOCR/` - olmOCR framework (for VLM sorter)
 - **Type checking**: Use `npx pyright`, not global pyright
 
+### PyTorch 2.6 Compatibility
+
+**Issue**: PyTorch 2.6 changed the default `weights_only` parameter in `torch.load()` from `False` to `True`, breaking models with custom classes like `YOLOv10DetectionModel`.
+
+**Solution**: The `setup.py` script automatically patches `doclayout_yolo/nn/tasks.py` to use `weights_only=False`:
+```bash
+python setup.py  # Applies both DocLayout-YOLO and PyTorch 2.6 patches
+```
+
+**Additional Requirements**:
+- `dill==0.4.0` - Required for loading models serialized with dill (added to `requirements.txt`)
+
+**Manual Patch** (if needed):
+```bash
+# Apply patch manually
+sed -i 's/torch\.load(file, map_location="cpu")/torch.load(file, map_location="cpu", weights_only=False)/g' \
+  .venv/lib/python3.11/site-packages/doclayout_yolo/nn/tasks.py
+
+# Install dill
+uv pip install dill
+```
+
+**How It Works**:
+- `setup.py` includes `fix_pytorch26_compatibility()` function
+- Automatically called during environment setup
+- Patches `torch.load()` call at line 753 of `tasks.py`
+- Enables loading of custom model classes safely
+
 ### Rate Limiting & Caching
 - **Gemini tiers**: `free`, `tier1`, `tier2`, `tier3` - set via `--gemini-tier`
 - **Rate limiter**: `pipeline/recognition/api/ratelimit.py` - auto-throttles requests
