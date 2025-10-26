@@ -287,7 +287,7 @@ class Pipeline:
         self.recognition_stage = RecognitionStage(self.recognizer)
         self.block_correction_stage = BlockCorrectionStage(enable=False)  # Placeholder for future
         self.rendering_stage = RenderingStage(renderer=self.renderer)
-        self.page_correction_stage = PageCorrectionStage(recognizer=self.recognizer, backend=self.backend, enable=True)
+        self.page_correction_stage = PageCorrectionStage(recognizer=self.recognizer, backend=self.backend, enable=True)  # type: ignore[arg-type]
         self.output_stage = OutputStage(temp_dir=self.temp_dir)
 
     def _setup_directories(self) -> None:
