@@ -419,12 +419,15 @@ def document_to_markdown(
 # ==================== Wrapper: Dict → Object → Markdown ====================
 
 
-def region_dict_to_markdown(data: dict[str, Any], **kwargs: Any) -> str:
+def region_dict_to_markdown(
+    data: dict[str, Any],
+    header_identifier: RegionTypeHeaderIdentifier | None = None,
+) -> str:
     """Convert block dict to Markdown (convenience wrapper).
 
     Args:
-        data: Block dictionary
-        **kwargs: Additional arguments for block_to_markdown
+        data: Block dictionary (from Block.to_dict())
+        header_identifier: Header identifier (uses default if None)
 
     Returns:
         Markdown-formatted string
@@ -435,15 +438,24 @@ def region_dict_to_markdown(data: dict[str, Any], **kwargs: Any) -> str:
         '# Hello'
     """
     block = Block.from_dict(data)
-    return block_to_markdown(block, **kwargs)
+    return block_to_markdown(block, header_identifier=header_identifier)
 
 
-def regions_dict_to_markdown(data: list[dict[str, Any]], **kwargs: Any) -> str:
+def regions_dict_to_markdown(
+    data: list[dict[str, Any]],
+    include_bbox: bool = False,
+    include_confidence: bool = False,
+    header_identifier: RegionTypeHeaderIdentifier | None = None,
+    preserve_reading_order: bool = True,
+) -> str:
     """Convert list of region dicts to Markdown (convenience wrapper).
 
     Args:
-        data: List of region dictionaries
-        **kwargs: Additional arguments for regions_to_markdown
+        data: List of block dictionaries (from Block.to_dict())
+        include_bbox: Include bounding box information
+        include_confidence: Include confidence scores
+        header_identifier: Header identifier (uses default if None)
+        preserve_reading_order: Preserve block reading order
 
     Returns:
         Markdown-formatted string
@@ -454,15 +466,28 @@ def regions_dict_to_markdown(data: list[dict[str, Any]], **kwargs: Any) -> str:
         '# Hello'
     """
     blocks = [Block.from_dict(b) for b in data]
-    return blocks_to_markdown(blocks, **kwargs)
+    return blocks_to_markdown(
+        blocks,
+        include_bbox=include_bbox,
+        include_confidence=include_confidence,
+        header_identifier=header_identifier,
+        preserve_reading_order=preserve_reading_order,
+    )
 
 
-def page_dict_to_markdown(data: dict[str, Any], **kwargs: Any) -> str:
+def page_dict_to_markdown(
+    data: dict[str, Any],
+    include_page_header: bool = True,
+    include_bbox: bool = False,
+    include_confidence: bool = False,
+) -> str:
     """Convert page dict to Markdown (convenience wrapper).
 
     Args:
-        data: Page dictionary
-        **kwargs: Additional arguments for page_to_markdown
+        data: Page dictionary (from Page.to_dict())
+        include_page_header: Include "## Page N" header
+        include_bbox: Include bbox metadata
+        include_confidence: Include confidence metadata
 
     Returns:
         Markdown-formatted string
@@ -476,15 +501,27 @@ def page_dict_to_markdown(data: dict[str, Any], **kwargs: Any) -> str:
         '## Page 1\\n\\n# Hello'
     """
     page = Page.from_dict(data)
-    return page_to_markdown(page, **kwargs)
+    return page_to_markdown(
+        page,
+        include_page_header=include_page_header,
+        include_bbox=include_bbox,
+        include_confidence=include_confidence,
+    )
 
 
-def document_dict_to_markdown(data: dict[str, Any], **kwargs: Any) -> str:
+def document_dict_to_markdown(
+    data: dict[str, Any],
+    include_metadata: bool = True,
+    include_bbox: bool = False,
+    include_confidence: bool = False,
+) -> str:
     """Convert document dict to Markdown (convenience wrapper).
 
     Args:
-        data: Document dictionary
-        **kwargs: Additional arguments for document_to_markdown
+        data: Document dictionary (from Document.to_dict())
+        include_metadata: Include document metadata section
+        include_bbox: Include bbox metadata
+        include_confidence: Include confidence metadata
 
     Returns:
         Markdown-formatted string
@@ -500,7 +537,12 @@ def document_dict_to_markdown(data: dict[str, Any], **kwargs: Any) -> str:
         >>> md = document_dict_to_markdown(data)
     """
     doc = Document.from_dict(data)
-    return document_to_markdown(doc, **kwargs)
+    return document_to_markdown(
+        doc,
+        include_metadata=include_metadata,
+        include_bbox=include_bbox,
+        include_confidence=include_confidence,
+    )
 
 
 # ==================== File I/O ====================
