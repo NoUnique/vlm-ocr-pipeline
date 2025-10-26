@@ -55,3 +55,5 @@ known-first-party = ["pipeline", "models"]
 "pipeline/stages/input_stage.py" = ["PLC0415"]  # Lazy imports for conversion modules
 # Test files: allow magic numbers (concrete test values) and lazy imports
 "tests/test_*.py" = ["PLR2004", "PLC0415"]
+# Scripts: allow lazy imports (avoid circular dependencies)
+"scripts/*.py" = ["PLC0415"]

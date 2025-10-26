@@ -37,6 +37,95 @@ def get_pdf_info(pdf_path: Path) -> dict[str, Any]:
     return pdfinfo_from_path(str(pdf_path))
 
 
+def render_pdf_page_pymupdf(
+    pdf_path: Path,
+    page_num: int,
+    temp_dir: Path,
+    dpi: int = 200,
+) -> tuple[np.ndarray, Path]:
+    """Render a PDF page to an image using PyMuPDF (faster than pdf2image).
+
+    This function uses PyMuPDF's get_pixmap() which is typically 2-3x faster
+    than pdf2image/poppler. Falls back to pdf2image if PyMuPDF is not available.
+
+    Args:
+        pdf_path: Path to the PDF file
+        page_num: Page number to render (1-indexed)
+        temp_dir: Directory for temporary files
+        dpi: DPI for rendering (default: 200)
+
+    Returns:
+        Tuple of (image array, temporary file path)
+
+    Raises:
+        ValueError: If page_num is invalid or rendering fails
+
+    Example:
+        >>> temp_dir = Path("/tmp/pdf_temp")
+        >>> image, temp_path = render_pdf_page_pymupdf(
+        ...     Path("doc.pdf"), page_num=1, temp_dir=temp_dir, dpi=200
+        ... )
+        >>> image.shape
+        (1650, 1275, 3)
+    """
+    temp_dir.mkdir(parents=True, exist_ok=True)
+
+    # Try PyMuPDF first (faster)
+    if fitz is not None:
+        try:
+            with open_pdf_document(pdf_path) as doc:
+                if page_num < 1 or page_num > doc.page_count:
+                    raise ValueError(f"Invalid page number: {page_num} (total: {doc.page_count})")
+
+                page = doc.load_page(page_num - 1)  # 0-indexed
+
+                # Calculate zoom factor from DPI (PyMuPDF default is 72 DPI)
+                zoom = dpi / 72.0
+                mat = fitz.Matrix(zoom, zoom)  # type: ignore[attr-defined]
+
+                # Render to pixmap
+                pix = page.get_pixmap(matrix=mat)  # type: ignore[attr-defined]
+
+                # Convert to numpy array (RGB)
+                img = np.frombuffer(pix.samples, dtype=np.uint8)  # type: ignore[attr-defined]
+                img = img.reshape(pix.height, pix.width, pix.n)  # type: ignore[attr-defined]
+
+                # Convert RGBA to RGB if necessary (4 channels = RGBA)
+                rgba_channels = 4
+                if pix.n == rgba_channels:  # type: ignore[attr-defined]
+                    img = img[:, :, :3]  # Drop alpha channel
+
+                # Save to temp file
+                temp_image_path = temp_dir / f"{pdf_path.stem}_page_{page_num}.jpg"
+                cv2.imwrite(str(temp_image_path), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+                logger.info("Rendered PDF page with PyMuPDF to: %s", temp_image_path)
+
+                return img, temp_image_path
+
+        except Exception as e:
+            logger.warning("PyMuPDF rendering failed: %s. Falling back to pdf2image.", e)
+
+    # Fallback to pdf2image
+    logger.debug("Using pdf2image for rendering (PyMuPDF not available or failed)")
+    images = convert_from_path(
+        pdf_path,
+        first_page=page_num,
+        last_page=page_num,
+        dpi=dpi,
+    )
+
+    if not images:
+        raise ValueError(f"Failed to render page {page_num} from {pdf_path}")
+
+    page_image = np.array(images[0])
+
+    temp_image_path = temp_dir / f"{pdf_path.stem}_page_{page_num}.jpg"
+    cv2.imwrite(str(temp_image_path), cv2.cvtColor(page_image, cv2.COLOR_RGB2BGR))
+    logger.info("Rendered PDF page with pdf2image to: %s", temp_image_path)
+
+    return page_image, temp_image_path
+
+
 def render_pdf_page(
     pdf_path: Path,
     page_num: int,
@@ -44,6 +133,10 @@ def render_pdf_page(
     dpi: int = 200,
 ) -> tuple[np.ndarray, Path]:
     """Render a PDF page to an image.
+
+    This is a wrapper that automatically uses the fastest available method:
+    - PyMuPDF (fitz) if available (2-3x faster)
+    - pdf2image as fallback
 
     Args:
         pdf_path: Path to the PDF file
@@ -65,25 +158,7 @@ def render_pdf_page(
         >>> image.shape
         (1650, 1275, 3)
     """
-    temp_dir.mkdir(parents=True, exist_ok=True)
-
-    images = convert_from_path(
-        pdf_path,
-        first_page=page_num,
-        last_page=page_num,
-        dpi=dpi,
-    )
-
-    if not images:
-        raise ValueError(f"Failed to render page {page_num} from {pdf_path}")
-
-    page_image = np.array(images[0])
-
-    temp_image_path = temp_dir / f"{pdf_path.stem}_page_{page_num}.jpg"
-    cv2.imwrite(str(temp_image_path), cv2.cvtColor(page_image, cv2.COLOR_RGB2BGR))
-    logger.info("Rendered PDF page to: %s", temp_image_path)
-
-    return page_image, temp_image_path
+    return render_pdf_page_pymupdf(pdf_path, page_num, temp_dir, dpi)
 
 
 def open_pymupdf_document(pdf_path: Path) -> Any | None:
