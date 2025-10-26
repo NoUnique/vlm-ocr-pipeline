@@ -6,7 +6,10 @@ import json
 import logging
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import numpy as np
 
 from pipeline.misc import tz_now
 from pipeline.types import Block, ColumnLayout, Document, Page
@@ -29,7 +32,7 @@ class OutputStage:
         self,
         pdf_path: Path,
         page_num: int,
-        page_image: Any,
+        page_image: np.ndarray,
         detected_blocks: Sequence[Block],
         processed_blocks: Sequence[Block],
         text: str,

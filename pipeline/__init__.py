@@ -7,9 +7,12 @@ import json
 import logging
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
+
+if TYPE_CHECKING:
+    import numpy as np
 
 # Load environment variables if not already loaded
 try:
@@ -25,7 +28,7 @@ from .layout.ordering import create_sorter as create_sorter_impl, validate_combi
 from .misc import tz_now
 from .recognition import TextRecognizer
 from .recognition.api.ratelimit import rate_limiter
-from .types import Block, Detector, Document, Page, Recognizer, Sorter
+from .types import Block, Detector, Document, Page, PyMuPDFPage, Recognizer, Sorter
 
 logger = logging.getLogger(__name__)
 
@@ -482,7 +485,7 @@ class Pipeline:
         pdf_path: Path,
         page_num: int,
         page_output_dir: Path,
-        pymupdf_page: Any | None,
+        pymupdf_page: PyMuPDFPage | None,
     ) -> tuple[Page | None, bool]:
         """Process a single PDF page through 8-stage pipeline.
 
@@ -640,7 +643,7 @@ class Pipeline:
         self,
         pdf_path: Path,
         page_num: int,
-        page_image: Any,
+        page_image: np.ndarray,
         detected_blocks: Sequence[Block],
         processed_blocks: Sequence[Block],
         text: str,

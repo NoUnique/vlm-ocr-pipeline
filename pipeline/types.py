@@ -64,6 +64,32 @@ class ColumnLayout(TypedDict):
     columns: list[ColumnInfo]  # List of columns on the page
 
 
+# ==================== External Library Protocols ====================
+
+
+class PyMuPDFRect(Protocol):
+    """Protocol for PyMuPDF Rect object.
+
+    This defines the minimal interface we need from fitz.Rect
+    without requiring PyMuPDF as a dependency for type checking.
+    """
+
+    x0: float  # Left boundary
+    y0: float  # Top boundary
+    x1: float  # Right boundary
+    y1: float  # Bottom boundary
+
+
+class PyMuPDFPage(Protocol):
+    """Protocol for PyMuPDF Page object.
+
+    This defines the minimal interface we need from fitz.Page
+    without requiring PyMuPDF as a dependency for type checking.
+    """
+
+    rect: PyMuPDFRect  # Page rectangle
+
+
 # ==================== Standardized Block Types ====================
 # Based on MinerU 2.5 VLM (most comprehensive type system)
 
@@ -408,7 +434,7 @@ class BBox:
             raise ValueError(f"Unknown bbox coord_format: {coord_format}. Use 'xywh' or 'xyxy'.")
 
     @classmethod
-    def from_pymupdf_rect(cls, rect: Any) -> BBox:
+    def from_pymupdf_rect(cls, rect: PyMuPDFRect) -> BBox:
         """Create from PyMuPDF Rect or IRect object.
 
         Format: Rect(x0, y0, x1, y1)

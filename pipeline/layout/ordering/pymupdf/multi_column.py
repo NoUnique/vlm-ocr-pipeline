@@ -30,6 +30,7 @@ __all__ = ["column_boxes", "MultiColumnSorter"]
 _MIN_NBLOCK_LENGTH = 2
 _BOTTOM_TOLERANCE = 10
 
+# Local type aliases for PyMuPDF objects (file-specific, not exported)
 PyMuPDFModule = Any
 PyMuPDFPage = Any
 PyMuPDFRect = Any
