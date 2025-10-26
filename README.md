@@ -132,7 +132,7 @@ graph TD
 
     A -->|PDF/Image| A1[Load document<br/>Extract auxiliary info]
     B -->|numpy array| B1[Detect layout blocks<br/>bbox, type, confidence]
-    C -->|list[Block]| C1[Sort by reading order<br/>Add order & column_index]
+    C -->|blocks list| C1[Sort by reading order<br/>Add order & column_index]
     D -->|sorted blocks| D1[Extract text from blocks<br/>VLM or local model]
     E -->|blocks with text| E1[Block-level correction<br/>Optional, disabled by default]
     F -->|corrected blocks| F1[Convert to Markdown<br/>or plaintext]

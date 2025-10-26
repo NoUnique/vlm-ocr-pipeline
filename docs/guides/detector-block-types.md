@@ -8,9 +8,9 @@ All detectors in this pipeline use a **unified type system** that supports 25+ b
 
 ### Implementation
 
-- **Type definitions:** [`pipeline/types.py`](pipeline/types.py) - `Block` dataclass with `type: str` field
+- **Type definitions:** `pipeline/types.py` - `Block` dataclass with `type: str` field
 - **Detector integration:** Applied in all detectors during block creation
-- **Output conversion:** [`pipeline/conversion/output/markdown/__init__.py`](pipeline/conversion/output/markdown/__init__.py)
+- **Output conversion:** `pipeline/conversion/output/markdown/__init__.py`
 
 ### Type Mapping Process
 
@@ -125,7 +125,7 @@ Based on MinerU 2.5 VLM (`external/MinerU/mineru/utils/enum_class.py`):
 
 ### DocLayout-YOLO (Project)
 
-**Implementation:** [`pipeline/layout/detection/doclayout_yolo.py`](pipeline/layout/detection/doclayout_yolo.py)
+**Implementation:** `pipeline/layout/detection/doclayout_yolo.py`
 
 **Type System:** Model-dependent (loaded from YOLO model weights)
 
@@ -138,7 +138,7 @@ Based on MinerU 2.5 VLM (`external/MinerU/mineru/utils/enum_class.py`):
 
 ### PaddleOCR PP-DocLayoutV2
 
-**Implementation:** [`pipeline/layout/detection/paddleocr/doclayout_v2.py`](pipeline/layout/detection/paddleocr/doclayout_v2.py)
+**Implementation:** `pipeline/layout/detection/paddleocr/doclayout_v2.py`
 
 **Type System:** Fixed 25-type system with integrated reading order
 
@@ -199,7 +199,7 @@ Based on MinerU 2.5 VLM (`external/MinerU/mineru/utils/enum_class.py`):
 
 ### MinerU DocLayout-YOLO
 
-**Implementation:** [`pipeline/layout/detection/mineru/doclayout_yolo.py`](pipeline/layout/detection/mineru/doclayout_yolo.py)
+**Implementation:** `pipeline/layout/detection/mineru/doclayout_yolo.py`
 
 **Type System:** Fixed 10-type system
 
@@ -221,7 +221,7 @@ Based on MinerU 2.5 VLM (`external/MinerU/mineru/utils/enum_class.py`):
 
 ### MinerU VLM 2.5
 
-**Implementation:** [`pipeline/layout/detection/mineru/vlm.py`](pipeline/layout/detection/mineru/vlm.py)
+**Implementation:** `pipeline/layout/detection/mineru/vlm.py`
 
 **Type System:** 25 standardized types (canonical reference)
 
@@ -234,7 +234,7 @@ Based on MinerU 2.5 VLM (`external/MinerU/mineru/utils/enum_class.py`):
 
 ### olmOCR VLM
 
-**Implementation:** Used via sorters in [`pipeline/layout/ordering/olmocr/`](pipeline/layout/ordering/olmocr/)
+**Implementation:** Used via sorters in `pipeline/layout/ordering/olmocr/`
 
 **Type System:** Single type (`text`)
 
@@ -261,7 +261,7 @@ Content with **formatting**, $$equations$$, and tables.
 
 ## Markdown Conversion Rules
 
-Defined in [`pipeline/conversion/output/markdown/__init__.py`](pipeline/conversion/output/markdown/__init__.py):
+Defined in `pipeline/conversion/output/markdown/__init__.py`:
 
 | Type | Markdown Format | Example |
 |------|----------------|---------|
@@ -291,7 +291,7 @@ Defined in [`pipeline/conversion/output/markdown/__init__.py`](pipeline/conversi
 
 To integrate a new detector with the type system:
 
-1. **Implement the Detector protocol** ([`pipeline/types.py`](pipeline/types.py)):
+1. **Implement the Detector protocol** (see `pipeline/types.py`):
    ```python
    class MyDetector:
        def detect(self, image: np.ndarray) -> list[Block]:
@@ -337,7 +337,7 @@ To integrate a new detector with the type system:
        return blocks
    ```
 
-4. **Register in factory** ([`pipeline/layout/detection/__init__.py`](pipeline/layout/detection/__init__.py)):
+4. **Register in factory** (see `pipeline/layout/detection/__init__.py`):
    ```python
    def create_detector(name: str, **kwargs) -> Detector:
        if name == "my-detector":
