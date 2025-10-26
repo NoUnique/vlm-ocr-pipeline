@@ -61,7 +61,9 @@ class OpenAIClient:
         # Load API config for max_tokens and temperature
         self._load_api_config()
 
-        self.client: Any = self._setup_openai_client()  # Use Any to avoid strict type checking
+        # Use Any to avoid OpenAI library's overly strict type checking for messages parameter
+        # The actual type is OpenAI | None, but dict messages aren't compatible with ChatCompletionMessageParam
+        self.client: Any = self._setup_openai_client()
 
     def _load_api_config(self) -> None:
         """Load API configuration from settings/api_config.yaml"""

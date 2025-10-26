@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pipeline.recognition import TextRecognizer
 
 logger = logging.getLogger(__name__)
 
@@ -11,11 +14,11 @@ logger = logging.getLogger(__name__)
 class PageCorrectionStage:
     """Stage 7: PageCorrection - Page-level text correction."""
 
-    def __init__(self, recognizer: Any, backend: str, enable: bool = True):
+    def __init__(self, recognizer: TextRecognizer, backend: str, enable: bool = True):
         """Initialize PageCorrectionStage.
 
         Args:
-            recognizer: Text recognizer instance (TextRecognizer)
+            recognizer: Text recognizer instance
             backend: Backend name (e.g., "openai", "gemini", "paddleocr-vl")
             enable: Whether to enable page-level correction
         """
