@@ -58,6 +58,68 @@ python main.py --input doc.pdf --pages 1,5,10
 python main.py --rate-limit-status --backend gemini --gemini-tier free
 ```
 
+### Documentation
+
+```bash
+# Build documentation locally
+uv run mkdocs build
+
+# Serve documentation locally (with live reload)
+uv run mkdocs serve  # Visit http://127.0.0.1:8000
+
+# Deploy to GitHub Pages (manual)
+uv run mkdocs gh-deploy --force
+```
+
+**GitHub Pages Auto-Deployment**:
+- Documentation is automatically built and deployed to GitHub Pages when changes to `docs/` or `mkdocs.yml` are pushed to `main`
+- Workflow: `.github/workflows/docs.yml`
+- Site URL: `https://nounique.github.io/vlm-ocr-pipeline/` (once enabled)
+
+**Enable GitHub Pages**:
+1. Go to repository Settings → Pages
+2. Source: Deploy from a branch
+3. Branch: `gh-pages` / `root`
+4. Save
+
+### Pre-Commit Checklist
+
+Before committing, run the pre-commit check script:
+
+```bash
+./scripts/pre-commit-check.sh
+```
+
+This script automatically runs:
+1. ✅ **Code formatting** (`ruff format --check`)
+2. ✅ **Linting** (`ruff check`)
+3. ✅ **Type checking** (`npx pyright`)
+4. ✅ **Documentation build** (`mkdocs build --strict`)
+
+**Manual Pre-Commit Workflow**:
+```bash
+# 1. Format code
+uv run ruff format .
+
+# 2. Fix linting issues
+uv run ruff check . --fix
+
+# 3. Type check
+npx pyright
+
+# 4. Test documentation build
+uv run mkdocs build --strict
+
+# 5. Commit
+git add .
+git commit -m "your message"
+git push
+```
+
+After push to `main`, GitHub Actions will automatically:
+- Build documentation
+- Deploy to GitHub Pages (if docs/ or mkdocs.yml changed)
+
 ## Core Architecture
 
 ### 5-Stage Pipeline Design

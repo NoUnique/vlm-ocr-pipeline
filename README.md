@@ -4,6 +4,24 @@ A unified OCR processing pipeline that leverages Vision Language Models (VLMs) f
 
 > **Based on**: This project is based on and modified from [Versatile-OCR-Program](https://github.com/ses4255/Versatile-OCR-Program)
 
+## 📚 Documentation
+
+**[📖 Full Documentation](https://nounique.github.io/vlm-ocr-pipeline/)** (once GitHub Pages is enabled)
+
+Quick links:
+- [Installation Guide](https://nounique.github.io/vlm-ocr-pipeline/getting-started/installation/)
+- [Quick Start](https://nounique.github.io/vlm-ocr-pipeline/getting-started/quickstart/)
+- [Architecture Overview](https://nounique.github.io/vlm-ocr-pipeline/architecture/overview/)
+- [API Reference](https://nounique.github.io/vlm-ocr-pipeline/api/pipeline/)
+- [Contributing Guide](https://nounique.github.io/vlm-ocr-pipeline/guides/contributing/)
+
+Local documentation:
+```bash
+# Serve documentation locally
+uv run mkdocs serve
+# Visit http://127.0.0.1:8000
+```
+
 ## Features
 
 - **Document Layout Detection**: Automatically detects text, tables, figures, and other elements using DocLayout-YOLO, PaddleOCR PP-DocLayoutV2, or MinerU
