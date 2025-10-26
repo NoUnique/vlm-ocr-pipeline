@@ -24,8 +24,10 @@ from PIL import Image
 from pipeline.constants import (
     DEFAULT_MAX_TOKENS,
     DEFAULT_TEMPERATURE,
+    MAX_IMAGE_DIMENSION,
     SPECIAL_BLOCK_MAX_TOKENS,
     TEXT_CORRECTION_MAX_TOKENS,
+    TEXT_CORRECTION_TEMPERATURE,
 )
 
 logger = logging.getLogger(__name__)
@@ -82,7 +84,7 @@ class OpenAIClient:
                     self.special_blocks_temperature = special_blocks.get("temperature", DEFAULT_TEMPERATURE)
 
                     self.text_correction_max_tokens = text_correction.get("max_tokens", TEXT_CORRECTION_MAX_TOKENS)
-                    self.text_correction_temperature = text_correction.get("temperature", 0.0)
+                    self.text_correction_temperature = text_correction.get("temperature", TEXT_CORRECTION_TEMPERATURE)
 
                     logger.debug("Loaded API config from %s", config_path)
             else:
@@ -100,7 +102,7 @@ class OpenAIClient:
         self.special_blocks_max_tokens = SPECIAL_BLOCK_MAX_TOKENS
         self.special_blocks_temperature = DEFAULT_TEMPERATURE
         self.text_correction_max_tokens = TEXT_CORRECTION_MAX_TOKENS
-        self.text_correction_temperature = 0.0
+        self.text_correction_temperature = TEXT_CORRECTION_TEMPERATURE
 
     def _setup_openai_client(self) -> OpenAI | None:
         """Setup OpenAI API client"""
@@ -133,7 +135,7 @@ class OpenAIClient:
         """Encode image to base64 for OpenAI API"""
         # Resize image if too large
         h, w = image.shape[:2]
-        max_dim = 1024
+        max_dim = MAX_IMAGE_DIMENSION
 
         if max(h, w) > max_dim:
             scale = max_dim / max(h, w)

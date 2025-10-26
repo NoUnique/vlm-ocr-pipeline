@@ -37,3 +37,11 @@ DEFAULT_OVERLAP_THRESHOLD = 0.7
 # Global Settings
 MIN_BOX_SIZE = 10
 """Minimum bounding box dimension (width or height) in pixels."""
+
+# Image Processing
+MAX_IMAGE_DIMENSION = 1024
+"""Maximum dimension (width or height) for images sent to VLM APIs."""
+
+# Text Correction
+TEXT_CORRECTION_TEMPERATURE = 0.0
+"""Temperature for text correction API calls (0.0 for fully deterministic output)."""
