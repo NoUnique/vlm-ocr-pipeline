@@ -10,6 +10,8 @@ import cv2
 import numpy as np
 from pdf2image.pdf2image import convert_from_path, pdfinfo_from_path
 
+from ...resources import open_pdf_document
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -144,51 +146,56 @@ def extract_text_spans_from_pdf(
         return []
 
     try:
-        doc = fitz.open(str(pdf_path))
-        if page_num < 1 or page_num > doc.page_count:
-            logger.error("Invalid page number: %d (total pages: %d)", page_num, doc.page_count)
-            doc.close()
-            return []
+        with open_pdf_document(pdf_path) as doc:
+            if page_num < 1 or page_num > doc.page_count:
+                logger.error("Invalid page number: %d (total pages: %d)", page_num, doc.page_count)
+                return []
 
-        page = doc.load_page(page_num - 1)  # 0-indexed in PyMuPDF
-        text_spans: list[dict[str, Any]] = []
+            page = doc.load_page(page_num - 1)  # 0-indexed in PyMuPDF
+            text_spans: list[dict[str, Any]] = []
 
-        # Get text with detailed formatting information (PyMuPDF's dict format)
-        text_dict = page.get_text("dict")  # type: ignore[attr-defined]
-        blocks = text_dict["blocks"]
+            # Get text with detailed formatting information (PyMuPDF's dict format)
+            text_dict = page.get_text("dict")  # type: ignore[attr-defined]
+            blocks = text_dict["blocks"]
 
-        for block in blocks:
-            # Skip image blocks (type 0 = text, type 1 = image)
-            if block.get("type") != 0:
-                continue
+            for block in blocks:
+                # Skip image blocks (type 0 = text, type 1 = image)
+                if block.get("type") != 0:
+                    continue
 
-            for line in block.get("lines", []):
-                for span in line.get("spans", []):
-                    text = span.get("text", "").strip()
-                    if not text:
-                        continue
+                for line in block.get("lines", []):
+                    for span in line.get("spans", []):
+                        text = span.get("text", "").strip()
+                        if not text:
+                            continue
 
-                    # Get font information (PyMuPDF keys)
-                    size = span.get("size", 12.0)  # PyMuPDF uses 'size'
-                    font = span.get("font", "Unknown")  # PyMuPDF uses 'font'
+                        # Get font information (PyMuPDF keys)
+                        size = span.get("size", 12.0)  # PyMuPDF uses 'size'
+                        font = span.get("font", "Unknown")  # PyMuPDF uses 'font'
 
-                    # Get bounding box (PyMuPDF uses xyxy format)
-                    bbox_tuple = span.get("bbox", (0, 0, 0, 0))
-                    x0, y0, x1, y1 = bbox_tuple
+                        # Get bounding box (PyMuPDF uses xyxy format)
+                        bbox_tuple = span.get("bbox", (0, 0, 0, 0))
+                        x0, y0, x1, y1 = bbox_tuple
 
-                    text_spans.append(
-                        {
-                            "bbox": [int(x0), int(y0), int(x1), int(y1)],
-                            "text": text,
-                            "size": float(size),  # PyMuPDF terminology
-                            "font": font,  # PyMuPDF terminology
-                        }
-                    )
+                        text_spans.append(
+                            {
+                                "bbox": [int(x0), int(y0), int(x1), int(y1)],
+                                "text": text,
+                                "size": float(size),  # PyMuPDF terminology
+                                "font": font,  # PyMuPDF terminology
+                            }
+                        )
 
-        doc.close()
-        logger.info("Extracted %d text spans from page %d", len(text_spans), page_num)
-        return text_spans
+            logger.info("Extracted %d text spans from page %d", len(text_spans), page_num)
+            return text_spans
 
+    except FileNotFoundError:
+        logger.error("PDF file not found: %s", pdf_path)
+        return []
+    except RuntimeError as exc:
+        # PyMuPDF not available
+        logger.warning("Cannot extract text spans: %s", exc)
+        return []
     except Exception as exc:
         # Fallback for unexpected errors - text spans are optional (allowed per ERROR_HANDLING.md section 3.3)
         logger.error("Failed to extract text spans: %s", exc, exc_info=True)

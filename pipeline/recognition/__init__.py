@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import gc
 import logging
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -11,6 +10,7 @@ from typing import Any
 import numpy as np
 
 from ..prompt import PromptManager
+from ..resources import managed_numpy_array
 from ..types import Block, Recognizer
 from .api.gemini import GeminiClient
 from .api.openai import OpenAIClient
@@ -150,24 +150,21 @@ class TextRecognizer(Recognizer):
         # Get prompt for block type
         prompt = self._get_prompt_for_block_type(block_type)
 
-        # Extract text
-        try:
-            if self.client is None:
-                raise RuntimeError(
-                    f"API client not initialized for backend '{self.backend}'. "
-                    "Cannot extract text without a configured client."
-                )
-            result = self.client.extract_text(block_image, block.to_dict(), prompt)
-            block.text = result.get("text", "") if isinstance(result, dict) else str(result)
-        except Exception as e:
-            # Fallback for unexpected errors - set empty text to continue processing
-            # (allowed per ERROR_HANDLING.md section 3.3)
-            logger.error("Failed to extract text: %s", e, exc_info=True)
-            block.text = ""
-
-        # Cleanup
-        del block_image
-        gc.collect()
+        # Extract text with managed memory
+        with managed_numpy_array(block_image) as (managed_image,):
+            try:
+                if self.client is None:
+                    raise RuntimeError(
+                        f"API client not initialized for backend '{self.backend}'. "
+                        "Cannot extract text without a configured client."
+                    )
+                result = self.client.extract_text(managed_image, block.to_dict(), prompt)
+                block.text = result.get("text", "") if isinstance(result, dict) else str(result)
+            except Exception as e:
+                # Fallback for unexpected errors - set empty text to continue processing
+                # (allowed per ERROR_HANDLING.md section 3.3)
+                logger.error("Failed to extract text: %s", e, exc_info=True)
+                block.text = ""
 
         return block
 
