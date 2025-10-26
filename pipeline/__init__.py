@@ -91,6 +91,8 @@ class Pipeline:
         olmocr_model: str | None = None,
         # Renderer option
         renderer: str = "markdown",
+        # Async processing option
+        use_async: bool = False,
     ):
         """Initialize VLM OCR processing pipeline.
 
@@ -110,6 +112,7 @@ class Pipeline:
             mineru_backend: MinerU backend ("transformers", "vllm-engine", "vllm-async-engine")
             olmocr_model: olmOCR model path (for olmocr-vlm sorter)
             renderer: Output format renderer ("markdown" or "plaintext")
+            use_async: Enable async API clients for concurrent block processing (improves performance)
         """
         # Load configuration files
         models_config = _load_yaml_config(Path("settings") / "models.yaml")
@@ -258,6 +261,7 @@ class Pipeline:
                     "use_cache": use_cache,
                     "model": model,
                     "gemini_tier": gemini_tier,
+                    "use_async": use_async,
                 }
             )
 
