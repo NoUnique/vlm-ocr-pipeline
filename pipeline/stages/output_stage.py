@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from pipeline.misc import tz_now
-from pipeline.types import Block, Document, Page
+from pipeline.types import Block, ColumnLayout, Document, Page
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ class OutputStage:
         text: str,
         corrected_text: str,
         correction_ratio: float,
-        column_layout: dict[str, Any] | None,
+        column_layout: ColumnLayout | None,
         auxiliary_info: dict[str, Any] | None = None,
     ) -> Page:
         """Build Page object from processing results.

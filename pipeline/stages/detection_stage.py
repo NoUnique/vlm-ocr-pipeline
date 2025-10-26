@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import numpy as np
 
-from pipeline.types import Block, Detector
+from pipeline.types import Block, ColumnLayout, Detector
 
 
 class DetectionStage:
@@ -32,7 +30,7 @@ class DetectionStage:
         blocks = self.detector.detect(image)
         return blocks
 
-    def extract_column_layout(self, blocks: list[Block]) -> dict[str, Any] | None:
+    def extract_column_layout(self, blocks: list[Block]) -> ColumnLayout | None:
         """Extract column layout information from sorted blocks.
 
         Args:
