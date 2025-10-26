@@ -37,7 +37,7 @@ from pipeline import Pipeline
 
 # Try to import flamegraph support (optional)
 try:
-    import flameprof  # type: ignore
+    import flameprof  # type: ignore  # noqa: F401
 
     FLAMEPROF_AVAILABLE = True
 except ImportError:
@@ -172,7 +172,7 @@ class PerformanceProfiler:
         # Find hotspots (functions taking >1% of total time)
         hotspots = []
         stats_dict = ps.stats  # type: ignore
-        for func, (cc, nc, tt, ct, callers) in stats_dict.items():
+        for func, (_cc, nc, tt, ct, _callers) in stats_dict.items():
             if ct > total_time * 0.01:  # >1% of total time
                 func_name = f"{func[0]}:{func[1]}:{func[2]}"
                 hotspots.append(

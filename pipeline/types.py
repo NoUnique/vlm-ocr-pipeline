@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol, TypedDict
+from typing import TYPE_CHECKING, Any, Protocol, TypedDict, runtime_checkable
 
 if TYPE_CHECKING:
     import numpy as np
@@ -1348,6 +1348,7 @@ class Document:
 # ==================== Protocol Interfaces ====================
 
 
+@runtime_checkable
 class Detector(Protocol):
     """Layout detection interface.
 
@@ -1375,6 +1376,7 @@ class Detector(Protocol):
         ...
 
 
+@runtime_checkable
 class Sorter(Protocol):
     """Reading order sorting interface.
 
@@ -1402,6 +1404,7 @@ class Sorter(Protocol):
         ...
 
 
+@runtime_checkable
 class Recognizer(Protocol):
     """Text recognition interface.
 

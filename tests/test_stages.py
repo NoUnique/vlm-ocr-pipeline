@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
@@ -598,22 +598,31 @@ class TestOutputStage:
         stage = OutputStage(temp_dir=tmp_path)
 
         # Test complete processing
-        assert stage._determine_summary_filename(
-            processing_stopped=False,
-            has_errors=False,
-        ) == "summary.json"
+        assert (
+            stage._determine_summary_filename(
+                processing_stopped=False,
+                has_errors=False,
+            )
+            == "summary.json"
+        )
 
         # Test partial processing (has errors)
-        assert stage._determine_summary_filename(
-            processing_stopped=False,
-            has_errors=True,
-        ) == "summary_partial.json"
+        assert (
+            stage._determine_summary_filename(
+                processing_stopped=False,
+                has_errors=True,
+            )
+            == "summary_partial.json"
+        )
 
         # Test incomplete processing (stopped early)
-        assert stage._determine_summary_filename(
-            processing_stopped=True,
-            has_errors=False,
-        ) == "summary_incomplete.json"
+        assert (
+            stage._determine_summary_filename(
+                processing_stopped=True,
+                has_errors=False,
+            )
+            == "summary_incomplete.json"
+        )
 
     def test_build_pages_summary(self, tmp_path: Path):
         """Test building pages summary."""

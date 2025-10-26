@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from pipeline.conversion.output.markdown import (
     RegionTypeHeaderIdentifier,
     block_to_markdown,

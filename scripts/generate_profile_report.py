@@ -336,6 +336,21 @@ class ProfileReportGenerator:
                 </div>"""
             )
 
+            # GPU memory metrics
+            gpu_memory = self.memory_results.get("results", {}).get("gpu_memory", {})
+            if gpu_memory and gpu_memory.get("end") and gpu_memory["end"].get("num_gpus", 0) > 0:
+                for device in gpu_memory["end"]["devices"]:
+                    gpu_peak = device.get("max_allocated_mb", 0)
+                    gpu_util = device.get("utilization_percent", 0)
+                    gpu_name = device.get("name", f"GPU {device.get('index', 0)}")
+                    metrics.append(
+                        f"""
+                <div class="metric-card">
+                    <div class="metric-label">{gpu_name} Peak</div>
+                    <div class="metric-value">{gpu_peak:.2f} <span class="metric-unit">MB ({gpu_util:.1f}%)</span></div>
+                </div>"""
+                    )
+
         # Pages and blocks
         if self.cpu_results:
             total_time = self.cpu_results.get("total_time", 0)
@@ -361,7 +376,7 @@ class ProfileReportGenerator:
         <section>
             <h2>Summary</h2>
             <div class="metric-grid">
-                {''.join(metrics) if metrics else '<div class="no-data">No summary metrics available</div>'}
+                {"".join(metrics) if metrics else '<div class="no-data">No summary metrics available</div>'}
             </div>
         </section>"""
 
@@ -401,7 +416,7 @@ class ProfileReportGenerator:
                     </tr>
                 </thead>
                 <tbody>
-                    {''.join(rows) if rows else '<tr><td colspan="4" class="no-data">No hotspots found</td></tr>'}
+                    {"".join(rows) if rows else '<tr><td colspan="4" class="no-data">No hotspots found</td></tr>'}
                 </tbody>
             </table>"""
 
@@ -447,13 +462,56 @@ class ProfileReportGenerator:
                     </tr>
                 </thead>
                 <tbody>
-                    {''.join(rows) if rows else '<tr><td colspan="3" class="no-data">No allocations found</td></tr>'}
+                    {"".join(rows) if rows else '<tr><td colspan="3" class="no-data">No allocations found</td></tr>'}
                 </tbody>
             </table>"""
+
+        # Build GPU memory section if available
+        gpu_section = ""
+        gpu_memory = self.memory_results.get("results", {}).get("gpu_memory", {})
+        if gpu_memory and gpu_memory.get("end") and gpu_memory["end"].get("num_gpus", 0) > 0:
+            gpu_rows = []
+            for device in gpu_memory["end"]["devices"]:
+                gpu_name = device.get("name", f"GPU {device.get('index', 0)}")
+                peak_alloc = device.get("max_allocated_mb", 0)
+                curr_alloc = device.get("allocated_mb", 0)
+                total_mem = device.get("total_mb", 0)
+                util_pct = device.get("utilization_percent", 0)
+
+                util_badge = "badge-success" if util_pct < 50 else "badge-warning" if util_pct < 80 else "badge-danger"
+                gpu_rows.append(
+                    f"""
+                <tr>
+                    <td><strong>{gpu_name}</strong></td>
+                    <td>{peak_alloc:.2f} MB</td>
+                    <td>{curr_alloc:.2f} MB</td>
+                    <td>{total_mem:.2f} MB</td>
+                    <td><span class="badge {util_badge}">{util_pct:.1f}%</span></td>
+                </tr>"""
+                )
+
+            gpu_table = f"""
+            <p><span class="badge badge-info">GPU Memory Usage</span></p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Device</th>
+                        <th>Peak Allocated</th>
+                        <th>Current Allocated</th>
+                        <th>Total Memory</th>
+                        <th>Utilization</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {"".join(gpu_rows)}
+                </tbody>
+            </table>"""
+            gpu_section = gpu_table
 
         return f"""
         <section>
             <h2>Memory Profiling</h2>
+            {gpu_section}
             <p><span class="badge badge-warning">Top Memory Allocations</span></p>
             {table_html}
         </section>"""
@@ -511,9 +569,8 @@ def main() -> None:
         if args.input:
             if not generator.load_results(args.input):
                 sys.exit(1)
-        else:
-            if not generator.load_specific_files(args.cpu, args.memory):
-                sys.exit(1)
+        elif not generator.load_specific_files(args.cpu, args.memory):
+            sys.exit(1)
 
         # Generate report
         args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -521,7 +578,7 @@ def main() -> None:
 
         # Open in browser
         if args.open:
-            print(f"\n🌐 Opening report in browser...")
+            print("\n🌐 Opening report in browser...")
             webbrowser.open(f"file://{args.output.absolute()}")
 
     except Exception as e:

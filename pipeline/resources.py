@@ -18,6 +18,15 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Optional torch import for GPU memory management
+try:
+    import torch
+
+    _HAS_TORCH = True
+except ImportError:
+    torch = None  # type: ignore[assignment]
+    _HAS_TORCH = False
+
 # Optional PyMuPDF import
 try:
     import fitz  # type: ignore[import-untyped]
@@ -82,7 +91,8 @@ def managed_numpy_array(*arrays: np.ndarray) -> Iterator[tuple[np.ndarray, ...]]
     """Context manager for numpy arrays to ensure cleanup.
 
     Helps manage memory for large image arrays by explicitly deleting
-    them and running garbage collection after use.
+    them and running garbage collection after use. Also clears GPU cache
+    if torch is available.
 
     Args:
         *arrays: One or more numpy arrays to manage
@@ -105,6 +115,12 @@ def managed_numpy_array(*arrays: np.ndarray) -> Iterator[tuple[np.ndarray, ...]]
         for arr in arrays:
             del arr
         logger.debug("Cleaned up %d numpy array(s)", len(arrays))
+
+        # Clean up GPU memory if available
+        if _HAS_TORCH and torch is not None and torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            logger.debug("Cleared GPU cache")
+
         gc.collect()
 
 
@@ -113,7 +129,8 @@ def managed_image_processing() -> Iterator[None]:
     """Context manager for image processing operations.
 
     Ensures garbage collection runs after image processing to free memory.
-    Useful for wrapping blocks of code that create many temporary images.
+    Also clears GPU cache if torch is available. Useful for wrapping blocks
+    of code that create many temporary images.
 
     Example:
         >>> with managed_image_processing():
@@ -125,6 +142,11 @@ def managed_image_processing() -> Iterator[None]:
     try:
         yield
     finally:
+        # Clean up GPU memory if available
+        if _HAS_TORCH and torch is not None and torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            logger.debug("Cleared GPU cache after image processing")
+
         gc.collect()
 
 
@@ -180,4 +202,9 @@ class ManagedResource:
         except Exception as e:  # noqa: BLE001 - catch all for cleanup
             logger.warning("Error cleaning up resource %s: %s", self.name, e)
         finally:
+            # Clean up GPU memory if available
+            if _HAS_TORCH and torch is not None and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                logger.debug("Cleared GPU cache for resource: %s", self.name)
+
             gc.collect()

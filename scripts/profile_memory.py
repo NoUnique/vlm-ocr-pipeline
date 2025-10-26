@@ -43,6 +43,14 @@ try:
 except ImportError:
     PSUTIL_AVAILABLE = False
 
+# Try to import torch for GPU memory tracking (optional)
+try:
+    import torch
+
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
 
 class MemoryProfiler:
     """Memory profiler for pipeline execution."""
@@ -74,6 +82,52 @@ class MemoryProfiler:
             "used": mem.used,
             "free": mem.free,
         }
+
+    def get_gpu_memory(self) -> dict[str, Any] | None:
+        """Get current GPU memory info.
+
+        Returns:
+            GPU memory info dict or None if torch/CUDA not available
+        """
+        if not TORCH_AVAILABLE or not torch.cuda.is_available():
+            return None
+
+        # Get GPU memory for all available devices
+        num_gpus = torch.cuda.device_count()
+        gpu_info = {
+            "num_gpus": num_gpus,
+            "devices": [],
+        }
+
+        for i in range(num_gpus):
+            device_name = torch.cuda.get_device_name(i)
+            allocated = torch.cuda.memory_allocated(i)
+            reserved = torch.cuda.memory_reserved(i)
+            max_allocated = torch.cuda.max_memory_allocated(i)
+            max_reserved = torch.cuda.max_memory_reserved(i)
+
+            # Get total memory (requires calling a CUDA function)
+            total_memory = torch.cuda.get_device_properties(i).total_memory
+
+            gpu_info["devices"].append(
+                {
+                    "index": i,
+                    "name": device_name,
+                    "allocated": allocated,
+                    "allocated_mb": allocated / 1024 / 1024,
+                    "reserved": reserved,
+                    "reserved_mb": reserved / 1024 / 1024,
+                    "max_allocated": max_allocated,
+                    "max_allocated_mb": max_allocated / 1024 / 1024,
+                    "max_reserved": max_reserved,
+                    "max_reserved_mb": max_reserved / 1024 / 1024,
+                    "total": total_memory,
+                    "total_mb": total_memory / 1024 / 1024,
+                    "utilization_percent": (allocated / total_memory * 100) if total_memory > 0 else 0,
+                }
+            )
+
+        return gpu_info
 
     def profile_pipeline(
         self,
@@ -109,8 +163,14 @@ class MemoryProfiler:
         tracemalloc.start()
         gc.collect()  # Start with clean slate
 
+        # Reset GPU memory stats if available
+        if TORCH_AVAILABLE and torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
+            torch.cuda.empty_cache()
+
         # Get initial memory state
         start_mem = self.get_system_memory()
+        start_gpu_mem = self.get_gpu_memory()
         start_snapshot = tracemalloc.take_snapshot()
         start_time = time.perf_counter()
 
@@ -149,6 +209,7 @@ class MemoryProfiler:
             execution_time = time.perf_counter() - start_time
             end_snapshot = tracemalloc.take_snapshot()
             end_mem = self.get_system_memory()
+            end_gpu_mem = self.get_gpu_memory()
 
             # Get peak memory
             current, peak = tracemalloc.get_traced_memory()
@@ -161,6 +222,15 @@ class MemoryProfiler:
             print(f"   Total blocks: {num_blocks}")
             print(f"   Peak memory: {peak / 1024 / 1024:.2f} MB")
             print(f"   Current memory: {current / 1024 / 1024:.2f} MB")
+
+            # Print GPU memory stats if available
+            if end_gpu_mem and end_gpu_mem["num_gpus"] > 0:
+                print("\n   GPU Memory:")
+                for device in end_gpu_mem["devices"]:
+                    print(f"   - GPU {device['index']} ({device['name']}):")
+                    print(f"     Peak allocated: {device['max_allocated_mb']:.2f} MB")
+                    print(f"     Current allocated: {device['allocated_mb']:.2f} MB")
+                    print(f"     Utilization: {device['utilization_percent']:.1f}%")
 
             # Analyze memory growth
             memory_diff = self._analyze_snapshot_diff(start_snapshot, end_snapshot)
@@ -178,6 +248,10 @@ class MemoryProfiler:
                 "system_memory": {
                     "start": start_mem,
                     "end": end_mem,
+                },
+                "gpu_memory": {
+                    "start": start_gpu_mem,
+                    "end": end_gpu_mem,
                 },
                 "top_allocations": memory_diff,
             }
@@ -263,26 +337,36 @@ class MemoryProfiler:
             f.write("MEMORY PROFILING REPORT\n")
             f.write("=" * 70 + "\n\n")
 
-            f.write(f"Configuration:\n")
+            f.write("Configuration:\n")
             for key, value in config.items():
                 f.write(f"  {key}: {value}\n")
 
-            f.write(f"\nExecution:\n")
+            f.write("\nExecution:\n")
             f.write(f"  Time: {results['execution_time']:.3f}s\n")
             f.write(f"  Pages: {results['pages']}\n")
             f.write(f"  Blocks: {results['blocks']}\n")
 
-            f.write(f"\nMemory Usage:\n")
+            f.write("\nMemory Usage:\n")
             f.write(f"  Peak: {results['memory']['peak_mb']:.2f} MB\n")
             f.write(f"  Current: {results['memory']['current_mb']:.2f} MB\n")
 
             if results["system_memory"]["start"]:
                 start_mem = results["system_memory"]["start"]
                 end_mem = results["system_memory"]["end"]
-                f.write(f"\nSystem Memory:\n")
+                f.write("\nSystem Memory:\n")
                 f.write(f"  Start: {start_mem['used'] / 1024 / 1024:.2f} MB used\n")
                 f.write(f"  End: {end_mem['used'] / 1024 / 1024:.2f} MB used\n")
                 f.write(f"  Diff: {(end_mem['used'] - start_mem['used']) / 1024 / 1024:.2f} MB\n")
+
+            # GPU memory section
+            if results["gpu_memory"]["end"] and results["gpu_memory"]["end"]["num_gpus"] > 0:
+                f.write("\nGPU Memory:\n")
+                for device in results["gpu_memory"]["end"]["devices"]:
+                    f.write(f"  GPU {device['index']} ({device['name']}):\n")
+                    f.write(f"    Peak allocated: {device['max_allocated_mb']:.2f} MB\n")
+                    f.write(f"    Current allocated: {device['allocated_mb']:.2f} MB\n")
+                    f.write(f"    Total memory: {device['total_mb']:.2f} MB\n")
+                    f.write(f"    Utilization: {device['utilization_percent']:.1f}%\n")
 
             f.write(f"\nTop {len(results['top_allocations'])} Memory Allocations:\n")
             f.write(f"{'File:Line':<50} {'Size':<15} {'Diff':<15}\n")
@@ -290,7 +374,9 @@ class MemoryProfiler:
             for alloc in results["top_allocations"]:
                 location = f"{Path(alloc['filename']).name}:{alloc['lineno']}"
                 size_str = f"{alloc['size_mb']:.2f} MB"
-                diff_str = f"+{alloc['size_diff_mb']:.2f} MB" if alloc["size_diff"] > 0 else f"{alloc['size_diff_mb']:.2f} MB"
+                diff_str = (
+                    f"+{alloc['size_diff_mb']:.2f} MB" if alloc["size_diff"] > 0 else f"{alloc['size_diff_mb']:.2f} MB"
+                )
                 f.write(f"{location:<50} {size_str:<15} {diff_str:<15}\n")
 
         print(f"📊 Text report saved: {text_file}")
@@ -428,6 +514,13 @@ def main() -> None:
     if not PSUTIL_AVAILABLE:
         print("⚠️  Warning: psutil not installed. System memory tracking unavailable.")
         print("   Install with: uv pip install psutil")
+
+    # Check torch
+    if not TORCH_AVAILABLE:
+        print("⚠️  Warning: torch not installed. GPU memory tracking unavailable.")
+        print("   Install with: uv pip install torch")
+    elif not torch.cuda.is_available():
+        print("ℹ️  Info: CUDA not available. GPU memory tracking disabled.")
 
     try:
         profiler = MemoryProfiler(output_dir=args.output_dir)

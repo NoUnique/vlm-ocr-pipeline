@@ -171,9 +171,7 @@ class AsyncOpenAIClient:
 
         return base64.b64encode(img_bytes).decode("utf-8")
 
-    async def extract_text(
-        self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str
-    ) -> dict[str, Any]:  # noqa: PLR0911
+    async def extract_text(self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str) -> dict[str, Any]:  # noqa: PLR0911
         """
         Extract text from block using OpenAI API (async).
 
@@ -303,9 +301,7 @@ class AsyncOpenAIClient:
         # Create semaphore to limit concurrent requests
         semaphore = asyncio.Semaphore(max_concurrent)
 
-        async def extract_with_semaphore(
-            img: np.ndarray, info: dict[str, Any], prompt: str
-        ) -> dict[str, Any]:
+        async def extract_with_semaphore(img: np.ndarray, info: dict[str, Any], prompt: str) -> dict[str, Any]:
             async with semaphore:
                 return await self.extract_text(img, info, prompt)
 
@@ -321,13 +317,15 @@ class AsyncOpenAIClient:
             if isinstance(result, Exception):
                 logger.error("Task %d failed with exception: %s", i, result)
                 _, info, _ = regions[i]
-                final_results.append({
-                    "type": info["type"],
-                    "xywh": info["xywh"],
-                    "text": "[BATCH_ERROR]",
-                    "confidence": 0.0,
-                    "error": "batch_processing_error",
-                })
+                final_results.append(
+                    {
+                        "type": info["type"],
+                        "xywh": info["xywh"],
+                        "text": "[BATCH_ERROR]",
+                        "confidence": 0.0,
+                        "error": "batch_processing_error",
+                    }
+                )
             else:
                 final_results.append(result)
 

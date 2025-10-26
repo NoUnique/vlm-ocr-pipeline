@@ -126,9 +126,7 @@ class TestAsyncOpenAIClient:
             with patch.object(client.client.chat.completions, "create", new_callable=AsyncMock) as mock_create:
                 mock_create.return_value = mock_response
 
-                result = await client.correct_text(
-                    "Original text", "System prompt", "User prompt with {text}"
-                )
+                result = await client.correct_text("Original text", "System prompt", "User prompt with {text}")
 
                 assert result == "Corrected text"
                 mock_create.assert_awaited_once()
@@ -256,9 +254,7 @@ class TestAsyncGeminiClient:
             with patch.object(client.client.aio.models, "generate_content", new_callable=AsyncMock) as mock_gen:
                 mock_gen.return_value = mock_response
 
-                result = await client.correct_text(
-                    "Original text", "System prompt", "User prompt with text"
-                )
+                result = await client.correct_text("Original text", "System prompt", "User prompt with text")
 
                 assert result["corrected_text"] == "Corrected by Gemini"
                 assert "correction_ratio" in result

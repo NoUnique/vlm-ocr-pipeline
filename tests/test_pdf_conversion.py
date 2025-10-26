@@ -10,11 +10,9 @@ Tests the PDF conversion functions which handle:
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
-import cv2
 import numpy as np
 import pytest
 

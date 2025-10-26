@@ -11,7 +11,6 @@ Requirements:
 
 from __future__ import annotations
 
-import asyncio
 import os
 import time
 
@@ -245,7 +244,7 @@ class TestAsyncRateLimiterIntegration:
         # Get status
         status = await limiter.get_status()
 
-        print(f"\n✅ Rate limiter test completed")
-        print(f"   Requests made: 5")
+        print("\n✅ Rate limiter test completed")
+        print("   Requests made: 5")
         print(f"   Current RPM: {status['current']['rpm']}")
         print(f"   Wait times: {[f'{t:.3f}s' for t in request_times]}")

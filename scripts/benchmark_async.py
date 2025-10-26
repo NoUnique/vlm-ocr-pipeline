@@ -23,7 +23,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from pipeline import Pipeline
 from pipeline.conversion.input import load_image, render_pdf_page
 from pipeline.recognition import TextRecognizer
-from pipeline.types import Block
 
 logging.basicConfig(
     level=logging.INFO,
@@ -223,7 +222,9 @@ class AsyncBenchmark:
             return {}
 
         speedup = sync["process_time"] / async_res["process_time"] if async_res["process_time"] > 0 else 0
-        improvement_pct = (1 - async_res["process_time"] / sync["process_time"]) * 100 if sync["process_time"] > 0 else 0
+        improvement_pct = (
+            (1 - async_res["process_time"] / sync["process_time"]) * 100 if sync["process_time"] > 0 else 0
+        )
 
         comparison = {
             "speedup": speedup,
