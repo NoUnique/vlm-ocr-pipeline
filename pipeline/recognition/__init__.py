@@ -13,7 +13,9 @@ from ..prompt import PromptManager
 from ..resources import managed_numpy_array
 from ..types import Block, Recognizer
 from .api.gemini import GeminiClient
+from .api.gemini_async import AsyncGeminiClient
 from .api.openai import OpenAIClient
+from .api.openai_async import AsyncOpenAIClient
 from .cache import RecognitionCache
 
 logger = logging.getLogger(__name__)
@@ -52,6 +54,7 @@ class TextRecognizer(Recognizer):
         backend: str = "openai",
         model: str = "gemini-2.5-flash",
         gemini_tier: str = "free",
+        use_async: bool = False,
     ):
         """Initialize text recognizer.
 
@@ -61,12 +64,14 @@ class TextRecognizer(Recognizer):
             backend: Backend API ("openai" or "gemini")
             model: Model to use for text processing
             gemini_tier: Gemini API tier (only used with gemini backend)
+            use_async: Whether to use async API clients for concurrent processing
         """
         self.cache_dir = Path(cache_dir)
         self.use_cache = use_cache
         self.backend = backend.lower()
         self.model = model
         self.gemini_tier = gemini_tier
+        self.use_async = use_async
 
         # Initialize cache
         if use_cache:
@@ -75,14 +80,17 @@ class TextRecognizer(Recognizer):
         else:
             self.cache = None
 
-        # Initialize VLM client
+        # Initialize VLM clients (both sync and async if requested)
         if self.backend == "gemini":
             self.client = GeminiClient(gemini_model=model)
+            self.async_client = AsyncGeminiClient(gemini_model=model) if use_async else None
         elif self.backend == "openai":
             self.client = OpenAIClient(model=model)
+            self.async_client = AsyncOpenAIClient(model=model) if use_async else None
         elif self.backend == "paddleocr-vl":
             # PaddleOCR-VL is handled separately, no client needed
             self.client = None  # type: ignore[assignment]
+            self.async_client = None
         else:
             raise ValueError(f"Unknown backend: {backend}")
 
@@ -90,10 +98,11 @@ class TextRecognizer(Recognizer):
         self.prompt_manager = PromptManager(model=model)
 
         logger.info(
-            "TextRecognizer initialized: backend=%s, model=%s, cache=%s",
+            "TextRecognizer initialized: backend=%s, model=%s, cache=%s, async=%s",
             self.backend,
             model,
             use_cache,
+            use_async,
         )
 
     def process_blocks(self, image: np.ndarray, blocks: Sequence[Block]) -> list[Block]:
@@ -225,6 +234,96 @@ class TextRecognizer(Recognizer):
             # Fallback for unexpected errors - return error with original text
             # (allowed per ERROR_HANDLING.md section 3.3)
             logger.error("Text correction failed: %s", e, exc_info=True)
+            return {"error": "correction_failed", "original_text": text}
+
+    async def process_blocks_async(
+        self, image: np.ndarray, blocks: Sequence[Block], max_concurrent: int = 5
+    ) -> list[Block]:
+        """Process all blocks to extract text concurrently (async).
+
+        This method processes multiple blocks in parallel using async API clients,
+        significantly improving performance by reducing overall processing time.
+
+        Args:
+            image: Full page image
+            blocks: List of detected blocks
+            max_concurrent: Maximum number of concurrent API calls
+
+        Returns:
+            Blocks with text extracted
+
+        Raises:
+            RuntimeError: If async client is not initialized
+        """
+        if self.async_client is None:
+            raise RuntimeError("Async client not initialized. Please set use_async=True when creating TextRecognizer.")
+
+        # Prepare batch data: (image, region_info, prompt) tuples
+        batch_data = []
+        for block in blocks:
+            # Clear any pre-existing text from detector
+            if block.text:
+                logger.debug(
+                    "Clearing detector-provided text for block (source=%s). Will use recognizer instead.",
+                    block.source,
+                )
+                block.text = None
+
+            # Extract block image
+            try:
+                block_image = self._crop_block(image, block)
+                prompt = self._get_prompt_for_block_type(block.type)
+                batch_data.append((block_image, block.to_dict(), prompt))
+            except (IndexError, ValueError, TypeError) as e:
+                logger.error("Failed to crop block: %s", e)
+                # Skip this block in batch processing
+                continue
+
+        # Process all blocks concurrently
+        results = await self.async_client.extract_text_batch(batch_data, max_concurrent=max_concurrent)
+
+        # Update blocks with extracted text
+        processed_blocks = []
+        result_idx = 0
+        for block in blocks:
+            if block.text is None:  # Block was included in batch
+                if result_idx < len(results):
+                    result = results[result_idx]
+                    block.text = result.get("text", "") if isinstance(result, dict) else str(result)
+                    result_idx += 1
+                else:
+                    block.text = ""  # Fallback
+            processed_blocks.append(block)
+
+        return processed_blocks
+
+    async def correct_text_async(self, text: str) -> str | dict[str, Any]:
+        """Correct extracted text using VLM (async).
+
+        Args:
+            text: Raw text to correct
+
+        Returns:
+            Corrected text or dict with error info
+
+        Raises:
+            RuntimeError: If async client is not initialized
+        """
+        if not text or not text.strip():
+            return text
+
+        if self.async_client is None:
+            raise RuntimeError("Async client not initialized. Please set use_async=True when creating TextRecognizer.")
+
+        try:
+            system_prompt = self.prompt_manager.get_prompt("text_correction", "system")
+            user_prompt = self.prompt_manager.get_prompt("text_correction", "user", text=text)
+            corrected = await self.async_client.correct_text(text, system_prompt, user_prompt)
+            return corrected
+        except Exception as e:
+            # Fallback for unexpected errors - return error with original text
+            # (allowed per ERROR_HANDLING.md section 3.3)
+            logger.error("Async text correction failed: %s", e, exc_info=True)
             return {"error": "correction_failed", "original_text": text}
 
 
