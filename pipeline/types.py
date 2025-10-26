@@ -1407,17 +1407,29 @@ class Recognizer(Protocol):
 
     All recognizers must implement this interface to extract and correct
     text from blocks using various OCR or VLM backends.
+
+    Methods:
+        process_blocks: Extract text from blocks in an image
+        correct_text: Correct raw text using VLM (optional for some backends)
+
+    Example:
+        >>> recognizer = TextRecognizer(backend="gemini")
+        >>> blocks_with_text = recognizer.process_blocks(image, blocks)
+        >>> corrected = recognizer.correct_text("sampel txt")
     """
 
     def process_blocks(self, image: np.ndarray, blocks: Sequence[Block]) -> list[Block]:
         """Process blocks to extract text.
 
+        This method processes each block in the input image to extract text content.
+        The returned blocks should have their `text` field populated.
+
         Args:
-            image: Full page image as numpy array (H, W, C)
-            blocks: Detected blocks with bbox
+            image: Full page image as numpy array (H, W, C) in RGB format
+            blocks: Detected blocks with bbox field populated
 
         Returns:
-            Blocks with text field populated
+            List of blocks with text field populated
 
         Example:
             >>> recognizer = TextRecognizer(backend="gemini")
@@ -1430,17 +1442,27 @@ class Recognizer(Protocol):
     def correct_text(self, text: str) -> str | dict[str, Any]:
         """Correct extracted text using VLM.
 
+        This method takes raw extracted text and applies correction using a VLM.
+        Some recognizers may not support correction (e.g., PaddleOCR-VL).
+
         Args:
             text: Raw extracted text to correct
 
         Returns:
-            Corrected text string or dict with correction metadata
+            Corrected text string, or dict with correction metadata or error info.
+            If correction is not supported, returns the original text unchanged.
 
         Example:
             >>> recognizer = TextRecognizer(backend="gemini")
             >>> corrected = recognizer.correct_text("sampel txt")
             >>> corrected
             'sample text'
+
+            >>> # For recognizers without correction support
+            >>> recognizer = PaddleOCRVLRecognizer()
+            >>> result = recognizer.correct_text("some text")
+            >>> result  # Returns original text
+            'some text'
         """
         ...
 

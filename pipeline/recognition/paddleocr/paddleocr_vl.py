@@ -45,12 +45,14 @@ logger = logging.getLogger(__name__)
 class PaddleOCRVLRecognizer(Recognizer):
     """Text recognizer using PaddleOCR-VL-0.9B model.
 
-    This recognizer uses PaddleOCR's full pipeline which includes:
-    - Layout detection (PP-DocLayoutV2)
-    - VL Recognition (PaddleOCR-VL-0.9B)
+    This class implements the Recognizer protocol using PaddleOCR's pipeline which includes:
+    - Layout detection (PP-DocLayoutV2) - optional
+    - VL Recognition (PaddleOCR-VL-0.9B) - 0.9B params, NaViT + ERNIE-4.5-0.3B
 
-    Note: This is a full pipeline recognizer. For block-level recognition only,
-    consider using it without layout detection.
+    Note: Text correction is not supported by this recognizer.
+
+    Implements:
+        Recognizer: Text recognition protocol with PaddleOCR-VL backend
 
     Example:
         >>> recognizer = PaddleOCRVLRecognizer()
@@ -243,24 +245,17 @@ class PaddleOCRVLRecognizer(Recognizer):
         logger.info("Processed %d blocks with PaddleOCR-VL", len(output_blocks))
         return output_blocks
 
-    def correct_text(
-        self,
-        image: np.ndarray,
-        blocks: Sequence[Block],
-        **kwargs,
-    ) -> list[Block]:
-        """Correct text in blocks (not applicable for PaddleOCR-VL).
+    def correct_text(self, text: str) -> str:
+        """Correct text (not supported for PaddleOCR-VL).
 
         PaddleOCR-VL performs direct text extraction, not correction.
-        This method simply returns the blocks unchanged.
+        This method simply returns the original text unchanged.
 
         Args:
-            image: Input image
-            blocks: List of blocks with text
-            **kwargs: Additional arguments
+            text: Raw text to correct
 
         Returns:
-            Original blocks unchanged
+            Original text unchanged (correction not supported)
         """
-        logger.info("PaddleOCR-VL does not support text correction, returning original blocks")
-        return list(blocks)
+        logger.debug("PaddleOCR-VL does not support text correction, returning original text")
+        return text

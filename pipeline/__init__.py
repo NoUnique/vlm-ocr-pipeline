@@ -26,7 +26,7 @@ from .constants import DEFAULT_CONFIDENCE_THRESHOLD
 from .layout.detection import create_detector as create_detector_impl
 from .layout.ordering import create_sorter as create_sorter_impl, validate_combination
 from .misc import tz_now
-from .recognition import TextRecognizer
+from .recognition import create_recognizer
 from .recognition.api.ratelimit import rate_limiter
 from .types import Block, Detector, Document, Page, PyMuPDFPage, Recognizer, Sorter
 
@@ -241,25 +241,27 @@ class Pipeline:
 
         self.sorter: Sorter | None = create_sorter_impl(sorter, **sorter_kwargs) if sorter else None
 
-        # Recognizer (backend-dependent)
+        # Recognizer (using factory pattern)
+        recognizer_kwargs: dict[str, Any] = {}
         if backend == "paddleocr-vl":
-            # Use PaddleOCR-VL recognizer
-            from .recognition import PaddleOCRVLRecognizer  # noqa: PLC0415
-
-            self.recognizer: Recognizer = PaddleOCRVLRecognizer(
-                device=None,  # Auto-detect
-                vl_rec_backend="native",
-                use_layout_detection=False,  # We handle layout detection separately
+            recognizer_kwargs.update(
+                {
+                    "device": None,  # Auto-detect
+                    "vl_rec_backend": "native",
+                    "use_layout_detection": False,  # We handle layout detection separately
+                }
             )
         else:
-            # Use traditional VLM-based recognizer
-            self.recognizer = TextRecognizer(
-                cache_dir=self.cache_dir,
-                use_cache=use_cache,
-                backend=backend,
-                model=model,
-                gemini_tier=gemini_tier,
+            recognizer_kwargs.update(
+                {
+                    "cache_dir": self.cache_dir,
+                    "use_cache": use_cache,
+                    "model": model,
+                    "gemini_tier": gemini_tier,
+                }
             )
+
+        self.recognizer: Recognizer = create_recognizer(backend, **recognizer_kwargs)
 
         logger.info(
             "Pipeline initialized: detector=%s, sorter=%s, recognizer=%s (model=%s)",

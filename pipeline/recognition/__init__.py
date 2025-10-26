@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import gc
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -27,14 +27,22 @@ except ImportError:
     PaddleOCRVLRecognizer = None  # type: ignore[misc, assignment]
     _HAS_PADDLEOCR_VL = False
 
-__all__ = ["TextRecognizer", "PaddleOCRVLRecognizer"]
+__all__ = [
+    "TextRecognizer",
+    "PaddleOCRVLRecognizer",
+    "create_recognizer",
+    "list_available_recognizers",
+]
 
 
 class TextRecognizer(Recognizer):
     """Handles text recognition and extraction from document blocks.
 
-    This class manages the text extraction pipeline using VLM APIs
-    (OpenAI/OpenRouter or Gemini) with intelligent caching.
+    This class implements the Recognizer protocol and manages the text extraction
+    pipeline using VLM APIs (OpenAI/OpenRouter or Gemini) with intelligent caching.
+
+    Implements:
+        Recognizer: Text recognition protocol with VLM backends (OpenAI/Gemini)
     """
 
     def __init__(
@@ -221,3 +229,85 @@ class TextRecognizer(Recognizer):
             # (allowed per ERROR_HANDLING.md section 3.3)
             logger.error("Text correction failed: %s", e, exc_info=True)
             return {"error": "correction_failed", "original_text": text}
+
+
+# ==================== Factory Pattern ====================
+
+# Registry mapping recognizer names to factory functions
+_RECOGNIZER_REGISTRY: dict[str, Callable[..., Recognizer]] = {}
+
+
+def _register_recognizers() -> None:
+    """Register available recognizers."""
+
+    # Always available: TextRecognizer with OpenAI/Gemini backends
+    def create_openai_recognizer(**kwargs: Any) -> Recognizer:
+        """Create OpenAI TextRecognizer."""
+        kwargs.setdefault("backend", "openai")
+        return TextRecognizer(**kwargs)
+
+    def create_gemini_recognizer(**kwargs: Any) -> Recognizer:
+        """Create Gemini TextRecognizer."""
+        kwargs.setdefault("backend", "gemini")
+        return TextRecognizer(**kwargs)
+
+    _RECOGNIZER_REGISTRY["openai"] = create_openai_recognizer
+    _RECOGNIZER_REGISTRY["gemini"] = create_gemini_recognizer
+
+    # Optional: PaddleOCR-VL
+    if _HAS_PADDLEOCR_VL and PaddleOCRVLRecognizer is not None:
+        _RECOGNIZER_REGISTRY["paddleocr-vl"] = PaddleOCRVLRecognizer
+
+
+# Register on module import
+_register_recognizers()
+
+
+def create_recognizer(name: str, **kwargs: Any) -> Recognizer:
+    """Create a recognizer instance using factory pattern.
+
+    Args:
+        name: Recognizer name ("openai", "gemini", "paddleocr-vl")
+        **kwargs: Additional arguments passed to the recognizer constructor
+            Common args:
+                - cache_dir: Cache directory (default: ".cache")
+                - use_cache: Enable caching (default: True)
+                - model: Model name (backend-specific)
+                - gemini_tier: Gemini API tier ("free", "tier1", etc.)
+
+    Returns:
+        Recognizer instance
+
+    Raises:
+        ValueError: If recognizer name is not registered
+
+    Example:
+        >>> # Create OpenAI recognizer
+        >>> recognizer = create_recognizer("openai", model="gpt-4o")
+
+        >>> # Create Gemini recognizer
+        >>> recognizer = create_recognizer("gemini", model="gemini-2.5-flash")
+
+        >>> # Create PaddleOCR-VL recognizer (if available)
+        >>> recognizer = create_recognizer("paddleocr-vl")
+    """
+    if name not in _RECOGNIZER_REGISTRY:
+        available = ", ".join(_RECOGNIZER_REGISTRY.keys())
+        raise ValueError(f"Unknown recognizer: {name}. Available: {available}")
+
+    logger.info("Creating recognizer: %s", name)
+    return _RECOGNIZER_REGISTRY[name](**kwargs)
+
+
+def list_available_recognizers() -> list[str]:
+    """List available recognizer names.
+
+    Returns:
+        List of registered recognizer names
+
+    Example:
+        >>> recognizers = list_available_recognizers()
+        >>> print(recognizers)
+        ['openai', 'gemini', 'paddleocr-vl']
+    """
+    return list(_RECOGNIZER_REGISTRY.keys())
