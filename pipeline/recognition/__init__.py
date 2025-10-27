@@ -432,28 +432,29 @@ def create_recognizer(
             backend = gpu_config.recommended_backend
             logger.info(f"🚀 Auto-selected backend '{backend}' for recognizer '{name}'")
 
-        # Inject auto-optimized settings (only if not manually overridden)
-        if "tensor_parallel_size" not in kwargs and gpu_config.has_cuda:
-            kwargs["tensor_parallel_size"] = gpu_config.tensor_parallel_size
-            logger.debug(f"Auto-set tensor_parallel_size={gpu_config.tensor_parallel_size}")
+        # Inject auto-optimized settings (only for local GPU-based recognizers)
+        if name not in ["openai", "gemini"]:
+            if "tensor_parallel_size" not in kwargs and gpu_config.has_cuda:
+                kwargs["tensor_parallel_size"] = gpu_config.tensor_parallel_size
+                logger.debug(f"Auto-set tensor_parallel_size={gpu_config.tensor_parallel_size}")
 
-        if "gpu_memory_utilization" not in kwargs and gpu_config.has_cuda:
-            kwargs["gpu_memory_utilization"] = gpu_config.gpu_memory_utilization
-            logger.debug(f"Auto-set gpu_memory_utilization={gpu_config.gpu_memory_utilization}")
+            if "gpu_memory_utilization" not in kwargs and gpu_config.has_cuda:
+                kwargs["gpu_memory_utilization"] = gpu_config.gpu_memory_utilization
+                logger.debug(f"Auto-set gpu_memory_utilization={gpu_config.gpu_memory_utilization}")
 
-        if "device" not in kwargs and gpu_config.has_cuda:
-            # Auto-select device based on parallel strategy
-            if gpu_config.tensor_parallel_size > 1:
-                # vLLM will handle multi-GPU internally
-                kwargs["device"] = "cuda"
-            else:
-                # Single GPU
-                kwargs["device"] = "cuda:0"
-            logger.debug(f"Auto-set device={kwargs['device']}")
+            if "device" not in kwargs and gpu_config.has_cuda:
+                # Auto-select device based on parallel strategy
+                if gpu_config.tensor_parallel_size > 1:
+                    # vLLM will handle multi-GPU internally
+                    kwargs["device"] = "cuda"
+                else:
+                    # Single GPU
+                    kwargs["device"] = "cuda:0"
+                logger.debug(f"Auto-set device={kwargs['device']}")
 
-        if "use_bf16" not in kwargs and gpu_config.has_cuda:
-            kwargs["use_bf16"] = gpu_config.use_bf16
-            logger.debug(f"Auto-set use_bf16={gpu_config.use_bf16}")
+            if "use_bf16" not in kwargs and gpu_config.has_cuda:
+                kwargs["use_bf16"] = gpu_config.use_bf16
+                logger.debug(f"Auto-set use_bf16={gpu_config.use_bf16}")
 
     # Pass backend to recognizer if specified
     if backend is not None:

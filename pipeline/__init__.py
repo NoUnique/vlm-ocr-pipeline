@@ -361,7 +361,9 @@ class Pipeline:
                 }
             )
 
-        self.recognizer: Recognizer = create_recognizer(recognizer_backend, **recognizer_kwargs)
+        self.recognizer: Recognizer = create_recognizer(
+            self.recognizer_model, backend=recognizer_backend, **recognizer_kwargs
+        )
 
         logger.info(
             "Pipeline initialized: detector=%s (backend=%s), sorter=%s (backend=%s), recognizer=%s (backend=%s)",
