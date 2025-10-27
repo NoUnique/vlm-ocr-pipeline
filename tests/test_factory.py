@@ -71,6 +71,7 @@ def test_list_available_recognizers():
 
     assert "openai" in available
     assert "gemini" in available
+    assert "deepseek-ocr" in available
     # PaddleOCR-VL recognizer should be available if installed
     # assert "paddleocr-vl" in available  # Optional dependency
 
@@ -91,6 +92,32 @@ def test_create_recognizer_gemini():
     assert recognizer is not None
     assert hasattr(recognizer, "process_blocks")
     assert hasattr(recognizer, "correct_text")
+
+
+def test_create_recognizer_deepseek_hf():
+    """Test create_recognizer creates DeepSeek-OCR recognizer with HF backend."""
+    # Will fail at model loading (expected), but tests factory registration
+    try:
+        recognizer = create_recognizer("deepseek-ocr", backend="hf")
+        # If we reach here, factory worked but model not available
+        assert hasattr(recognizer, "process_blocks")
+        assert hasattr(recognizer, "correct_text")
+    except (ImportError, OSError, RuntimeError) as e:
+        # Expected: missing dependencies or model not downloaded
+        assert "deepseek" in str(e).lower() or "transformers" in str(e).lower() or "addict" in str(e).lower()
+
+
+def test_create_recognizer_deepseek_vllm():
+    """Test create_recognizer creates DeepSeek-OCR recognizer with vLLM backend."""
+    # Will fail at model loading (expected), but tests factory registration
+    try:
+        recognizer = create_recognizer("deepseek-ocr", backend="vllm")
+        # If we reach here, factory worked but model not available
+        assert hasattr(recognizer, "process_blocks")
+        assert hasattr(recognizer, "correct_text")
+    except (ImportError, OSError, RuntimeError) as e:
+        # Expected: missing dependencies or model not downloaded
+        assert "deepseek" in str(e).lower() or "vllm" in str(e).lower() or "addict" in str(e).lower()
 
 
 def test_create_recognizer_unknown():
