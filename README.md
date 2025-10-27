@@ -390,6 +390,104 @@ openai:
 
 Missing configuration files automatically fall back to safe defaults with a warning.
 
+## Backend System
+
+The pipeline supports flexible inference backends for each processing stage (detector, sorter, recognizer). Backends can be auto-selected or explicitly specified for performance optimization.
+
+### Available Backends
+
+| Backend | Description | Use Cases |
+|---------|-------------|-----------|
+| `pytorch` | Native PyTorch inference (single GPU) | DocLayout-YOLO, PaddleOCR models |
+| `hf` | HuggingFace Transformers (single GPU) | MinerU VLM, olmOCR, LayoutReader |
+| `vllm` | vLLM inference engine (high-throughput) | MinerU VLM, olmOCR, PaddleOCR-VL |
+| `sglang` | SGLang inference engine (structured generation) | PaddleOCR-VL |
+| `openai` | OpenAI API | GPT-4o, GPT-4 Turbo, GPT-3.5 Turbo |
+| `gemini` | Google Gemini API | Gemini 2.5 Flash, Gemini 2.0 Pro |
+
+### Backend Selection
+
+**Auto-selection (recommended)**:
+```bash
+# Backends are automatically selected based on model capabilities
+python main.py --input document.pdf --detector mineru-vlm --recognizer gpt-4o
+# detector backend: hf (HuggingFace Transformers)
+# recognizer backend: openai (OpenAI API)
+```
+
+**Explicit backend specification**:
+```bash
+# Specify backends for performance tuning
+python main.py --input document.pdf \
+    --detector mineru-vlm --detector-backend vllm \
+    --sorter olmocr-vlm --sorter-backend vllm \
+    --recognizer paddleocr-vl --recognizer-backend sglang
+```
+
+### Stage-Specific Backends
+
+#### 1. Detector Backends
+
+```bash
+# DocLayout-YOLO (PyTorch only)
+python main.py --input doc.pdf --detector doclayout-yolo
+
+# MinerU VLM (HuggingFace or vLLM)
+python main.py --input doc.pdf --detector mineru-vlm --detector-backend hf
+python main.py --input doc.pdf --detector mineru-vlm --detector-backend vllm
+
+# PaddleOCR PP-DocLayoutV2 (PaddlePaddle only)
+python main.py --input doc.pdf --detector paddleocr-doclayout-v2
+```
+
+#### 2. Sorter Backends
+
+```bash
+# Algorithm-based sorters (no backend)
+python main.py --input doc.pdf --sorter pymupdf
+python main.py --input doc.pdf --sorter mineru-xycut
+
+# olmOCR VLM (HuggingFace or vLLM)
+python main.py --input doc.pdf --sorter olmocr-vlm --sorter-backend hf
+python main.py --input doc.pdf --sorter olmocr-vlm --sorter-backend vllm
+```
+
+#### 3. Recognizer Backends
+
+```bash
+# API-based recognizers (OpenAI, Gemini)
+python main.py --input doc.pdf --recognizer gpt-4o
+python main.py --input doc.pdf --recognizer gemini-2.5-flash
+
+# Local PaddleOCR-VL (PyTorch, vLLM, or SGLang)
+python main.py --input doc.pdf --recognizer paddleocr-vl --recognizer-backend pytorch
+python main.py --input doc.pdf --recognizer paddleocr-vl --recognizer-backend vllm
+python main.py --input doc.pdf --recognizer paddleocr-vl --recognizer-backend sglang
+```
+
+### Backend Compatibility
+
+| Model | Supported Backends | Default |
+|-------|-------------------|---------|
+| **Detectors** |
+| `doclayout-yolo` | (native PyTorch) | - |
+| `mineru-doclayout-yolo` | (native PyTorch) | - |
+| `mineru-vlm` | `hf`, `vllm` | `hf` |
+| `paddleocr-doclayout-v2` | (native PaddlePaddle) | - |
+| **Sorters** |
+| `pymupdf` | (rule-based) | - |
+| `mineru-xycut` | (algorithm-based) | - |
+| `mineru-layoutreader` | (HuggingFace Transformers) | - |
+| `mineru-vlm` | (uses detector backend) | - |
+| `olmocr-vlm` | `hf`, `vllm` | `hf` |
+| `paddleocr-doclayout-v2` | (passthrough) | - |
+| **Recognizers** |
+| `openai` (GPT models) | `openai` | `openai` |
+| `gemini` (Gemini models) | `gemini` | `gemini` |
+| `paddleocr-vl` | `pytorch`, `vllm`, `sglang` | `pytorch` |
+
+For detailed backend configuration, see `settings/models.yaml`.
+
 ## Usage
 
 ### Command Line Interface
@@ -397,17 +495,12 @@ Missing configuration files automatically fall back to safe defaults with a warn
 #### Basic Usage
 
 ```bash
-# Process a single PDF (uses OpenAI backend by default)
+# Process a single PDF (uses default: doclayout-yolo detector + gemini-2.5-flash recognizer)
 python main.py --input document.pdf
 
-# Use Gemini backend specifically
-python main.py --input document.pdf --backend gemini
-
-# Use specific OpenAI model
-python main.py --input document.pdf --model gpt-4o
-
-# Use OpenRouter with Gemini model
-python main.py --input document.pdf --model google/gemini-2.5-flash
+# Use different recognizer
+python main.py --input document.pdf --recognizer gpt-4o
+python main.py --input document.pdf --recognizer gemini-2.0-pro
 
 # Process a directory of PDFs
 python main.py --input /path/to/pdfs/

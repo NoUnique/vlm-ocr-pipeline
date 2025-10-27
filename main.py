@@ -98,18 +98,26 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         epilog=textwrap.dedent(
             """
             Examples:
-              # Basic usage
+              # Basic usage (default: doclayout-yolo detector + gemini recognizer)
               python main.py --input document.pdf
-              python main.py --input document.pdf --backend gemini
-              
+
+              # Different recognizers
+              python main.py --input document.pdf --recognizer gpt-4o
+              python main.py --input document.pdf --recognizer paddleocr-vl
+
+              # Custom backends
+              python main.py --input document.pdf \
+                  --detector mineru-vlm --detector-backend vllm \
+                  --recognizer paddleocr-vl --recognizer-backend sglang
+
               # Traditional pipeline with ordering
               python main.py --input document.pdf --sorter pymupdf
               python main.py --input document.pdf --sorter mineru-xycut
-              
+
               # MinerU VLM (detection + ordering)
-              python main.py --input document.pdf --detector mineru-vlm --sorter mineru-vlm \
-                  --mineru-model opendatalab/PDF-Extract-Kit-1.0
-              
+              python main.py --input document.pdf \
+                  --detector mineru-vlm --sorter mineru-vlm
+
               # Advanced options
               python main.py --input /path/to/images/
               python main.py --input document.pdf --output /custom/output/
@@ -134,7 +142,6 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         default="output",
         help="Output directory path (default: ./output)",
     )
-    parser.add_argument("--model-path", type=str, help="Path to custom DocLayout-YOLO model (optional)")
     parser.add_argument(
         "--confidence",
         type=float,
@@ -144,25 +151,19 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-cache", action="store_true", help="Disable caching (default: caching enabled)")
     parser.add_argument("--cache-dir", type=str, default=".cache", help="Cache directory path (default: ./.cache)")
     parser.add_argument("--temp-dir", type=str, default=".tmp", help="Temporary files directory path (default: ./.tmp)")
+
+    # Deprecated arguments (for backward compatibility)
     parser.add_argument(
         "--backend",
         choices=["openai", "gemini"],
-        default="openai",
-        help='Backend API to use: "openai" (OpenAI/OpenRouter) or "gemini" (Google Gemini) (default: openai)',
+        help="[DEPRECATED] Use --recognizer and --recognizer-backend instead",
     )
     parser.add_argument(
         "--model",
         type=str,
-        default="gemini-2.5-flash",
-        help='Model to use (default: gemini-2.5-flash). For OpenRouter: use format like "openai/gpt-4"',
+        help="[DEPRECATED] Use --recognizer MODEL_NAME instead",
     )
-    parser.add_argument(
-        "--gemini-tier",
-        type=str,
-        choices=["free", "tier1", "tier2", "tier3"],
-        default="free",
-        help="Gemini API tier for rate limiting (only used with --backend gemini) (default: free)",
-    )
+    parser.add_argument("--model-path", type=str, help="[DEPRECATED] Use --detector-model-path instead")
 
     page_group = parser.add_mutually_exclusive_group()
     page_group.add_argument(
@@ -187,64 +188,93 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         default="INFO",
         help="Logging level (default: INFO)",
     )
-    # Modular detector/sorter options
-    parser.add_argument(
+    # Layout Detection Stage
+    detection_group = parser.add_argument_group("Layout Detection")
+    detection_group.add_argument(
         "--detector",
-        choices=["doclayout-yolo", "mineru-doclayout-yolo", "mineru-vlm", "paddleocr-doclayout-v2"],
+        type=str,
         default="doclayout-yolo",
         help=(
-            "Layout detection method (default: doclayout-yolo). "
-            "Options: doclayout-yolo (this project), mineru-doclayout-yolo (MinerU's YOLO), "
-            "mineru-vlm (MinerU VLM), paddleocr-doclayout-v2 (PaddleOCR PP-DocLayoutV2 with pointer network)."
+            "Detector model name or alias (default: doclayout-yolo). "
+            "Options: doclayout-yolo, mineru-doclayout-yolo, mineru-vlm, paddleocr-doclayout-v2, "
+            "or HuggingFace model path (e.g., opendatalab/PDF-Extract-Kit-1.0)"
         ),
     )
-    parser.add_argument(
+    detection_group.add_argument(
+        "--detector-backend",
+        choices=["pytorch", "hf", "pt-ray", "hf-ray", "vllm", "sglang"],
+        help="Inference backend for detector (auto-selected if not specified)",
+    )
+    detection_group.add_argument(
+        "--detector-model-path",
+        type=str,
+        help="Custom detector model path (overrides model name resolution)",
+    )
+
+    # Reading Order Stage
+    ordering_group = parser.add_argument_group("Reading Order")
+    ordering_group.add_argument(
         "--sorter",
-        choices=[
-            "pymupdf",
-            "mineru-layoutreader",
-            "mineru-xycut",
-            "mineru-vlm",
-            "olmocr-vlm",
-            "paddleocr-doclayout-v2",
-        ],
+        type=str,
         help=(
-            "Reading order sorting method. If not specified, defaults to mineru-xycut (fast and accurate). "
-            "Options: pymupdf (multi-column), mineru-layoutreader (LayoutLMv3), "
-            "mineru-xycut (XY-Cut algorithm, default), mineru-vlm (VLM ordering), olmocr-vlm (VLM full-page), "
-            "paddleocr-doclayout-v2 (passthrough for PP-DocLayoutV2 pointer network ordering)."
+            "Sorter model name or alias (auto-selected if not specified). "
+            "Options: pymupdf, mineru-xycut, mineru-layoutreader, mineru-vlm, olmocr-vlm, paddleocr-doclayout-v2, "
+            "or HuggingFace model path (e.g., opendatalab/PDF-Extract-Kit-1.0)"
         ),
     )
-
-    # MinerU options
-    mineru_group = parser.add_argument_group("MinerU options")
-    mineru_group.add_argument(
-        "--mineru-model",
-        help="MinerU model path (for --detector mineru-vlm or --sorter mineru-*)",
+    ordering_group.add_argument(
+        "--sorter-backend",
+        choices=["pytorch", "hf", "pt-ray", "hf-ray", "vllm", "sglang"],
+        help="Inference backend for sorter (auto-selected if not specified)",
     )
-    mineru_group.add_argument(
-        "--mineru-backend",
-        choices=["transformers", "vllm-engine", "vllm-async-engine"],
-        default="transformers",
-        help="MinerU VLM backend (default: transformers)",
+    ordering_group.add_argument(
+        "--sorter-model-path",
+        type=str,
+        help="Custom sorter model path (overrides model name resolution)",
     )
 
-    # olmOCR options
-    olmocr_group = parser.add_argument_group("olmOCR options")
-    olmocr_group.add_argument(
-        "--olmocr-model",
-        help="olmOCR model path (for --sorter olmocr-vlm)",
-    )
-
-    # Recognition options
-    recognition_group = parser.add_argument_group("Recognition options")
+    # Text Recognition Stage
+    recognition_group = parser.add_argument_group("Text Recognition")
     recognition_group.add_argument(
         "--recognizer",
-        choices=["openai", "gemini", "paddleocr-vl"],
+        type=str,
+        default="gemini-2.5-flash",
         help=(
-            "Text recognition method. If not specified, uses --backend value. "
-            "Options: openai (OpenAI API), gemini (Google Gemini), paddleocr-vl (PaddleOCR-VL-0.9B local model)."
+            "Recognizer model name (default: gemini-2.5-flash). "
+            "Examples: gemini-2.5-flash, gpt-4o, paddleocr-vl, "
+            "or full model name (e.g., PaddlePaddle/PaddleOCR-VL-0.9B)"
         ),
+    )
+    recognition_group.add_argument(
+        "--recognizer-backend",
+        choices=["pytorch", "hf", "pt-ray", "hf-ray", "vllm", "sglang", "openai", "gemini"],
+        help="Inference backend for recognizer (auto-selected if not specified)",
+    )
+
+    # API-specific options
+    gemini_group = parser.add_argument_group("Gemini API Options")
+    gemini_group.add_argument(
+        "--gemini-tier",
+        type=str,
+        choices=["free", "tier1", "tier2", "tier3"],
+        default="free",
+        help="Gemini API tier for rate limiting (only for gemini-* models, default: free)",
+    )
+
+    # Deprecated MinerU/olmOCR options (kept for backward compatibility)
+    legacy_group = parser.add_argument_group("Legacy Options (Deprecated)")
+    legacy_group.add_argument(
+        "--mineru-model",
+        help="[DEPRECATED] Use --detector or --sorter with model name instead",
+    )
+    legacy_group.add_argument(
+        "--mineru-backend",
+        choices=["transformers", "vllm-engine", "vllm-async-engine"],
+        help="[DEPRECATED] Use --detector-backend or --sorter-backend instead",
+    )
+    legacy_group.add_argument(
+        "--olmocr-model",
+        help="[DEPRECATED] Use --sorter with model name instead",
     )
 
     parser.add_argument(
@@ -264,29 +294,29 @@ def _execute_command(args: argparse.Namespace, parser: argparse.ArgumentParser, 
         parser.error("the following arguments are required: --input/-i")
         return 1  # pragma: no cover - parser.error raises SystemExit
 
+    # Handle deprecated arguments
+    _handle_deprecated_arguments(args, logger)
+
     try:
         # Lazy import: only load Pipeline when actually processing input
         from pipeline import Pipeline  # noqa: PLC0415
 
-        # Use --recognizer if specified, otherwise fall back to --backend
-        backend = args.recognizer if args.recognizer else args.backend
-
         pipeline = Pipeline(
-            model_path=args.model_path,
             confidence_threshold=args.confidence,
             use_cache=not args.no_cache,
             cache_dir=args.cache_dir,
             output_dir=args.output,
             temp_dir=args.temp_dir,
-            backend=backend,
-            model=args.model,
-            gemini_tier=args.gemini_tier,
-            # Modular detector/sorter options
+            # Stage-specific options
             detector=args.detector,
+            detector_backend=args.detector_backend,
+            detector_model_path=args.detector_model_path,
             sorter=args.sorter,
-            mineru_model=args.mineru_model,
-            mineru_backend=args.mineru_backend,
-            olmocr_model=args.olmocr_model,
+            sorter_backend=args.sorter_backend,
+            sorter_model_path=args.sorter_model_path,
+            recognizer=args.recognizer,
+            recognizer_backend=args.recognizer_backend,
+            gemini_tier=args.gemini_tier,
         )
 
         return _run_pipeline(pipeline, args, logger)
@@ -298,18 +328,129 @@ def _execute_command(args: argparse.Namespace, parser: argparse.ArgumentParser, 
         return 1
 
 
+def _handle_deprecated_arguments(args: argparse.Namespace, logger: logging.Logger) -> None:  # noqa: PLR0912
+    """Handle deprecated arguments and migrate to new format."""
+    import warnings  # noqa: PLC0415
+
+    # Handle deprecated --backend and --model
+    if args.backend or args.model:
+        if args.backend:
+            warnings.warn(
+                "--backend is deprecated. Use --recognizer MODEL_NAME --recognizer-backend BACKEND instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            logger.warning("--backend is deprecated, use --recognizer and --recognizer-backend instead")
+
+        if args.model:
+            warnings.warn(
+                "--model is deprecated. Use --recognizer MODEL_NAME instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            logger.warning("--model is deprecated, use --recognizer instead")
+
+        # Auto-migrate to new format
+        if args.model and not hasattr(args, "recognizer") or args.recognizer == "gemini-2.5-flash":
+            args.recognizer = args.model
+            logger.info("Migrated --model=%s to --recognizer=%s", args.model, args.recognizer)
+
+        if args.backend and not hasattr(args, "recognizer_backend") or args.recognizer_backend is None:
+            args.recognizer_backend = args.backend
+            logger.info("Migrated --backend=%s to --recognizer-backend=%s", args.backend, args.recognizer_backend)
+
+    # Handle deprecated --model-path
+    if args.model_path:
+        warnings.warn(
+            "--model-path is deprecated. Use --detector-model-path instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        logger.warning("--model-path is deprecated, use --detector-model-path instead")
+        if not hasattr(args, "detector_model_path") or args.detector_model_path is None:
+            args.detector_model_path = args.model_path
+            logger.info("Migrated --model-path to --detector-model-path")
+
+    # Handle deprecated --mineru-backend
+    if args.mineru_backend:
+        warnings.warn(
+            "--mineru-backend is deprecated. Use --detector-backend or --sorter-backend instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        logger.warning("--mineru-backend is deprecated, use --detector-backend or --sorter-backend instead")
+
+        # Map old MinerU backend names to new backend names
+        backend_mapping = {
+            "transformers": "hf",
+            "vllm-engine": "vllm",
+            "vllm-async-engine": "vllm",
+        }
+        new_backend = backend_mapping.get(args.mineru_backend, args.mineru_backend)
+
+        # Auto-migrate to new format
+        if args.detector == "mineru-vlm" and (not hasattr(args, "detector_backend") or args.detector_backend is None):
+            args.detector_backend = new_backend
+            logger.info("Migrated --mineru-backend=%s to --detector-backend=%s", args.mineru_backend, new_backend)
+
+        if args.sorter == "mineru-vlm" and (not hasattr(args, "sorter_backend") or args.sorter_backend is None):
+            args.sorter_backend = new_backend
+            logger.info("Migrated --mineru-backend=%s to --sorter-backend=%s", args.mineru_backend, new_backend)
+
+    # Handle deprecated --mineru-model
+    if args.mineru_model:
+        warnings.warn(
+            "--mineru-model is deprecated. Use --detector or --sorter with model name directly.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        logger.warning("--mineru-model is deprecated, use --detector or --sorter with model name instead")
+
+        # Auto-migrate to new format
+        if args.detector == "mineru-vlm":
+            args.detector = args.mineru_model
+            logger.info("Migrated --mineru-model to --detector=%s", args.mineru_model)
+
+        if args.sorter == "mineru-vlm":
+            args.sorter = args.mineru_model
+            logger.info("Migrated --mineru-model to --sorter=%s", args.mineru_model)
+
+    # Handle deprecated --olmocr-model
+    if args.olmocr_model:
+        warnings.warn(
+            "--olmocr-model is deprecated. Use --sorter with model name directly.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        logger.warning("--olmocr-model is deprecated, use --sorter with model name instead")
+
+        if args.sorter == "olmocr-vlm":
+            args.sorter = args.olmocr_model
+            logger.info("Migrated --olmocr-model to --sorter=%s", args.olmocr_model)
+
+
 def _handle_rate_limit_status(args: argparse.Namespace) -> bool:
     if not args.rate_limit_status:
         return False
 
-    if args.backend != "gemini":
+    # Check if using Gemini recognizer
+    recognizer_backend = args.recognizer_backend
+    if recognizer_backend is None:
+        # Try to infer from recognizer name
+        if args.recognizer.startswith("gemini"):
+            recognizer_backend = "gemini"
+        else:
+            recognizer_backend = "unknown"
+
+    if recognizer_backend != "gemini":
         print("\n⚠️  Rate limit status is only available for Gemini backend")
-        print(f"Current backend: {args.backend}")
+        print(f"Current recognizer backend: {recognizer_backend}")
+        print("Use --recognizer gemini-2.5-flash or similar to use Gemini")
         return True
 
     from pipeline.recognition.api.ratelimit import rate_limiter  # noqa: PLC0415
 
-    rate_limiter.set_tier_and_model(args.gemini_tier, args.model)
+    rate_limiter.set_tier_and_model(args.gemini_tier, args.recognizer)
     status = rate_limiter.get_status()
     _print_rate_limit_status(status)
     return True
@@ -351,12 +492,11 @@ def _run_pipeline(pipeline: Pipeline, args: argparse.Namespace, logger: logging.
     logger.info("Starting VLM OCR Pipeline")
     logger.info("Input: %s", args.input)
     logger.info("Output: %s", args.output)
-    logger.info("Backend: %s", args.backend)
-    logger.info("Model: %s", args.model)
-    if args.backend == "gemini":
+    logger.info("Detector: %s (backend: %s)", args.detector, args.detector_backend or "auto")
+    logger.info("Sorter: %s (backend: %s)", pipeline.sorter_name, args.sorter_backend or "auto")
+    logger.info("Recognizer: %s (backend: %s)", args.recognizer, args.recognizer_backend or "auto")
+    if args.recognizer.startswith("gemini"):
         logger.info("Gemini Tier: %s", args.gemini_tier)
-    logger.info("Detector: %s", args.detector)
-    logger.info("Sorter: %s", pipeline.sorter_name)
     input_path = Path(args.input)
     if not input_path.exists():
         logger.error("Input path does not exist: %s", input_path)

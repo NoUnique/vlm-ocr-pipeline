@@ -1,58 +1,168 @@
 # Model Configuration
 # Default models and alternative options for detectors, sorters, and recognizers
 #
-# Note: Models with null default_model either use bundled models or don't require models
+# Each model definition includes:
+#   - default_model: Model identifier (null for bundled/rule-based models)
+#   - description: Human-readable description
+#   - supported_backends: List of compatible inference backends (empty for rule-based)
+#   - default_backend: Auto-selected backend when not specified (null for rule-based)
+#   - backend_param_name: Actual parameter name used in code (if different from 'backend')
+#   - backend_mapping: Maps user-friendly backend names to actual implementation values
+#   - alternative_models: Alternative model options (optional)
 
 detectors:
-  mineru-vlm:
-    default_model: "opendatalab/MinerU2.5-2509-1.2B"
-    description: "MinerU 2.5 VLM detector (1.2B parameters)"
-    alternative_models:
-      - "opendatalab/PDF-Extract-Kit-1.0"
-      - "opendatalab/MinerU2.0-1.5B"
-
   doclayout-yolo:
     default_model: "models/doclayout_yolo_docstructbench_imgsz1024.pt"
     description: "DocLayout-YOLO trained on DocStructBench"
+    supported_backends: []  # Native PyTorch only, no backend parameter
+    default_backend: null
 
   mineru-doclayout-yolo:
     default_model: null  # Uses MinerU's bundled model
     description: "MinerU's DocLayout-YOLO implementation"
+    supported_backends: []  # Native PyTorch only, no backend parameter
+    default_backend: null
+
+  mineru-vlm:
+    default_model: "opendatalab/MinerU2.5-2509-1.2B"
+    description: "MinerU 2.5 VLM detector (1.2B parameters)"
+    supported_backends: ["hf", "vllm"]  # Only transformers and vllm are tested
+    default_backend: "hf"
+    backend_param_name: "backend"
+    backend_mapping:
+      hf: "transformers"          # HuggingFace Transformers
+      vllm: "vllm-engine"         # vLLM inference engine
+    alternative_models:
+      - "opendatalab/PDF-Extract-Kit-1.0"
+      - "opendatalab/MinerU2.0-1.5B"
 
   paddleocr-doclayout-v2:
     default_model: null  # Uses PaddleOCR's bundled model
     description: "PP-DocLayoutV2 with pointer network"
+    supported_backends: []  # PaddlePaddle only, no backend parameter
+    default_backend: null
 
 sorters:
-  olmocr-vlm:
-    default_model: "allenai/olmOCR-7B-0825-FP8"
-    description: "olmOCR VLM sorter (7B parameters, FP8 quantized)"
-    alternative_models:
-      - "allenai/olmOCR-7B-1024-FP8"
-
-  mineru-vlm:
-    default_model: "opendatalab/MinerU2.5-2509-1.2B"
-    description: "MinerU 2.5 VLM (detector + sorter)"
-
-  mineru-layoutreader:
-    default_model: null  # Uses MinerU's bundled LayoutLMv3 model
-    description: "LayoutReader based on LayoutLMv3"
+  pymupdf:
+    default_model: null  # No model required (uses PyMuPDF)
+    description: "Multi-column detection with PyMuPDF"
+    supported_backends: []  # Rule-based, no inference backend
+    default_backend: null
 
   mineru-xycut:
     default_model: null  # No model required (algorithm-based)
     description: "Fast XY-Cut algorithm"
+    supported_backends: []  # Algorithm-based, no inference backend
+    default_backend: null
 
-  pymupdf:
-    default_model: null  # No model required (uses PyMuPDF)
-    description: "Multi-column detection with PyMuPDF"
+  mineru-layoutreader:
+    default_model: null  # Uses MinerU's bundled LayoutLMv3 model
+    description: "LayoutReader based on LayoutLMv3"
+    supported_backends: []  # HuggingFace Transformers only, uses device parameter
+    default_backend: null
+
+  mineru-vlm:
+    default_model: "opendatalab/MinerU2.5-2509-1.2B"
+    description: "MinerU 2.5 VLM (detector + sorter)"
+    supported_backends: []  # Uses detector's backend, no separate backend parameter
+    default_backend: null
+
+  olmocr-vlm:
+    default_model: "allenai/olmOCR-7B-0825-FP8"
+    description: "olmOCR VLM sorter (7B parameters, FP8 quantized)"
+    supported_backends: ["hf", "vllm"]  # HuggingFace or vLLM
+    default_backend: "hf"
+    backend_param_name: "use_vllm"
+    backend_mapping:
+      hf: false       # use_vllm=False (HuggingFace Transformers)
+      vllm: true      # use_vllm=True (vLLM)
+    alternative_models:
+      - "allenai/olmOCR-7B-1024-FP8"
 
   paddleocr-doclayout-v2:
     default_model: null  # Uses detector's ordering
     description: "PP-DocLayoutV2 sorter (preserves pointer network order)"
+    supported_backends: []  # Passthrough sorter, no inference backend
+    default_backend: null
 
 recognizers:
+  # API-based recognizers
+  openai:
+    default_model: "gpt-4o"
+    description: "OpenAI GPT-4o API"
+    supported_backends: ["openai"]
+    default_backend: "openai"
+    alternative_models:
+      - "gpt-4-turbo"
+      - "gpt-3.5-turbo"
+
+  gemini:
+    default_model: "gemini-2.5-flash"
+    description: "Google Gemini 2.5 Flash API"
+    supported_backends: ["gemini"]
+    default_backend: "gemini"
+    alternative_models:
+      - "gemini-2.0-pro"
+      - "gemini-1.5-flash"
+
+  # Local model-based recognizers
   paddleocr-vl:
     default_model: "PaddlePaddle/PaddleOCR-VL-0.9B"
     description: "PaddleOCR-VL recognizer (0.9B parameters)"
+    supported_backends: ["pytorch", "vllm", "sglang"]
+    default_backend: "pytorch"
+    backend_param_name: "vl_rec_backend"
+    backend_mapping:
+      pytorch: "native"          # Native PaddlePaddle inference
+      vllm: "vllm-server"        # vLLM server
+      sglang: "sglang-server"    # SGLang server
     alternative_models:
       - "PaddleOCR-VL-0.9B-local"
+
+# Backend Definitions
+# User-friendly backend names and their actual implementation mappings
+backends:
+  pytorch:
+    name: "PyTorch"
+    description: "Native PyTorch inference (single GPU)"
+    use_cases: ["DocLayout-YOLO", "PaddleOCR models"]
+
+  hf:
+    name: "HuggingFace Transformers"
+    description: "HuggingFace Transformers library (single GPU)"
+    use_cases: ["MinerU VLM", "olmOCR", "LayoutReader"]
+
+  vllm:
+    name: "vLLM"
+    description: "vLLM inference engine (high-throughput VLM serving)"
+    use_cases: ["MinerU VLM", "olmOCR", "PaddleOCR-VL"]
+
+  sglang:
+    name: "SGLang"
+    description: "SGLang inference engine (structured generation)"
+    use_cases: ["PaddleOCR-VL"]
+
+  openai:
+    name: "OpenAI API"
+    description: "OpenAI GPT models via API"
+    use_cases: ["GPT-4o", "GPT-4 Turbo", "GPT-3.5 Turbo"]
+
+  gemini:
+    name: "Google Gemini API"
+    description: "Google Gemini models via API"
+    use_cases: ["Gemini 2.5 Flash", "Gemini 2.0 Pro"]
+
+# Model aliases for convenience
+# Users can use short names instead of full model identifiers
+aliases:
+  detectors:
+    doclayout-yolo: "models/doclayout_yolo_docstructbench_imgsz1024.pt"
+    pdf-extract-kit: "opendatalab/PDF-Extract-Kit-1.0"
+    mineru-vlm: "opendatalab/MinerU2.5-2509-1.2B"
+
+  recognizers:
+    gpt-4o: "gpt-4o"
+    gpt-4-turbo: "gpt-4-turbo"
+    gemini-2.5-flash: "gemini-2.5-flash"
+    gemini-2.0-pro: "gemini-2.0-pro"
+    paddleocr-vl: "PaddlePaddle/PaddleOCR-VL-0.9B"

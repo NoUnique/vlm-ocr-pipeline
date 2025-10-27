@@ -35,14 +35,22 @@ uv run pytest tests/test_types.py::test_bbox_from_xywh  # Single test
 
 ### Running the Pipeline
 ```bash
-# Basic usage
-python main.py --input document.pdf --backend gemini
-python main.py --input document.pdf --backend openai --model gpt-4o
+# Basic usage (default: doclayout-yolo detector + gemini-2.5-flash recognizer)
+python main.py --input document.pdf
+
+# Different recognizers
+python main.py --input document.pdf --recognizer gpt-4o
+python main.py --input document.pdf --recognizer gemini-2.0-pro
+
+# Custom backends for each stage
+python main.py --input doc.pdf \
+    --detector mineru-vlm --detector-backend vllm \
+    --sorter mineru-vlm --sorter-backend vllm \
+    --recognizer paddleocr-vl --recognizer-backend sglang
 
 # Modular detector/sorter combinations
 python main.py --input doc.pdf --detector doclayout-yolo --sorter mineru-xycut
-python main.py --input doc.pdf --detector mineru-vlm --sorter mineru-vlm \
-    --mineru-model opendatalab/PDF-Extract-Kit-1.0
+python main.py --input doc.pdf --detector mineru-vlm --sorter mineru-vlm
 
 # PaddleOCR pipeline (PP-DocLayoutV2 detector + PaddleOCR-VL-0.9B recognizer)
 # Note: paddleocr-doclayout-v2 detector auto-selects its sorter (preserves pointer network ordering)
@@ -55,7 +63,7 @@ python main.py --input doc.pdf --page-range 10-20
 python main.py --input doc.pdf --pages 1,5,10
 
 # Check rate limits (Gemini only)
-python main.py --rate-limit-status --backend gemini --gemini-tier free
+python main.py --rate-limit-status --recognizer gemini-2.5-flash --gemini-tier free
 ```
 
 ### Documentation
@@ -245,11 +253,38 @@ class Block:
 
 **Protocol Interfaces**: Type-safe plugin system via `Detector` and `Sorter` protocols in `pipeline/types.py`
 
+**Backend System**: Stage-specific inference backends for detectors, sorters, and recognizers
+- Configured via `settings/models.yaml` - maps models to supported backends
+- Validation: `pipeline/backend_validator.py` - validates backend compatibility
+- **Available backends**:
+  - `pytorch`: Native PyTorch (DocLayout-YOLO, PaddleOCR)
+  - `hf`: HuggingFace Transformers single-GPU (MinerU, LayoutReader)
+  - `pt-ray`: PyTorch + Ray multi-GPU
+  - `hf-ray`: HuggingFace + Ray multi-GPU
+  - `vllm`: vLLM inference engine (fast VLM inference)
+  - `sglang`: SGLang inference engine (fast VLM inference)
+  - `openai`: OpenAI API (GPT-4o, GPT-4 Turbo)
+  - `gemini`: Google Gemini API (Gemini 2.5 Flash, 2.0 Pro)
+- **Auto-selection**: Backends auto-selected based on model when not specified
+- **Examples**:
+  ```bash
+  # Auto-select backends (recommended)
+  python main.py --input doc.pdf --detector mineru-vlm --recognizer gpt-4o
+
+  # Explicit backends for performance tuning
+  python main.py --input doc.pdf \
+      --detector mineru-vlm --detector-backend vllm \
+      --sorter mineru-vlm --sorter-backend vllm \
+      --recognizer paddleocr-vl --recognizer-backend sglang
+  ```
+
 ### Important File Locations
 
 **Core Pipeline**: `pipeline/__init__.py` - Main `Pipeline` class orchestrating all stages
 
 **Type System**: `pipeline/types.py` - BBox, Region, Detector/Sorter protocols (read this first!)
+
+**Backend Validation**: `pipeline/backend_validator.py` - Backend compatibility validation and resolution
 
 **Detectors**:
 - `pipeline/layout/detection/doclayout_yolo.py` - This project's DocLayout-YOLO

@@ -74,43 +74,46 @@ class Pipeline:
 
     def __init__(  # noqa: PLR0912, PLR0915
         self,
-        model_path: str | Path | None = None,
         confidence_threshold: float | None = None,
         use_cache: bool = True,
         cache_dir: str | Path = ".cache",
         output_dir: str | Path = "output",
         temp_dir: str | Path = ".tmp",
-        backend: str = "openai",
-        model: str = "gemini-2.5-flash",
-        gemini_tier: str = "free",
-        # Modular detector/sorter options
+        # Layout Detection Stage
         detector: str = "doclayout-yolo",
+        detector_backend: str | None = None,
+        detector_model_path: str | Path | None = None,
+        # Reading Order Stage
         sorter: str | None = None,
-        mineru_model: str | None = None,
-        mineru_backend: str = "transformers",
-        olmocr_model: str | None = None,
-        # Renderer option
+        sorter_backend: str | None = None,
+        sorter_model_path: str | Path | None = None,
+        # Text Recognition Stage
+        recognizer: str = "gemini-2.5-flash",
+        recognizer_backend: str | None = None,
+        # API-specific options
+        gemini_tier: str = "free",
+        # Output options
         renderer: str = "markdown",
-        # Async processing option
+        # Performance options
         use_async: bool = False,
     ):
         """Initialize VLM OCR processing pipeline.
 
         Args:
-            model_path: DocLayout-YOLO model path (used if detector="doclayout-yolo")
             confidence_threshold: Detection confidence threshold (None = load from config)
             use_cache: Whether to use caching
             cache_dir: Cache directory path
             output_dir: Output directory path
             temp_dir: Temporary files directory path
-            backend: Backend API to use ("openai" or "gemini")
-            model: Model to use for text processing
-            gemini_tier: Gemini API tier for rate limiting (only used with gemini backend)
-            detector: Detector to use ("doclayout-yolo", "mineru-vlm", "none")
-            sorter: Sorter to use (None for auto-selection, "pymupdf" for multi-column)
-            mineru_model: MinerU model path (for mineru-vlm detector/sorter)
-            mineru_backend: MinerU backend ("transformers", "vllm-engine", "vllm-async-engine")
-            olmocr_model: olmOCR model path (for olmocr-vlm sorter)
+            detector: Detector model name or alias (e.g., "doclayout-yolo", "mineru-vlm")
+            detector_backend: Inference backend for detector (None = auto-select)
+            detector_model_path: Custom detector model path (overrides model name resolution)
+            sorter: Sorter model name or alias (None = auto-select)
+            sorter_backend: Inference backend for sorter (None = auto-select)
+            sorter_model_path: Custom sorter model path (overrides model name resolution)
+            recognizer: Recognizer model name (e.g., "gemini-2.5-flash", "gpt-4o", "paddleocr-vl")
+            recognizer_backend: Inference backend for recognizer (None = auto-select)
+            gemini_tier: Gemini API tier for rate limiting (only for gemini-* recognizers)
             renderer: Output format renderer ("markdown" or "plaintext")
             use_async: Enable async API clients for concurrent block processing (improves performance)
         """
@@ -118,14 +121,36 @@ class Pipeline:
         models_config = _load_yaml_config(Path("settings") / "models.yaml")
         detection_config = _load_yaml_config(Path("settings") / "detection_config.yaml")
 
-        self.backend = backend.lower()
-        # Override model name for paddleocr-vl backend
-        if self.backend == "paddleocr-vl":
-            self.model = "paddleocr-vl"
-        else:
-            self.model = model
+        # Import backend validator
+        from .backend_validator import (  # noqa: PLC0415
+            resolve_detector_backend,
+            resolve_recognizer_backend,
+            resolve_sorter_backend,
+        )
+
+        # Resolve and validate backends
+        detector_backend, detector_error = resolve_detector_backend(detector, detector_backend)
+        if detector_error:
+            logger.warning("Detector backend validation: %s", detector_error)
+
+        self.recognizer_model = recognizer  # Store recognizer model name
+        recognizer_backend, recognizer_error = resolve_recognizer_backend(recognizer, recognizer_backend)
+        if recognizer_error:
+            raise ValueError(f"Recognizer backend validation failed: {recognizer_error}")
+
+        # Ensure recognizer_backend is not None after validation
+        if recognizer_backend is None:
+            raise ValueError(f"No backend available for recognizer: {recognizer}")
+
+        # Store resolved values
+        self.detector_backend = detector_backend
+        self.recognizer_backend = recognizer_backend
         self.gemini_tier = gemini_tier
         self.renderer = renderer.lower()
+
+        # Backward compatibility: store backend and model attributes
+        self.backend = recognizer_backend  # For backward compatibility
+        self.model = recognizer  # For backward compatibility
 
         # Validate renderer
         if self.renderer not in ["markdown", "plaintext"]:
@@ -167,9 +192,15 @@ class Pipeline:
                 sorter = "mineru-xycut"
                 logger.info("Using default sorter='mineru-xycut' (fast and accurate)")
 
+        # Resolve and validate sorter backend
+        sorter_backend, sorter_error = resolve_sorter_backend(sorter, sorter_backend)
+        if sorter_error:
+            logger.warning("Sorter backend validation: %s", sorter_error)
+
         # Store detector/sorter choices
         self.detector_name = detector
         self.sorter_name = sorter
+        self.sorter_backend = sorter_backend
 
         # Validate combination
         is_valid, message = validate_combination(detector, sorter)
@@ -184,9 +215,9 @@ class Pipeline:
             sorter = "mineru-xycut"
             self.sorter_name = "mineru-xycut"
 
-        # Initialize rate limiter (only for Gemini backend)
-        if self.backend == "gemini":
-            rate_limiter.set_tier_and_model(gemini_tier, model)
+        # Initialize rate limiter (only for Gemini recognizer)
+        if self.recognizer_backend == "gemini":
+            rate_limiter.set_tier_and_model(gemini_tier, recognizer)
 
         # Convert paths to Path objects
         self.cache_dir = Path(cache_dir)
@@ -207,24 +238,55 @@ class Pipeline:
             confidence_threshold = detector_specific_config.get("confidence_threshold", DEFAULT_CONFIDENCE_THRESHOLD)
             logger.debug("Using confidence_threshold=%.2f from config for detector=%s", confidence_threshold, detector)
 
+        # Helper function to map backend using backend_mapping from config
+        def map_backend(stage: str, model_name: str, backend: str | None) -> dict[str, Any]:
+            """Map user-friendly backend to actual implementation parameter."""
+            if backend is None:
+                return {}
+
+            stage_config = models_config.get(f"{stage}s", {}).get(model_name, {})
+            backend_mapping = stage_config.get("backend_mapping", {})
+            backend_param_name = stage_config.get("backend_param_name", "backend")
+
+            if backend_mapping and backend in backend_mapping:
+                mapped_value = backend_mapping[backend]
+                return {backend_param_name: mapped_value}
+            elif backend_param_name:
+                return {backend_param_name: backend}
+            return {}
+
         # Create detector
         detector_kwargs = {}
         if detector == "doclayout-yolo":
             detector_kwargs = {
-                "model_path": model_path,
+                "model_path": detector_model_path,
                 "confidence_threshold": confidence_threshold,
             }
         elif detector == "mineru-vlm":
-            # Get default model from models_config
-            mineru_detector_config = models_config.get("detectors", {}).get("mineru-vlm", {})
-            default_model = mineru_detector_config.get("default_model", "opendatalab/MinerU2.5-2509-1.2B")
-            final_model = mineru_model if mineru_model is not None else default_model
-            logger.debug("MinerU VLM detector: mineru_model=%s, final_model=%s", mineru_model, final_model)
+            # Use detector as model name (e.g., "opendatalab/PDF-Extract-Kit-1.0")
+            # Or get default model from models_config
+            detector_config = models_config.get("detectors", {}).get("mineru-vlm", {})
+            default_model = detector_config.get("default_model", "opendatalab/MinerU2.5-2509-1.2B")
+            final_model = detector if detector.startswith("opendatalab/") else default_model
+
+            # Map backend (hf -> transformers, vllm -> vllm-engine)
+            backend_kwargs = map_backend("detector", "mineru-vlm", detector_backend)
+            logger.debug(
+                "MinerU VLM detector: detector=%s, final_model=%s, backend_kwargs=%s",
+                detector,
+                final_model,
+                backend_kwargs,
+            )
+
             detector_kwargs = {
-                "model": final_model,  # MinerU 2.5 VLM (1.2B)
-                "backend": mineru_backend,
+                "model": final_model,
+                **backend_kwargs,
                 "detection_only": (sorter != "mineru-vlm"),  # Full pipeline if using mineru-vlm sorter
             }
+        elif detector == "paddleocr-doclayout-v2":
+            detector_kwargs = {}  # No backend parameter
+        elif detector == "mineru-doclayout-yolo":
+            detector_kwargs = {}  # No backend parameter
 
         # Create detector
         self.detector: Detector | None = (
@@ -234,45 +296,81 @@ class Pipeline:
         # Create sorter
         sorter_kwargs = {}
         if sorter == "olmocr-vlm":
-            # Get default model from models_config
-            olmocr_sorter_config = models_config.get("sorters", {}).get("olmocr-vlm", {})
-            default_olmocr_model = olmocr_sorter_config.get("default_model", "allenai/olmOCR-7B-0825-FP8")
+            # Use sorter as model name if it looks like a HF path
+            sorter_config = models_config.get("sorters", {}).get("olmocr-vlm", {})
+            default_model = sorter_config.get("default_model", "allenai/olmOCR-7B-0825-FP8")
+            final_model = sorter if sorter.startswith("allenai/") else default_model
+
+            # Map backend (hf -> use_vllm=False, vllm -> use_vllm=True)
+            backend_kwargs = map_backend("sorter", "olmocr-vlm", sorter_backend)
+            logger.debug(
+                "olmOCR VLM sorter: sorter=%s, final_model=%s, backend_kwargs=%s", sorter, final_model, backend_kwargs
+            )
+
             sorter_kwargs = {
-                "model": olmocr_model or default_olmocr_model,
+                "model": final_model,
+                **backend_kwargs,
                 "use_anchoring": True,
             }
+        elif sorter == "mineru-vlm":
+            sorter_kwargs = {}  # Uses detector's backend, no separate parameters
+        elif sorter == "mineru-layoutreader":
+            sorter_kwargs = {}  # No backend parameter, uses device
+        else:
+            # For pymupdf, mineru-xycut, paddleocr-doclayout-v2, etc. (no backend needed)
+            sorter_kwargs = {}
 
         self.sorter: Sorter | None = create_sorter_impl(sorter, **sorter_kwargs) if sorter else None
 
         # Recognizer (using factory pattern)
         recognizer_kwargs: dict[str, Any] = {}
-        if backend == "paddleocr-vl":
+        if recognizer_backend in ["pytorch", "vllm", "sglang"] or recognizer.startswith("PaddlePaddle/"):
+            # PaddleOCR-VL recognizer
+            # Map backend (pytorch -> native, vllm -> vllm-server, sglang -> sglang-server)
+            backend_kwargs = map_backend("recognizer", "paddleocr-vl", recognizer_backend)
+            logger.debug("PaddleOCR-VL recognizer: recognizer=%s, backend_kwargs=%s", recognizer, backend_kwargs)
+
             recognizer_kwargs.update(
                 {
                     "device": None,  # Auto-detect
-                    "vl_rec_backend": "native",
+                    **backend_kwargs,
                     "use_layout_detection": False,  # We handle layout detection separately
+                    "model": recognizer if recognizer.startswith("PaddlePaddle/") else None,
                 }
             )
-        else:
+            recognizer_backend = "paddleocr-vl"  # Override for factory
+        elif recognizer_backend in ["openai", "gemini"]:
             recognizer_kwargs.update(
                 {
                     "cache_dir": self.cache_dir,
                     "use_cache": use_cache,
-                    "model": model,
+                    "model": recognizer,
+                    "gemini_tier": gemini_tier,
+                    "use_async": use_async,
+                }
+            )
+        else:
+            # Default to API-based recognizers
+            recognizer_kwargs.update(
+                {
+                    "cache_dir": self.cache_dir,
+                    "use_cache": use_cache,
+                    "model": recognizer,
                     "gemini_tier": gemini_tier,
                     "use_async": use_async,
                 }
             )
 
-        self.recognizer: Recognizer = create_recognizer(backend, **recognizer_kwargs)
+        self.recognizer: Recognizer = create_recognizer(recognizer_backend, **recognizer_kwargs)
 
         logger.info(
-            "Pipeline initialized: detector=%s, sorter=%s, recognizer=%s (model=%s)",
+            "Pipeline initialized: detector=%s (backend=%s), sorter=%s (backend=%s), recognizer=%s (backend=%s)",
             detector,
+            detector_backend or "auto",
             sorter,
-            self.backend.upper(),
-            self.model,
+            sorter_backend or "auto",
+            recognizer,
+            recognizer_backend,
         )
 
         # Initialize 8 pipeline stages
