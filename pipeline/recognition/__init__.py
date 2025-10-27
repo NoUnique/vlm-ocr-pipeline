@@ -29,9 +29,19 @@ except ImportError:
     PaddleOCRVLRecognizer = None  # type: ignore[misc, assignment]
     _HAS_PADDLEOCR_VL = False
 
+# Lazy import for DeepSeek-OCR (optional dependency)
+try:
+    from .deepseek import DeepSeekOCRRecognizer  # noqa: PLC0415
+
+    _HAS_DEEPSEEK_OCR = True
+except ImportError:
+    DeepSeekOCRRecognizer = None  # type: ignore[misc, assignment]
+    _HAS_DEEPSEEK_OCR = False
+
 __all__ = [
     "TextRecognizer",
     "PaddleOCRVLRecognizer",
+    "DeepSeekOCRRecognizer",
     "create_recognizer",
     "list_available_recognizers",
 ]
@@ -353,6 +363,10 @@ def _register_recognizers() -> None:
     # Optional: PaddleOCR-VL
     if _HAS_PADDLEOCR_VL and PaddleOCRVLRecognizer is not None:
         _RECOGNIZER_REGISTRY["paddleocr-vl"] = PaddleOCRVLRecognizer
+
+    # Optional: DeepSeek-OCR
+    if _HAS_DEEPSEEK_OCR and DeepSeekOCRRecognizer is not None:
+        _RECOGNIZER_REGISTRY["deepseek-ocr"] = DeepSeekOCRRecognizer
 
 
 # Register on module import

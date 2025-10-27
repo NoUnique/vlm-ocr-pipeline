@@ -119,6 +119,17 @@ recognizers:
     alternative_models:
       - "PaddleOCR-VL-0.9B-local"
 
+  deepseek-ocr:
+    default_model: "deepseek-ai/DeepSeek-OCR"
+    description: "DeepSeek-OCR VLM for document understanding with contextual optical compression"
+    supported_backends: ["hf", "vllm"]  # HuggingFace Transformers or vLLM
+    default_backend: "hf"
+    backend_param_name: "backend"
+    backend_mapping:
+      hf: "hf"          # HuggingFace Transformers (flash_attention_2)
+      vllm: "vllm"      # vLLM AsyncLLMEngine
+    alternative_models: []
+
 # Backend Definitions
 # User-friendly backend names and their actual implementation mappings
 backends:

@@ -57,6 +57,10 @@ python main.py --input doc.pdf --detector mineru-vlm --sorter mineru-vlm
 python main.py --input doc.pdf --detector paddleocr-doclayout-v2 \
     --recognizer paddleocr-vl
 
+# DeepSeek-OCR recognizer (contextual optical compression)
+python main.py --input doc.pdf --recognizer deepseek-ocr --recognizer-backend hf
+python main.py --input doc.pdf --recognizer deepseek-ocr --recognizer-backend vllm
+
 # Page limiting (for testing/cost control)
 python main.py --input doc.pdf --max-pages 5
 python main.py --input doc.pdf --page-range 10-20

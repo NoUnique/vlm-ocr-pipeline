@@ -26,7 +26,7 @@ uv run mkdocs serve
 
 - **Document Layout Detection**: Automatically detects text, tables, figures, and other elements using DocLayout-YOLO, PaddleOCR PP-DocLayoutV2, or MinerU
 - **Multi-VLM Backend Support**: Support for OpenAI, OpenRouter, and Gemini VLM APIs for text extraction and processing
-- **Local VLM Recognition**: PaddleOCR-VL-0.9B for local text recognition (NaViT + ERNIE-4.5-0.3B, 109 languages)
+- **Local VLM Recognition**: PaddleOCR-VL-0.9B (NaViT + ERNIE-4.5-0.3B, 109 languages) and DeepSeek-OCR (contextual optical compression)
 - **Modular Detection & Ordering**: Flexible detector and sorter combinations (DocLayout-YOLO, PaddleOCR, MinerU, olmOCR)
 - **Advanced Ordering Algorithms**: Support for multi-column, LayoutReader (LayoutLMv3), XY-Cut, and VLM-based ordering
 - **Unified BBox System**: Integer-based bounding box (internal: xyxy, JSON: xywh) with automatic conversion between 6+ different formats (YOLO, MinerU, PyMuPDF, PyPDF, olmOCR)
@@ -91,6 +91,8 @@ vlm-ocr-pipeline/
 │       ├── cache.py
 │       ├── paddleocr/         # PaddleOCR recognizers
 │       │   └── paddleocr_vl.py  # PaddleOCR-VL-0.9B
+│       ├── deepseek/          # DeepSeek-OCR recognizers
+│       │   └── deepseek_ocr.py  # DeepSeek-OCR
 │       └── api/               # VLM API clients (OpenAI, Gemini)
 │
 ├── models/
@@ -100,7 +102,8 @@ vlm-ocr-pipeline/
 │   ├── MinerU/                # MinerU 2.5
 │   ├── olmocr/                # olmOCR
 │   ├── PaddleOCR/             # PaddleOCR v3.3.0 (PP-DocLayoutV2)
-│   └── PaddleX/               # PaddleX v3.3.1 (PaddleOCR-VL-0.9B)
+│   ├── PaddleX/               # PaddleX v3.3.1 (PaddleOCR-VL-0.9B)
+│   └── DeepSeek-OCR/          # DeepSeek-OCR (contextual optical compression)
 │
 ├── settings/
 │   └── prompts/               # YAML prompt templates by model
@@ -168,7 +171,7 @@ graph TD
 
 4. **Recognition Stage** (`RecognitionStage`)
    - Extracts text from each block using VLM or local model
-   - Supports multiple backends: OpenAI, Gemini, PaddleOCR-VL
+   - Supports multiple backends: OpenAI, Gemini, PaddleOCR-VL, DeepSeek-OCR
    - Handles special content types (tables, figures) with appropriate prompts
 
 5. **Block Correction Stage** (`BlockCorrectionStage`)
@@ -463,6 +466,10 @@ python main.py --input doc.pdf --recognizer gemini-2.5-flash
 python main.py --input doc.pdf --recognizer paddleocr-vl --recognizer-backend pytorch
 python main.py --input doc.pdf --recognizer paddleocr-vl --recognizer-backend vllm
 python main.py --input doc.pdf --recognizer paddleocr-vl --recognizer-backend sglang
+
+# Local DeepSeek-OCR (HuggingFace or vLLM)
+python main.py --input doc.pdf --recognizer deepseek-ocr --recognizer-backend hf
+python main.py --input doc.pdf --recognizer deepseek-ocr --recognizer-backend vllm
 ```
 
 ### Backend Compatibility
@@ -485,6 +492,7 @@ python main.py --input doc.pdf --recognizer paddleocr-vl --recognizer-backend sg
 | `openai` (GPT models) | `openai` | `openai` |
 | `gemini` (Gemini models) | `gemini` | `gemini` |
 | `paddleocr-vl` | `pytorch`, `vllm`, `sglang` | `pytorch` |
+| `deepseek-ocr` | `hf`, `vllm` | `hf` |
 
 For detailed backend configuration, see `settings/models.yaml`.
 
@@ -501,6 +509,7 @@ python main.py --input document.pdf
 # Use different recognizer
 python main.py --input document.pdf --recognizer gpt-4o
 python main.py --input document.pdf --recognizer gemini-2.0-pro
+python main.py --input document.pdf --recognizer deepseek-ocr --recognizer-backend hf
 
 # Process a directory of PDFs
 python main.py --input /path/to/pdfs/
