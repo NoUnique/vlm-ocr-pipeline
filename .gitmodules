@@ -6,3 +6,7 @@
 	path = external/olmocr
 	url = https://github.com/allenai/olmocr.git
 	shallow = true
+[submodule "external/DeepSeek-OCR"]
+	path = external/DeepSeek-OCR
+	url = https://github.com/deepseek-ai/DeepSeek-OCR.git
+	shallow = true
