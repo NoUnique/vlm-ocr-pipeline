@@ -122,7 +122,16 @@ class DeepSeekOCRRecognizer(Recognizer):
         self.image_size = image_size
         self.crop_mode = crop_mode
         self.prompt_template = prompt_template
-        self.kwargs = kwargs
+
+        # Filter out kwargs that shouldn't be passed to AutoModel.from_pretrained()
+        # Keep only transformers-related kwargs
+        excluded_keys = {
+            "backend", "model", "model_name", "device", "base_size", "image_size",
+            "crop_mode", "prompt_template", "tensor_parallel_size",
+            "gpu_memory_utilization", "use_bf16", "api_key", "gemini_tier",
+            "rate_limit", "use_async"
+        }
+        self.kwargs = {k: v for k, v in kwargs.items() if k not in excluded_keys}
 
         # Initialize backend-specific components
         if self.backend == "hf":
@@ -156,15 +165,68 @@ class DeepSeekOCRRecognizer(Recognizer):
 
         logger.info("Initializing HuggingFace backend for DeepSeek-OCR...")
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, trust_remote_code=True)
-        self.model = AutoModel.from_pretrained(
-            self.model_name,
-            _attn_implementation="flash_attention_2",
-            trust_remote_code=True,
-            use_safetensors=True,
-            **self.kwargs,
+
+        # Check if multi-GPU is available
+        gpu_count = torch.cuda.device_count()
+        use_multi_gpu = gpu_count > 1
+
+        # Try flash_attention_2, fallback to eager if not available
+        try:
+            if use_multi_gpu:
+                logger.info(f"Loading model with device_map='auto' for {gpu_count} GPUs")
+                self.model = AutoModel.from_pretrained(
+                    self.model_name,
+                    device_map="auto",
+                    _attn_implementation="flash_attention_2",
+                    torch_dtype=torch.bfloat16,
+                    trust_remote_code=True,
+                    use_safetensors=True,
+                    **self.kwargs,
+                )
+            else:
+                self.model = AutoModel.from_pretrained(
+                    self.model_name,
+                    _attn_implementation="flash_attention_2",
+                    trust_remote_code=True,
+                    use_safetensors=True,
+                    **self.kwargs,
+                )
+                self.model = self.model.eval().to(self.device).to(torch.bfloat16)
+            logger.info("Using Flash Attention 2")
+        except (ImportError, ValueError):
+            logger.warning("Flash Attention 2 not available, using eager attention")
+            if use_multi_gpu:
+                logger.info(f"Loading model with device_map='auto' for {gpu_count} GPUs")
+                self.model = AutoModel.from_pretrained(
+                    self.model_name,
+                    device_map="auto",
+                    _attn_implementation="eager",
+                    torch_dtype=torch.bfloat16,
+                    trust_remote_code=True,
+                    use_safetensors=True,
+                    **self.kwargs,
+                )
+            else:
+                self.model = AutoModel.from_pretrained(
+                    self.model_name,
+                    _attn_implementation="eager",
+                    trust_remote_code=True,
+                    use_safetensors=True,
+                    **self.kwargs,
+                )
+                self.model = self.model.eval().to(self.device).to(torch.bfloat16)
+
+        # Set to eval mode
+        if not use_multi_gpu:
+            self.model = self.model.eval()
+        else:
+            self.model.eval()
+
+        logger.info(
+            "HuggingFace backend initialized successfully (multi-GPU: %s, device_count: %d)",
+            use_multi_gpu,
+            gpu_count,
         )
-        self.model = self.model.eval().to(self.device).to(torch.bfloat16)
-        logger.info("HuggingFace backend initialized successfully")
 
     def _init_vllm_backend(self) -> None:
         """Initialize vLLM backend."""
@@ -258,10 +320,10 @@ class DeepSeekOCRRecognizer(Recognizer):
             ...     print(f"{block.type}: {block.text}")
         """
         logger.info("=== DeepSeekOCRRecognizer.process_blocks START ===")
-        logger.info("Number of blocks: %d", len(blocks) if blocks else 0)
+        logger.info("Number of blocks: %d", len(blocks) if blocks is not None else 0)
         logger.info("Backend: %s", self.backend)
 
-        if not blocks:
+        if blocks is None or len(blocks) == 0:
             logger.warning("No blocks provided for recognition")
             return []
 
