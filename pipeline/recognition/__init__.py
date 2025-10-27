@@ -373,17 +373,33 @@ def _register_recognizers() -> None:
 _register_recognizers()
 
 
-def create_recognizer(name: str, **kwargs: Any) -> Recognizer:
-    """Create a recognizer instance using factory pattern.
+def create_recognizer(
+    name: str,
+    backend: str | None = None,
+    use_auto_optimization: bool = True,
+    **kwargs: Any,
+) -> Recognizer:
+    """Create a recognizer instance using factory pattern with auto-optimization.
+
+    Auto-optimization (when use_auto_optimization=True):
+    - If backend is None, automatically select based on GPU environment
+    - If tensor_parallel_size not specified, use recommended value
+    - If gpu_memory_utilization not specified, use recommended value
+    - If device not specified, auto-select optimal device
 
     Args:
-        name: Recognizer name ("openai", "gemini", "paddleocr-vl")
+        name: Recognizer name ("openai", "gemini", "paddleocr-vl", "deepseek-ocr")
+        backend: Backend to use (None for auto-select)
+        use_auto_optimization: Enable auto-optimization (default: True)
         **kwargs: Additional arguments passed to the recognizer constructor
             Common args:
                 - cache_dir: Cache directory (default: ".cache")
                 - use_cache: Enable caching (default: True)
                 - model: Model name (backend-specific)
                 - gemini_tier: Gemini API tier ("free", "tier1", etc.)
+                - tensor_parallel_size: Tensor parallel size (auto-optimized if not set)
+                - gpu_memory_utilization: GPU memory utilization (auto-optimized if not set)
+                - device: Device string (auto-selected if not set)
 
     Returns:
         Recognizer instance
@@ -392,20 +408,58 @@ def create_recognizer(name: str, **kwargs: Any) -> Recognizer:
         ValueError: If recognizer name is not registered
 
     Example:
-        >>> # Create OpenAI recognizer
-        >>> recognizer = create_recognizer("openai", model="gpt-4o")
+        >>> # Auto-optimized (recommended)
+        >>> recognizer = create_recognizer("deepseek-ocr")  # Backend auto-selected
 
-        >>> # Create Gemini recognizer
-        >>> recognizer = create_recognizer("gemini", model="gemini-2.5-flash")
+        >>> # Manual backend selection
+        >>> recognizer = create_recognizer("deepseek-ocr", backend="vllm")
 
-        >>> # Create PaddleOCR-VL recognizer (if available)
-        >>> recognizer = create_recognizer("paddleocr-vl")
+        >>> # Disable auto-optimization
+        >>> recognizer = create_recognizer("deepseek-ocr", use_auto_optimization=False)
     """
     if name not in _RECOGNIZER_REGISTRY:
         available = ", ".join(_RECOGNIZER_REGISTRY.keys())
         raise ValueError(f"Unknown recognizer: {name}. Available: {available}")
 
-    logger.info("Creating recognizer: %s", name)
+    # Apply auto-optimization if enabled
+    if use_auto_optimization:
+        from ..gpu_environment import get_gpu_config  # noqa: PLC0415
+
+        gpu_config = get_gpu_config()
+
+        # Auto-select backend if not specified
+        if backend is None and name not in ["openai", "gemini"]:  # API recognizers don't need backend
+            backend = gpu_config.recommended_backend
+            logger.info(f"🚀 Auto-selected backend '{backend}' for recognizer '{name}'")
+
+        # Inject auto-optimized settings (only if not manually overridden)
+        if "tensor_parallel_size" not in kwargs and gpu_config.has_cuda:
+            kwargs["tensor_parallel_size"] = gpu_config.tensor_parallel_size
+            logger.debug(f"Auto-set tensor_parallel_size={gpu_config.tensor_parallel_size}")
+
+        if "gpu_memory_utilization" not in kwargs and gpu_config.has_cuda:
+            kwargs["gpu_memory_utilization"] = gpu_config.gpu_memory_utilization
+            logger.debug(f"Auto-set gpu_memory_utilization={gpu_config.gpu_memory_utilization}")
+
+        if "device" not in kwargs and gpu_config.has_cuda:
+            # Auto-select device based on parallel strategy
+            if gpu_config.tensor_parallel_size > 1:
+                # vLLM will handle multi-GPU internally
+                kwargs["device"] = "cuda"
+            else:
+                # Single GPU
+                kwargs["device"] = "cuda:0"
+            logger.debug(f"Auto-set device={kwargs['device']}")
+
+        if "use_bf16" not in kwargs and gpu_config.has_cuda:
+            kwargs["use_bf16"] = gpu_config.use_bf16
+            logger.debug(f"Auto-set use_bf16={gpu_config.use_bf16}")
+
+    # Pass backend to recognizer if specified
+    if backend is not None:
+        kwargs["backend"] = backend
+
+    logger.info("Creating recognizer: %s (auto-optimized: %s)", name, use_auto_optimization)
     return _RECOGNIZER_REGISTRY[name](**kwargs)
 
 
