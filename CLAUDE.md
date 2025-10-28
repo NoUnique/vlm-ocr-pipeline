@@ -98,6 +98,23 @@ uv run mkdocs gh-deploy --force
 3. Branch: `gh-pages` / `root`
 4. Save
 
+### Benchmarking
+
+```bash
+# Benchmark pipeline performance
+python scripts/benchmark.py --input document.pdf --max-pages 5
+
+# Different detector/backend combinations
+python scripts/benchmark.py --input doc.pdf --detector doclayout-yolo --backend gemini
+python scripts/benchmark.py --input doc.pdf --detector mineru-vlm --backend openai
+
+# Save results to JSON
+python scripts/benchmark.py --input doc.pdf --max-pages 3 --output results.json
+
+# With cache enabled
+python scripts/benchmark.py --input doc.pdf --use-cache
+```
+
 ### Pre-Commit Checklist
 
 Before committing, run the pre-commit check script:
