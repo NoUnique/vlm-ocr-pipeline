@@ -545,11 +545,18 @@ python main.py --input document.pdf --confidence 0.7
 # Use custom model path
 python main.py --input document.pdf --model-path /path/to/custom/model.pt
 
+# DPI configuration for PDF-to-image conversion
+python main.py --input document.pdf --dpi fast      # 150 DPI - fastest
+python main.py --input document.pdf --dpi balanced  # 150→300 dual (recommended)
+python main.py --input document.pdf --dpi quality   # 300 DPI - best quality
+python main.py --input document.pdf --dpi 200       # Custom single DPI
+python main.py --input document.pdf --dpi 150,300   # Custom dual DPI (detection,recognition)
+
 # Enable debug logging
 python main.py --input document.pdf --log-level DEBUG
 
 # Combined advanced usage
-python main.py --input /docs/ --max-pages 3 --confidence 0.8
+python main.py --input /docs/ --max-pages 3 --confidence 0.8 --dpi 250
 ```
 
 #### Modular Detector and Sorter Combinations

@@ -25,6 +25,74 @@ if TYPE_CHECKING:
     from pipeline import Pipeline
 
 
+def parse_dpi_config(dpi_arg: str | None) -> tuple[int | None, int | None, int | None, bool]:
+    """Parse DPI configuration from CLI argument.
+
+    Supports three formats:
+    1. Presets: "fast", "balanced", "quality"
+    2. Single DPI: "200"
+    3. Dual resolution: "150,300" (detection,recognition)
+
+    Args:
+        dpi_arg: DPI argument from CLI (None, preset, single, or comma-separated)
+
+    Returns:
+        Tuple of (dpi, detection_dpi, recognition_dpi, use_dual_resolution)
+
+    Examples:
+        >>> parse_dpi_config(None)
+        (None, None, None, False)
+        >>> parse_dpi_config("fast")
+        (150, 150, 150, False)
+        >>> parse_dpi_config("balanced")
+        (200, 150, 300, True)
+        >>> parse_dpi_config("quality")
+        (300, 300, 300, False)
+        >>> parse_dpi_config("200")
+        (200, 200, 200, False)
+        >>> parse_dpi_config("150,300")
+        (225, 150, 300, True)
+    """
+    if dpi_arg is None:
+        return (None, None, None, False)
+
+    dpi_lower = dpi_arg.lower().strip()
+
+    # Preset configurations
+    presets = {
+        "fast": (150, 150, 150, False),  # Fast processing, lower quality
+        "balanced": (200, 150, 300, True),  # Balanced: fast detection, accurate recognition
+        "quality": (300, 300, 300, False),  # High quality, slower processing
+    }
+
+    if dpi_lower in presets:
+        return presets[dpi_lower]
+
+    # Dual resolution: "150,300"
+    if "," in dpi_arg:
+        try:
+            parts = dpi_arg.split(",")
+            if len(parts) != 2:  # noqa: PLR2004
+                raise ValueError(f"Invalid dual DPI format: {dpi_arg}. Expected format: '150,300'")
+            detection_dpi = int(parts[0].strip())
+            recognition_dpi = int(parts[1].strip())
+            # Use average as default DPI
+            avg_dpi = (detection_dpi + recognition_dpi) // 2
+            return (avg_dpi, detection_dpi, recognition_dpi, True)
+        except (ValueError, IndexError) as e:
+            raise ValueError(f"Invalid dual DPI format: {dpi_arg}. Error: {e}") from e
+
+    # Single DPI value: "200"
+    try:
+        single_dpi = int(dpi_arg)
+        return (single_dpi, single_dpi, single_dpi, False)
+    except ValueError as e:
+        raise ValueError(
+            f"Invalid DPI value: {dpi_arg}. "
+            "Expected preset (fast/balanced/quality), single value (200), or dual (150,300)"
+        ) from e
+
+
 def setup_logging(level: str = "INFO") -> None:
     """Setup logging configuration with timestamped log files."""
     from pipeline.misc import tz_now  # noqa: PLC0415 - lazy import for startup performance
@@ -152,6 +220,18 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cache-dir", type=str, default=".cache", help="Cache directory path (default: ./.cache)")
     parser.add_argument("--temp-dir", type=str, default=".tmp", help="Temporary files directory path (default: ./.tmp)")
 
+    # DPI Settings
+    parser.add_argument(
+        "--dpi",
+        type=str,
+        help=(
+            "DPI for PDF-to-image conversion. Supports: "
+            "presets (fast/balanced/quality), "
+            "single value (200), "
+            "or dual resolution (150,300 for detection,recognition)"
+        ),
+    )
+
     page_group = parser.add_mutually_exclusive_group()
     page_group.add_argument(
         "--max-pages",
@@ -269,6 +349,9 @@ def _execute_command(args: argparse.Namespace, parser: argparse.ArgumentParser, 
         # Lazy import: only load Pipeline when actually processing input
         from pipeline import Pipeline  # noqa: PLC0415
 
+        # Parse DPI configuration
+        dpi, detection_dpi, recognition_dpi, use_dual_resolution = parse_dpi_config(args.dpi)
+
         pipeline = Pipeline(
             confidence_threshold=args.confidence,
             use_cache=not args.no_cache,
@@ -285,6 +368,11 @@ def _execute_command(args: argparse.Namespace, parser: argparse.ArgumentParser, 
             recognizer=args.recognizer,
             recognizer_backend=args.recognizer_backend,
             gemini_tier=args.gemini_tier,
+            # DPI options
+            dpi=dpi,
+            detection_dpi=detection_dpi,
+            recognition_dpi=recognition_dpi,
+            use_dual_resolution=use_dual_resolution,
         )
 
         return _run_pipeline(pipeline, args, logger)

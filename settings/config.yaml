@@ -1,0 +1,32 @@
+# General Pipeline Configuration
+
+# Document Conversion Settings
+conversion:
+  # DPI (Dots Per Inch) for PDF-to-image conversion
+  # Higher DPI = better quality but larger file size and slower processing
+  default_dpi: 200          # Default DPI for all stages if not specified
+  detection_dpi: 150        # Lower DPI for layout detection (faster, less memory)
+  recognition_dpi: 300      # Higher DPI for text recognition (better accuracy)
+
+  # Dual-resolution mode
+  # When enabled, uses detection_dpi for layout detection and recognition_dpi for text extraction
+  use_dual_resolution: false  # Set to true to enable proxy-based detection
+
+  # Image quality settings
+  jpeg_quality: 95          # JPEG quality for saved images (0-100)
+
+# Cache Settings
+cache:
+  enabled: true
+  directory: ".cache"
+  max_size_mb: 5000         # Maximum cache size in MB (0 = unlimited)
+
+# Output Settings
+output:
+  directory: "output"
+  save_intermediate: false  # Save intermediate results (detection, ordering, etc.)
+
+# Temporary Files
+temp:
+  directory: ".tmp"
+  cleanup_on_exit: true     # Remove temporary files when done

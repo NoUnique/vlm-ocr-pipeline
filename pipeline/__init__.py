@@ -92,6 +92,11 @@ class Pipeline:
         renderer: str = "markdown",
         # Performance options
         use_async: bool = False,
+        # DPI options
+        dpi: int | None = None,
+        detection_dpi: int | None = None,
+        recognition_dpi: int | None = None,
+        use_dual_resolution: bool = False,
     ):
         """Initialize VLM OCR processing pipeline.
 
@@ -112,10 +117,33 @@ class Pipeline:
             gemini_tier: Gemini API tier for rate limiting (only for gemini-* recognizers)
             renderer: Output format renderer ("markdown" or "plaintext")
             use_async: Enable async API clients for concurrent block processing (improves performance)
+            dpi: DPI for PDF-to-image conversion (overrides default_dpi from config)
+            detection_dpi: DPI for detection stage (overrides detection_dpi from config)
+            recognition_dpi: DPI for recognition stage (overrides recognition_dpi from config)
+            use_dual_resolution: Use different DPIs for detection and recognition stages
         """
         # Load configuration files
         models_config = _load_yaml_config(Path("settings") / "models.yaml")
         detection_config = _load_yaml_config(Path("settings") / "detection_config.yaml")
+        pipeline_config = _load_yaml_config(Path("settings") / "config.yaml")
+
+        # Load and merge DPI configuration
+        conversion_config = pipeline_config.get("conversion", {})
+        # CLI args override config values
+        self.dpi = dpi if dpi is not None else conversion_config.get("default_dpi", 200)
+        self.detection_dpi = detection_dpi if detection_dpi is not None else conversion_config.get("detection_dpi", 150)
+        self.recognition_dpi = (
+            recognition_dpi if recognition_dpi is not None else conversion_config.get("recognition_dpi", 300)
+        )
+        self.use_dual_resolution = use_dual_resolution or conversion_config.get("use_dual_resolution", False)
+
+        logger.info(
+            "DPI configuration: default=%d, detection=%d, recognition=%d, dual_resolution=%s",
+            self.dpi,
+            self.detection_dpi,
+            self.recognition_dpi,
+            self.use_dual_resolution,
+        )
 
         # Lazy imports for factory functions (avoid loading heavy dependencies at module import)
         from .backend_validator import (  # noqa: PLC0415
@@ -388,7 +416,13 @@ class Pipeline:
             RenderingStage,
         )
 
-        self.input_stage = InputStage(temp_dir=self.temp_dir)
+        self.input_stage = InputStage(
+            temp_dir=self.temp_dir,
+            dpi=self.dpi,
+            detection_dpi=self.detection_dpi,
+            recognition_dpi=self.recognition_dpi,
+            use_dual_resolution=self.use_dual_resolution,
+        )
         self.detection_stage = DetectionStage(self.detector)  # type: ignore[arg-type]
         self.ordering_stage = OrderingStage(self.sorter)  # type: ignore[arg-type]
         self.recognition_stage = RecognitionStage(self.recognizer)
@@ -405,6 +439,48 @@ class Pipeline:
     def _get_pdf_output_dir(self, pdf_path: Path) -> Path:
         """Return the output directory for a given PDF as <output>/<model>/<file_stem>."""
         return self.output_dir / self.model / pdf_path.stem
+
+    def _scale_blocks(self, blocks: list[Block], scale_factor: float) -> list[Block]:
+        """Scale block bounding boxes by a factor.
+
+        Used for dual-resolution mode where detection and recognition use different DPIs.
+
+        Args:
+            blocks: List of blocks with bounding boxes
+            scale_factor: Scale factor to apply to bbox coordinates
+
+        Returns:
+            List of blocks with scaled bounding boxes
+        """
+        from .types import BBox
+
+        scaled_blocks = []
+        for block in blocks:
+            if block.bbox:
+                # Scale bbox coordinates
+                scaled_bbox = BBox(
+                    x0=int(block.bbox.x0 * scale_factor),
+                    y0=int(block.bbox.y0 * scale_factor),
+                    x1=int(block.bbox.x1 * scale_factor),
+                    y1=int(block.bbox.y1 * scale_factor),
+                )
+                # Create new block with scaled bbox
+                scaled_block = Block(
+                    type=block.type,
+                    bbox=scaled_bbox,
+                    text=block.text,
+                    detection_confidence=block.detection_confidence,
+                    order=block.order,
+                    column_index=block.column_index,
+                    corrected_text=block.corrected_text,
+                    correction_ratio=block.correction_ratio,
+                    source=block.source,
+                )
+                scaled_blocks.append(scaled_block)
+            else:
+                # Block without bbox, keep as is
+                scaled_blocks.append(block)
+        return scaled_blocks
 
     def process_image(
         self,
@@ -619,27 +695,49 @@ class Pipeline:
             Tuple of (Page object or None, should_stop)
         """
         page_image = None
+        recognition_image = None
 
         try:
             # Stage 1: Input - Load PDF page
-            page_image = self.input_stage.load_pdf_page(pdf_path, page_num)
+            if self.use_dual_resolution:
+                # Dual-resolution mode: load page twice with different DPIs
+                logger.debug(
+                    "Using dual-resolution mode: detection_dpi=%d, recognition_dpi=%d",
+                    self.detection_dpi,
+                    self.recognition_dpi,
+                )
+                # Low DPI for detection (faster, less memory)
+                page_image = self.input_stage.load_pdf_page(pdf_path, page_num, dpi=self.detection_dpi)
+                # High DPI for recognition (better accuracy)
+                recognition_image = self.input_stage.load_pdf_page(pdf_path, page_num, dpi=self.recognition_dpi)
+            else:
+                # Single resolution mode: use default DPI for all stages
+                page_image = self.input_stage.load_pdf_page(pdf_path, page_num)
+                recognition_image = page_image  # Use same image for recognition
+
             auxiliary_info = self.input_stage.extract_auxiliary_info(pdf_path, page_num)
 
-            # Stage 2: Detection - Detect layout blocks
+            # Stage 2: Detection - Detect layout blocks (uses detection DPI)
             blocks: list[Block] = self.detection_stage.detect(page_image)
 
-            # Stage 3: BlockOrdering - Sort blocks by reading order
+            # Stage 3: BlockOrdering - Sort blocks by reading order (uses detection DPI)
             sorted_blocks: list[Block] = self.ordering_stage.sort(blocks, page_image, pymupdf_page=pymupdf_page)
 
             # Extract column layout info (for backward compatibility)
             column_layout = self.detection_stage.extract_column_layout(sorted_blocks)
 
-            # Stage 4: Recognition - Extract text from blocks
+            # Scale blocks if using dual-resolution (bbox coordinates need adjustment)
+            if self.use_dual_resolution and self.detection_dpi != self.recognition_dpi:
+                scale_factor = self.recognition_dpi / self.detection_dpi
+                logger.debug("Scaling blocks by factor %.2f for recognition", scale_factor)
+                sorted_blocks = self._scale_blocks(sorted_blocks, scale_factor)
+
+            # Stage 4: Recognition - Extract text from blocks (uses recognition DPI)
             # Note: olmocr-vlm sorter already includes text, skip recognition
             if self.sorter_name == "olmocr-vlm":
                 processed_blocks = sorted_blocks
             else:
-                processed_blocks = self.recognition_stage.recognize_blocks(sorted_blocks, page_image)
+                processed_blocks = self.recognition_stage.recognize_blocks(sorted_blocks, recognition_image)
 
             # Check for rate limit errors after recognition
             if self._check_for_rate_limit_errors({"blocks": processed_blocks}):

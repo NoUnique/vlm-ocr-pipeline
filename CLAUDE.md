@@ -70,6 +70,13 @@ python main.py --input doc.pdf --max-pages 5
 python main.py --input doc.pdf --page-range 10-20
 python main.py --input doc.pdf --pages 1,5,10
 
+# DPI configuration (PDF-to-image conversion quality)
+python main.py --input doc.pdf --dpi fast      # 150 DPI - fastest
+python main.py --input doc.pdf --dpi balanced  # 150→300 dual (recommended)
+python main.py --input doc.pdf --dpi quality   # 300 DPI - best quality
+python main.py --input doc.pdf --dpi 200       # Custom single DPI
+python main.py --input doc.pdf --dpi 150,300   # Custom dual (detection,recognition)
+
 # Check rate limits (Gemini only)
 python main.py --rate-limit-status --recognizer gemini-2.5-flash --gemini-tier free
 ```
