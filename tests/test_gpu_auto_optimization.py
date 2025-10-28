@@ -121,7 +121,7 @@ class TestRecognizerAutoOptimization:
 
                 # Test auto-backend selection (should fail at model loading, but we check the logic)
                 try:
-                    recognizer = create_recognizer("deepseek-ocr", use_auto_optimization=True)
+                    _ = create_recognizer("deepseek-ocr", use_auto_optimization=True)
                     # If we reach here, check that auto-optimization was applied
                     # (in real scenario, it will fail at model loading)
                 except (ImportError, OSError, RuntimeError):
@@ -150,7 +150,7 @@ class TestRecognizerAutoOptimization:
 
                 # Test manual override
                 try:
-                    recognizer = create_recognizer(
+                    _ = create_recognizer(
                         "deepseek-ocr",
                         backend="hf",  # Manual override
                         tensor_parallel_size=2,  # Manual override
@@ -166,7 +166,7 @@ class TestRecognizerAutoOptimization:
 
         # Test with auto-optimization disabled
         try:
-            recognizer = create_recognizer(
+            _ = create_recognizer(
                 "deepseek-ocr",
                 backend="hf",
                 use_auto_optimization=False,

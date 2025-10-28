@@ -59,7 +59,7 @@ class TestInputStage:
         result = stage.load_pdf_page(pdf_path, page_num=1)
 
         # Verify
-        mock_render.assert_called_once_with(pdf_path, 1, temp_dir=tmp_path)
+        mock_render.assert_called_once_with(pdf_path, 1, temp_dir=tmp_path, dpi=200)
         assert np.array_equal(result, mock_image)
 
     @patch("pipeline.conversion.input.pdf.extract_text_spans_from_pdf")
@@ -296,7 +296,10 @@ class TestRecognitionStage:
         result = stage.recognize_blocks(input_blocks, image)
 
         # Verify
-        mock_recognizer.process_blocks.assert_called_once_with(input_blocks, image)
+        mock_recognizer.process_blocks.assert_called_once()
+        call_args = mock_recognizer.process_blocks.call_args.args
+        assert np.array_equal(call_args[0], image)  # First arg is image
+        assert call_args[1] == input_blocks  # Second arg is blocks
         assert result == processed_blocks
         assert result[0].text == "Extracted text"
 

@@ -1,3 +1,11 @@
+"""Tests for pipeline helper functions.
+
+Tests helper methods and utilities used by the Pipeline class:
+- Text composition from blocks (ordering, filtering)
+- Page processing selection (page ranges, max pages)
+- Error detection (rate limits, processing failures)
+"""
+
 import pytest
 
 from pipeline import Pipeline

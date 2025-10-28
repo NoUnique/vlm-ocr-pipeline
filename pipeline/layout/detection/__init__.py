@@ -72,3 +72,36 @@ def create_detector(name: str, **kwargs: Any) -> Detector:
 def list_available_detectors() -> list[str]:
     """List available detector names."""
     return ["doclayout-yolo", "mineru-vlm", "mineru-doclayout-yolo", "paddleocr-doclayout-v2"]
+
+
+def __getattr__(name: str) -> Any:
+    """Lazy import for detector classes.
+
+    This allows direct imports like:
+        from pipeline.layout.detection import DocLayoutYOLODetector
+
+    While keeping the benefits of lazy loading (only import when needed).
+    """
+    if name == "DocLayoutYOLODetector":
+        from .doclayout_yolo import DocLayoutYOLODetector  # noqa: PLC0415
+
+        return DocLayoutYOLODetector
+    elif name == "MinerUVLMDetector":
+        from .mineru import MinerUVLMDetector  # noqa: PLC0415
+
+        return MinerUVLMDetector
+    elif name == "MinerUDocLayoutYOLODetector":
+        from .mineru import MinerUDocLayoutYOLODetector  # noqa: PLC0415
+
+        return MinerUDocLayoutYOLODetector
+    elif name == "PPDocLayoutV2Detector":
+        from .paddleocr import PPDocLayoutV2Detector  # noqa: PLC0415
+
+        return PPDocLayoutV2Detector
+    elif name == "LayoutDetector":
+        # Alias for DocLayoutYOLODetector for backwards compatibility
+        from .doclayout_yolo import DocLayoutYOLODetector  # noqa: PLC0415
+
+        return DocLayoutYOLODetector
+    else:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
