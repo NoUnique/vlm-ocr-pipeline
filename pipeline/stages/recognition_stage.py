@@ -29,5 +29,6 @@ class RecognitionStage:
             List of blocks with text field populated
         """
         # Use existing TextRecognizer.process_blocks method
-        processed_blocks = self.recognizer.process_blocks(blocks, image)
+        # Note: process_blocks expects (image, blocks) order
+        processed_blocks = self.recognizer.process_blocks(image, blocks)
         return processed_blocks

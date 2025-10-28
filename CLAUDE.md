@@ -38,11 +38,20 @@ uv run pytest tests/test_types.py::test_bbox_from_xywh  # Single test
 # Basic usage (default: doclayout-yolo detector + gemini-2.5-flash recognizer)
 python main.py --input document.pdf
 
-# Different recognizers
-python main.py --input document.pdf --recognizer gpt-4o
-python main.py --input document.pdf --recognizer gemini-2.0-pro
+# Different recognizers (backend auto-selected)
+python main.py --input document.pdf --recognizer gpt-4o  # → openai backend
+python main.py --input document.pdf --recognizer gemini-2.0-pro  # → gemini backend
+python main.py --input document.pdf --recognizer meta-llama/Llama-3-8b  # → openai backend (OpenRouter)
 
-# Custom backends for each stage
+# Local model recognizers (backend auto-selected)
+python main.py --input document.pdf --recognizer paddleocr-vl  # → pytorch backend
+python main.py --input document.pdf --recognizer deepseek-ocr  # → hf backend
+
+# Manual backend selection (optional, for advanced users)
+python main.py --input doc.pdf --recognizer paddleocr-vl --recognizer-backend vllm
+python main.py --input doc.pdf --recognizer deepseek-ocr --recognizer-backend vllm
+
+# Full pipeline with custom backends
 python main.py --input doc.pdf \
     --detector mineru-vlm --detector-backend vllm \
     --sorter mineru-vlm --sorter-backend vllm \
@@ -54,12 +63,7 @@ python main.py --input doc.pdf --detector mineru-vlm --sorter mineru-vlm
 
 # PaddleOCR pipeline (PP-DocLayoutV2 detector + PaddleOCR-VL-0.9B recognizer)
 # Note: paddleocr-doclayout-v2 detector auto-selects its sorter (preserves pointer network ordering)
-python main.py --input doc.pdf --detector paddleocr-doclayout-v2 \
-    --recognizer paddleocr-vl
-
-# DeepSeek-OCR recognizer (contextual optical compression)
-python main.py --input doc.pdf --recognizer deepseek-ocr --recognizer-backend hf
-python main.py --input doc.pdf --recognizer deepseek-ocr --recognizer-backend vllm
+python main.py --input doc.pdf --detector paddleocr-doclayout-v2 --recognizer paddleocr-vl
 
 # Page limiting (for testing/cost control)
 python main.py --input doc.pdf --max-pages 5
@@ -314,6 +318,20 @@ class Block:
 **Prompt Management**: `settings/prompts/{gemini,openai,internvl,qwen,phi4}/` - Model-specific YAML templates
 
 ## Development Guidelines
+
+### Refactoring Principles
+
+**IMPORTANT: This project has not been officially released yet. Pre-1.0 development philosophy:**
+- **No backward compatibility concerns** - This is pre-release software, breaking changes are acceptable
+- **Aggressive refactoring** - Remove deprecated code completely, don't keep migration logic
+- **Clean slate approach** - If a feature is removed or replaced, delete all related code without hesitation
+- **Focus on correctness over compatibility** - Prioritize code quality and maintainability over preserving old APIs
+
+When refactoring:
+1. Remove deprecated arguments/functions completely (no migration logic, no warnings)
+2. Update documentation immediately to reflect changes
+3. Don't version-gate features - just implement the best solution
+4. If unsure whether to keep something, remove it (can always restore from git if needed)
 
 ### Code Quality Standards
 - **Type annotations**: Required for all functions/methods (use `typing` module)

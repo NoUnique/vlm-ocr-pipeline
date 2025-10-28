@@ -23,6 +23,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -35,6 +36,209 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
+
+
+def parse_deepseek_ocr_output(raw_output: str) -> str:
+    """Parse DeepSeek-OCR output to extract actual text.
+
+    DeepSeek-OCR outputs in the format:
+    - Text: <|ref|>actual_text<|/ref|><|det|>[[x, y, w, h]]<|/det|>
+    - Table: <|ref|>table<|/ref|><|det|>[[...]]<|/det|>\n<table>...</table>
+
+    Args:
+        raw_output: Raw output from DeepSeek-OCR model
+
+    Returns:
+        Extracted text content (or HTML table if present)
+    """
+    if not raw_output:
+        return ""
+
+    # Extract content between <|ref|> and <|/ref|>
+    ref_match = re.search(r"<\|ref\|>(.*?)<\|/ref\|>", raw_output, re.DOTALL)
+    if not ref_match:
+        # No ref tags found, return raw output
+        return raw_output.strip()
+
+    ref_content = ref_match.group(1).strip()
+
+    # Check if it's a table reference
+    if ref_content.lower() == "table":
+        # Look for <table>...</table> content after the tags
+        table_match = re.search(r"<table>.*?</table>", raw_output, re.DOTALL)
+        if table_match:
+            return table_match.group(0)
+        # No table HTML found, return "table" indicator
+        return ref_content
+
+    # Regular text content
+    return ref_content
+
+
+def _process_on_gpu_worker(
+    gpu_id: int,
+    device: str,
+    assigned_blocks: list[tuple[int, Block]],
+    image: np.ndarray,
+    model_name: str,
+    base_size: int,
+    image_size: int,
+    crop_mode: bool,
+    prompt_template: str,
+) -> list[tuple[int, Block]]:
+    """Worker function to process blocks on a specific GPU (runs in separate process).
+
+    Args:
+        gpu_id: GPU ID for logging
+        device: Device string (e.g., "cuda:0")
+        assigned_blocks: List of (index, block) tuples to process
+        image: Full page image
+        model_name: DeepSeek-OCR model name
+        base_size: Base resolution
+        image_size: Image size for cropping
+        crop_mode: Whether to use dynamic resolution
+        prompt_template: Prompt template for OCR
+
+    Returns:
+        List of (index, processed_block) tuples
+    """
+    import os  # noqa: PLC0415
+    import shutil  # noqa: PLC0415
+    import tempfile  # noqa: PLC0415
+
+    # CRITICAL: Set CUDA_VISIBLE_DEVICES for this subprocess BEFORE importing torch
+    # This ensures this subprocess only sees its assigned GPU
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+
+    import torch  # noqa: PLC0415
+    from transformers import AutoModel, AutoTokenizer  # noqa: PLC0415
+
+    # After setting CUDA_VISIBLE_DEVICES, this subprocess should see exactly 1 GPU at index 0
+    if not torch.cuda.is_available():
+        raise RuntimeError(f"GPU {gpu_id}: CUDA is not available in this subprocess")
+
+    visible_gpus = torch.cuda.device_count()
+    if visible_gpus != 1:
+        print(f"WARNING: GPU {gpu_id}: Expected 1 visible GPU, but found {visible_gpus}")
+
+    # Since we set CUDA_VISIBLE_DEVICES, always use device 0
+    # (which maps to the physical GPU specified by gpu_id)
+    torch.cuda.set_device(0)
+
+    # Load model in this process
+    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+
+    try:
+        model = AutoModel.from_pretrained(
+            model_name,
+            _attn_implementation="flash_attention_2",
+            trust_remote_code=True,
+            use_safetensors=True,
+        )
+        # Use .cuda() which uses the device set by torch.cuda.set_device()
+        model = model.eval().cuda().to(torch.bfloat16)
+    except (ImportError, ValueError):
+        model = AutoModel.from_pretrained(
+            model_name,
+            _attn_implementation="eager",
+            trust_remote_code=True,
+            use_safetensors=True,
+        )
+        # Use .cuda() which uses the device set by torch.cuda.set_device()
+        model = model.eval().cuda().to(torch.bfloat16)
+
+    results = []
+
+    for idx, block in assigned_blocks:
+        # Skip blocks without valid bbox
+        if not block.bbox:
+            results.append((idx, block))
+            continue
+
+        # Crop image to block bbox
+        x0, y0, x1, y1 = block.bbox.x0, block.bbox.y0, block.bbox.x1, block.bbox.y1
+
+        # Ensure coordinates are within image bounds
+        h, w = image.shape[:2]
+        x0, y0 = max(0, x0), max(0, y0)
+        x1, y1 = min(w, x1), min(h, y1)
+
+        # Check for valid crop dimensions
+        if x1 <= x0 or y1 <= y0:
+            results.append((idx, block))
+            continue
+
+        # Crop the block region
+        cropped = image[y0:y1, x0:x1]
+
+        # Convert to PIL Image
+        cropped_pil = Image.fromarray(cropped)
+
+        # Save to temporary file
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp_file:
+            tmp_path = tmp_file.name
+            cropped_pil.save(tmp_path)
+
+        # Create temporary output directory
+        tmp_output_dir = tempfile.mkdtemp(prefix="deepseek_ocr_")
+
+        try:
+            # Call model.infer() - must save results to get text output
+            result = model.infer(
+                tokenizer,
+                prompt=prompt_template,
+                image_file=tmp_path,
+                output_path=tmp_output_dir,
+                base_size=base_size,
+                image_size=image_size,
+                crop_mode=crop_mode,
+                test_compress=False,
+                save_results=True,  # Changed from False - need to save to get output
+            )
+
+            # Read the saved text file from output directory
+            # DeepSeek-OCR saves to <output_path>/<input_filename>_text.txt
+
+            # DeepSeek-OCR saves output to result.mmd file
+            mmd_file = os.path.join(tmp_output_dir, "result.mmd")
+            if os.path.exists(mmd_file):
+                with open(mmd_file, encoding="utf-8") as f:
+                    raw_output = f.read()
+            else:
+                # Fallback: check if result has any text
+                raw_output = str(result) if result else ""
+
+            text = parse_deepseek_ocr_output(raw_output)
+
+            # Create updated block with text
+            processed_block = Block(
+                type=block.type,
+                bbox=block.bbox,
+                text=text,
+                detection_confidence=block.detection_confidence,
+                order=block.order,
+                column_index=block.column_index,
+                corrected_text=None,
+                correction_ratio=None,
+                source=block.source or "deepseek-ocr",
+            )
+            results.append((idx, processed_block))
+
+        except Exception as e:
+            logger.warning("[%s] Error processing block %d: %s", device, idx, e)
+            results.append((idx, block))
+        finally:
+            # Clean up temporary files
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+            try:
+                shutil.rmtree(tmp_output_dir, ignore_errors=True)
+            except Exception:
+                pass
+
+    return results
 
 
 class DeepSeekOCRRecognizer(Recognizer):
@@ -68,6 +272,8 @@ class DeepSeekOCRRecognizer(Recognizer):
         image_size: int = 640,
         crop_mode: bool = True,
         prompt_template: str = "<image>\\n<|grounding|>Convert the document to markdown. ",
+        use_multi_gpu: bool = True,
+        batch_size: int | None = None,
         **kwargs: Any,
     ):
         """Initialize DeepSeek-OCR recognizer.
@@ -79,6 +285,7 @@ class DeepSeekOCRRecognizer(Recognizer):
                 - "vllm": vLLM AsyncLLMEngine (high-throughput)
             device: Device to run model on ("cuda:0", "cpu", etc.)
                 Default: CUDA 0 if available, otherwise CPU
+                Ignored if use_multi_gpu=True
             base_size: Base resolution for image processing
                 - 512: Tiny (64 tokens)
                 - 640: Small (100 tokens)
@@ -93,6 +300,11 @@ class DeepSeekOCRRecognizer(Recognizer):
                 Alternatives:
                 - "<image>\\n<|grounding|>OCR this image. "
                 - "<image>\\nFree OCR. "
+            use_multi_gpu: Whether to use multiple GPUs for parallel processing
+                True: Replicate model across all available GPUs (default)
+                False: Use single GPU specified by device
+            batch_size: Number of blocks to process in parallel per GPU
+                None: Auto-detect based on GPU memory (default)
             **kwargs: Additional arguments passed to model initialization
 
         Example:
@@ -122,14 +334,29 @@ class DeepSeekOCRRecognizer(Recognizer):
         self.image_size = image_size
         self.crop_mode = crop_mode
         self.prompt_template = prompt_template
+        self.use_multi_gpu = use_multi_gpu
+        self.batch_size = batch_size
 
         # Filter out kwargs that shouldn't be passed to AutoModel.from_pretrained()
         # Keep only transformers-related kwargs
         excluded_keys = {
-            "backend", "model", "model_name", "device", "base_size", "image_size",
-            "crop_mode", "prompt_template", "tensor_parallel_size",
-            "gpu_memory_utilization", "use_bf16", "api_key", "gemini_tier",
-            "rate_limit", "use_async"
+            "backend",
+            "model",
+            "model_name",
+            "device",
+            "base_size",
+            "image_size",
+            "crop_mode",
+            "prompt_template",
+            "tensor_parallel_size",
+            "gpu_memory_utilization",
+            "use_bf16",
+            "api_key",
+            "gemini_tier",
+            "rate_limit",
+            "use_async",
+            "use_multi_gpu",
+            "batch_size",
         }
         self.kwargs = {k: v for k, v in kwargs.items() if k not in excluded_keys}
 
@@ -164,69 +391,49 @@ class DeepSeekOCRRecognizer(Recognizer):
             ) from e
 
         logger.info("Initializing HuggingFace backend for DeepSeek-OCR...")
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, trust_remote_code=True)
 
-        # Check if multi-GPU is available
         gpu_count = torch.cuda.device_count()
-        use_multi_gpu = gpu_count > 1
 
-        # Try flash_attention_2, fallback to eager if not available
-        try:
-            if use_multi_gpu:
-                logger.info(f"Loading model with device_map='auto' for {gpu_count} GPUs")
-                self.model = AutoModel.from_pretrained(
-                    self.model_name,
-                    device_map="auto",
-                    _attn_implementation="flash_attention_2",
-                    torch_dtype=torch.bfloat16,
-                    trust_remote_code=True,
-                    use_safetensors=True,
-                    **self.kwargs,
-                )
-            else:
-                self.model = AutoModel.from_pretrained(
-                    self.model_name,
-                    _attn_implementation="flash_attention_2",
-                    trust_remote_code=True,
-                    use_safetensors=True,
-                    **self.kwargs,
-                )
-                self.model = self.model.eval().to(self.device).to(torch.bfloat16)
-            logger.info("Using Flash Attention 2")
-        except (ImportError, ValueError):
-            logger.warning("Flash Attention 2 not available, using eager attention")
-            if use_multi_gpu:
-                logger.info(f"Loading model with device_map='auto' for {gpu_count} GPUs")
-                self.model = AutoModel.from_pretrained(
-                    self.model_name,
-                    device_map="auto",
-                    _attn_implementation="eager",
-                    torch_dtype=torch.bfloat16,
-                    trust_remote_code=True,
-                    use_safetensors=True,
-                    **self.kwargs,
-                )
-            else:
-                self.model = AutoModel.from_pretrained(
-                    self.model_name,
-                    _attn_implementation="eager",
-                    trust_remote_code=True,
-                    use_safetensors=True,
-                    **self.kwargs,
-                )
-                self.model = self.model.eval().to(self.device).to(torch.bfloat16)
+        if self.use_multi_gpu and gpu_count > 1:
+            logger.info("Multi-GPU mode enabled: will use %d GPUs with multiprocessing", gpu_count)
+            # Store GPU count for parallel processing
+            # Models will be loaded separately in each process to avoid CUDA context issues
+            self.gpu_count = gpu_count
+            self.gpu_devices = [f"cuda:{i}" for i in range(gpu_count)]
+            logger.info("Multi-GPU initialization complete (lazy loading per process)")
 
-        # Set to eval mode
-        if not use_multi_gpu:
-            self.model = self.model.eval()
         else:
-            self.model.eval()
+            # Single GPU mode
+            if self.use_multi_gpu and gpu_count <= 1:
+                logger.warning("Multi-GPU requested but only %d GPU available, using single GPU mode", gpu_count)
 
-        logger.info(
-            "HuggingFace backend initialized successfully (multi-GPU: %s, device_count: %d)",
-            use_multi_gpu,
-            gpu_count,
-        )
+            logger.info("Single GPU mode: loading model on %s", self.device)
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, trust_remote_code=True)
+
+            # Try flash_attention_2, fallback to eager
+            try:
+                self.model = AutoModel.from_pretrained(
+                    self.model_name,
+                    _attn_implementation="flash_attention_2",
+                    trust_remote_code=True,
+                    use_safetensors=True,
+                    **self.kwargs,
+                )
+                self.model = self.model.eval().to(self.device).to(torch.bfloat16)
+                logger.info("Using Flash Attention 2 on %s", self.device)
+            except (ImportError, ValueError):
+                logger.warning("Flash Attention 2 not available, using eager attention")
+                self.model = AutoModel.from_pretrained(
+                    self.model_name,
+                    _attn_implementation="eager",
+                    trust_remote_code=True,
+                    use_safetensors=True,
+                    **self.kwargs,
+                )
+                self.model = self.model.eval().to(self.device).to(torch.bfloat16)
+                logger.info("Using eager attention on %s", self.device)
+
+        logger.info("HuggingFace backend initialized successfully")
 
     def _init_vllm_backend(self) -> None:
         """Initialize vLLM backend."""
@@ -346,94 +553,178 @@ class DeepSeekOCRRecognizer(Recognizer):
 
     def _process_blocks_hf(self, image: np.ndarray, blocks: Sequence[Block]) -> list[Block]:
         """Process blocks using HuggingFace backend."""
-        # Process each block individually by cropping
-        output_blocks = []
-        for idx, block in enumerate(blocks):
-            logger.info("--- Processing block %d/%d (type=%s) ---", idx + 1, len(blocks), block.type)
+        if hasattr(self, "gpu_devices"):
+            # Multi-GPU parallel processing with multiprocessing
+            return self._process_blocks_parallel(image, blocks)
+        else:
+            # Single GPU sequential processing
+            return self._process_blocks_sequential(image, blocks)
 
-            # Skip blocks without valid bbox
-            if not block.bbox:
-                logger.warning("Block %d without bbox, skipping", idx)
-                output_blocks.append(block)
-                continue
+    def _process_blocks_parallel(self, image: np.ndarray, blocks: Sequence[Block]) -> list[Block]:
+        """Process blocks in parallel across multiple GPUs using multiprocessing.
 
-            # Crop image to block bbox
-            x0, y0, x1, y1 = block.bbox.x0, block.bbox.y0, block.bbox.x1, block.bbox.y1
+        Note: Uses ProcessPoolExecutor with 'spawn' method to avoid
+        CUDA context issues with DeepSeek-OCR's infer() method.
+        """
+        import multiprocessing as mp  # noqa: PLC0415
+        from concurrent.futures import ProcessPoolExecutor, as_completed  # noqa: PLC0415
 
-            # Ensure coordinates are within image bounds
-            h, w = image.shape[:2]
-            x0, y0 = max(0, x0), max(0, y0)
-            x1, y1 = min(w, x1), min(h, y1)
+        # Set start method to 'spawn' for CUDA compatibility
+        ctx = mp.get_context("spawn")
 
-            # Check for valid crop dimensions
-            if x1 <= x0 or y1 <= y0:
-                logger.warning("Block %d has invalid dimensions: (%d,%d,%d,%d)", idx, x0, y0, x1, y1)
-                output_blocks.append(block)
-                continue
+        gpu_devices = self.gpu_devices
+        num_gpus = len(gpu_devices)
 
-            # Crop the block region
-            cropped = image[y0:y1, x0:x1]
-            logger.info("Cropped block %d to shape: %s", idx, cropped.shape)
+        logger.info("Processing %d blocks across %d GPUs in parallel (multiprocessing)", len(blocks), num_gpus)
 
-            # Convert to PIL Image
-            cropped_pil = Image.fromarray(cropped)
+        # Assign blocks to GPUs (round-robin) with original indices
+        blocks_with_indices = [(idx, block) for idx, block in enumerate(blocks)]
+        gpu_assignments = [[] for _ in range(num_gpus)]
+        for i, (idx, block) in enumerate(blocks_with_indices):
+            gpu_id = i % num_gpus
+            gpu_assignments[gpu_id].append((idx, block))
 
-            # Save to temporary file for model.infer()
-            import tempfile  # noqa: PLC0415
-
-            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp_file:
-                tmp_path = tmp_file.name
-                cropped_pil.save(tmp_path)
-
-            try:
-                logger.info("Calling DeepSeek-OCR model.infer() for block %d...", idx)
-                # Call model.infer() with proper parameters
-                result = self.model.infer(
-                    self.tokenizer,
-                    prompt=self.prompt_template,
-                    image_file=tmp_path,
-                    output_path=None,  # Don't save intermediate results
-                    base_size=self.base_size,
-                    image_size=self.image_size,
-                    crop_mode=self.crop_mode,
-                    test_compress=False,
-                    save_results=False,
-                )
-                logger.info("DeepSeek-OCR model.infer() completed for block %d", idx)
-
-                # Extract text from result
-                text = str(result) if result else ""
-                logger.debug("Block %d final text: %s", idx, repr(text))
-
-                # Create updated block with text
-                output_blocks.append(
-                    Block(
-                        type=block.type,
-                        bbox=block.bbox,
-                        text=text,
-                        detection_confidence=block.detection_confidence,
-                        order=block.order,
-                        column_index=block.column_index,
-                        corrected_text=None,
-                        correction_ratio=None,
-                        source=block.source or "deepseek-ocr",
+        # Prepare arguments for each process
+        process_args = []
+        for gpu_id, device in enumerate(gpu_devices):
+            assigned = gpu_assignments[gpu_id]
+            if assigned:  # Only submit if there are blocks for this GPU
+                process_args.append(
+                    (
+                        gpu_id,
+                        device,
+                        assigned,
+                        image,
+                        self.model_name,
+                        self.base_size,
+                        self.image_size,
+                        self.crop_mode,
+                        self.prompt_template,
                     )
                 )
 
-            except Exception as e:
-                logger.warning("Error processing block %d with DeepSeek-OCR: %s", idx, e, exc_info=True)
-                # Return original block if processing fails
-                output_blocks.append(block)
-            finally:
-                # Clean up temporary file
-                import os  # noqa: PLC0415
+        # Launch parallel processing with separate processes using spawn context
+        all_results = []
+        with ProcessPoolExecutor(max_workers=num_gpus, mp_context=ctx) as executor:
+            futures = {}
+            for args in process_args:
+                future = executor.submit(_process_on_gpu_worker, *args)
+                futures[future] = args[0]  # gpu_id
 
+            # Collect results
+            for future in as_completed(futures):
+                gpu_id = futures[future]
                 try:
-                    os.unlink(tmp_path)
-                except Exception:
-                    pass
+                    results = future.result()
+                    all_results.extend(results)
+                    logger.info("GPU %d completed processing %d blocks", gpu_id, len(results))
+                except Exception as e:
+                    logger.error("Error on GPU %d: %s", gpu_id, e, exc_info=True)
 
-        logger.info("Processed %d blocks with DeepSeek-OCR (HF)", len(output_blocks))
+        # Sort by original index to maintain order
+        all_results.sort(key=lambda x: x[0])
+        output_blocks = [block for _, block in all_results]
+
+        logger.info("Processed %d blocks with DeepSeek-OCR (HF, multi-GPU)", len(output_blocks))
+        return output_blocks
+
+    def _process_single_block_hf(
+        self, model, tokenizer, device: str, block: Block, image: np.ndarray, idx: int
+    ) -> Block:
+        """Process a single block on a specific GPU."""
+        import os  # noqa: PLC0415
+        import tempfile  # noqa: PLC0415
+
+        logger.info("[%s] Processing block %d (type=%s)", device, idx, block.type)
+
+        # Skip blocks without valid bbox
+        if not block.bbox:
+            logger.warning("[%s] Block %d without bbox, skipping", device, idx)
+            return block
+
+        # Crop image to block bbox
+        x0, y0, x1, y1 = block.bbox.x0, block.bbox.y0, block.bbox.x1, block.bbox.y1
+
+        # Ensure coordinates are within image bounds
+        h, w = image.shape[:2]
+        x0, y0 = max(0, x0), max(0, y0)
+        x1, y1 = min(w, x1), min(h, y1)
+
+        # Check for valid crop dimensions
+        if x1 <= x0 or y1 <= y0:
+            logger.warning("[%s] Block %d has invalid dimensions: (%d,%d,%d,%d)", device, idx, x0, y0, x1, y1)
+            return block
+
+        # Crop the block region
+        cropped = image[y0:y1, x0:x1]
+
+        # Convert to PIL Image
+        cropped_pil = Image.fromarray(cropped)
+
+        # Save to temporary file
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp_file:
+            tmp_path = tmp_file.name
+            cropped_pil.save(tmp_path)
+
+        # Create temporary output directory
+        tmp_output_dir = tempfile.mkdtemp(prefix="deepseek_ocr_")
+
+        try:
+            # Call model.infer()
+            result = model.infer(
+                tokenizer,
+                prompt=self.prompt_template,
+                image_file=tmp_path,
+                output_path=tmp_output_dir,
+                base_size=self.base_size,
+                image_size=self.image_size,
+                crop_mode=self.crop_mode,
+                test_compress=False,
+                save_results=False,
+            )
+
+            # Extract text from result
+            raw_output = str(result) if result else ""
+            text = parse_deepseek_ocr_output(raw_output)
+
+            # Create updated block with text
+            return Block(
+                type=block.type,
+                bbox=block.bbox,
+                text=text,
+                detection_confidence=block.detection_confidence,
+                order=block.order,
+                column_index=block.column_index,
+                corrected_text=None,
+                correction_ratio=None,
+                source=block.source or "deepseek-ocr",
+            )
+
+        except Exception as e:
+            logger.warning("[%s] Error processing block %d: %s", device, idx, e, exc_info=True)
+            return block
+        finally:
+            # Clean up temporary files
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+            try:
+                import shutil  # noqa: PLC0415
+
+                shutil.rmtree(tmp_output_dir, ignore_errors=True)
+            except Exception:
+                pass
+
+    def _process_blocks_sequential(self, image: np.ndarray, blocks: Sequence[Block]) -> list[Block]:
+        """Process blocks sequentially on a single GPU."""
+        output_blocks = []
+        for idx, block in enumerate(blocks):
+            logger.info("--- Processing block %d/%d (type=%s) ---", idx + 1, len(blocks), block.type)
+            processed_block = self._process_single_block_hf(self.model, self.tokenizer, self.device, block, image, idx)
+            output_blocks.append(processed_block)
+
+        logger.info("Processed %d blocks with DeepSeek-OCR (HF, single GPU)", len(output_blocks))
         return output_blocks
 
     async def _process_blocks_vllm(self, image: np.ndarray, blocks: Sequence[Block]) -> list[Block]:
@@ -509,14 +800,18 @@ class DeepSeekOCRRecognizer(Recognizer):
                         final_output = request_output.outputs[0].text
 
                 logger.info("vLLM processing completed for block %d", idx)
-                logger.debug("Block %d final text: %s", idx, repr(final_output))
+
+                # Parse DeepSeek-OCR output format
+                text = parse_deepseek_ocr_output(final_output)
+                logger.info("Block %d raw output: %s", idx, repr(final_output[:200]))
+                logger.info("Block %d extracted text: %s", idx, repr(text[:200] if len(text) > 200 else text))
 
                 # Create updated block with text
                 output_blocks.append(
                     Block(
                         type=block.type,
                         bbox=block.bbox,
-                        text=final_output,
+                        text=text,
                         detection_confidence=block.detection_confidence,
                         order=block.order,
                         column_index=block.column_index,

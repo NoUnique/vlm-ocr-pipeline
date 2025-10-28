@@ -66,6 +66,7 @@ class PaddleOCRVLRecognizer(Recognizer):
         device: str | None = None,
         vl_rec_backend: str = "native",
         use_layout_detection: bool = False,
+        use_multi_gpu: bool = True,
         **kwargs,
     ):
         """Initialize PaddleOCR-VL recognizer.
@@ -81,6 +82,7 @@ class PaddleOCRVLRecognizer(Recognizer):
                 - "sglang-server": Use SGLang server for acceleration
             use_layout_detection: Whether to use layout detection (default: False)
                 When False, the pipeline only performs VL recognition on provided blocks
+            use_multi_gpu: Whether to use multiple GPUs if available (default: True)
             **kwargs: Additional arguments passed to PaddleOCRVL
 
         Example:
@@ -92,9 +94,13 @@ class PaddleOCRVLRecognizer(Recognizer):
 
             >>> # With layout detection enabled
             >>> recognizer = PaddleOCRVLRecognizer(use_layout_detection=True)
+
+            >>> # With multi-GPU disabled
+            >>> recognizer = PaddleOCRVLRecognizer(use_multi_gpu=False)
         """
         # Lazy import to avoid loading PaddleOCR unless needed
         try:
+            import paddle  # noqa: PLC0415
             from paddleocr import PaddleOCRVL  # noqa: PLC0415  # type: ignore[import-untyped]
         except ImportError as e:
             raise ImportError(
@@ -106,6 +112,17 @@ class PaddleOCRVLRecognizer(Recognizer):
         self.device = device
         self.vl_rec_backend = vl_rec_backend
         self.use_layout_detection = use_layout_detection
+        self.use_multi_gpu = use_multi_gpu
+
+        # Check for multi-GPU availability
+        self.gpu_count = paddle.device.cuda.device_count() if paddle.device.cuda.device_count() > 0 else 0
+        if self.gpu_count > 1 and use_multi_gpu and vl_rec_backend == "native":
+            logger.info("Multi-GPU mode enabled: will use %d GPUs with multiprocessing", self.gpu_count)
+            self.multi_gpu_enabled = True
+        else:
+            self.multi_gpu_enabled = False
+            if use_multi_gpu and self.gpu_count <= 1:
+                logger.warning("Multi-GPU requested but only %d GPU available", self.gpu_count)
 
         # Initialize PaddleOCRVL pipeline
         init_kwargs = {
@@ -121,10 +138,11 @@ class PaddleOCRVLRecognizer(Recognizer):
         self.pipeline = PaddleOCRVL(**init_kwargs)
 
         logger.info(
-            "PaddleOCR-VL recognizer initialized (model: %s, device: %s, backend: %s)",
+            "PaddleOCR-VL recognizer initialized (model: %s, device: %s, backend: %s, multi_gpu: %s)",
             vl_rec_model_name,
             device or "auto",
             vl_rec_backend,
+            self.multi_gpu_enabled,
         )
 
     def process_blocks(

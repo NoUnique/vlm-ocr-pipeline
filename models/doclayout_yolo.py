@@ -10,19 +10,32 @@ logger = logging.getLogger(__name__)
 
 
 class DocLayoutYOLO:
-    """DocLayout-YOLO model wrapper class with pathlib support"""
+    """DocLayout-YOLO model wrapper class with pathlib support and multi-GPU support"""
 
-    def __init__(self, model_path: str | Path | None = None) -> None:
+    def __init__(self, model_path: str | Path | None = None, use_multi_gpu: bool = True) -> None:
         """
         Initialize the DocLayout-YOLO model
 
         Args:
             model_path: Local model file path. If not provided,
                        the pre-trained model will be loaded from Hugging Face Hub.
+            use_multi_gpu: Whether to use multiple GPUs if available (default: True)
         """
         self.model_path = Path(model_path) if model_path else None
         self.model = None
-        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        self.use_multi_gpu = use_multi_gpu
+        self.gpu_count = torch.cuda.device_count() if torch.cuda.is_available() else 0
+
+        if self.gpu_count > 1 and use_multi_gpu:
+            logger.info("Multi-GPU mode enabled: will use %d GPUs", self.gpu_count)
+            # YOLO supports multi-GPU via comma-separated device IDs
+            self.device = ",".join(str(i) for i in range(self.gpu_count))
+            logger.info("Multi-GPU device string: %s", self.device)
+        else:
+            self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+            if use_multi_gpu and self.gpu_count <= 1:
+                logger.warning("Multi-GPU requested but only %d GPU available", self.gpu_count)
+
         self.init_model()
 
     def init_model(self) -> bool:

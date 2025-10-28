@@ -388,7 +388,12 @@ def create_recognizer(
     - If device not specified, auto-select optimal device
 
     Args:
-        name: Recognizer name ("openai", "gemini", "paddleocr-vl", "deepseek-ocr")
+        name: Recognizer name or model name
+            - Recognizer names: "openai", "gemini", "paddleocr-vl", "deepseek-ocr"
+            - Model names (auto-normalized):
+                - Gemini models: "gemini-2.5-flash", "gemini-2.0-pro" → "gemini"
+                - GPT models: "gpt-4o", "gpt-4-turbo" → "openai"
+                - HuggingFace format: "meta-llama/Llama-3-8b" → "openai" (OpenRouter)
         backend: Backend to use (None for auto-select)
         use_auto_optimization: Enable auto-optimization (default: True)
         **kwargs: Additional arguments passed to the recognizer constructor
@@ -410,6 +415,8 @@ def create_recognizer(
     Example:
         >>> # Auto-optimized (recommended)
         >>> recognizer = create_recognizer("deepseek-ocr")  # Backend auto-selected
+        >>> recognizer = create_recognizer("gemini-2.5-flash")  # Auto-normalized to "gemini"
+        >>> recognizer = create_recognizer("gpt-4o")  # Auto-normalized to "openai"
 
         >>> # Manual backend selection
         >>> recognizer = create_recognizer("deepseek-ocr", backend="vllm")
@@ -417,9 +424,38 @@ def create_recognizer(
         >>> # Disable auto-optimization
         >>> recognizer = create_recognizer("deepseek-ocr", use_auto_optimization=False)
     """
+    # Normalize recognizer name from model name
+    original_name = name
+    model_name_for_kwargs = None  # Store original model name for kwargs
+
+    # 1. Gemini models (gemini-2.5-flash, gemini-2.0-pro, etc.) → "gemini"
+    if name.startswith("gemini"):
+        if name != "gemini":  # If it's a specific model name, not just "gemini"
+            model_name_for_kwargs = name
+            name = "gemini"
+            logger.debug(f"Normalized recognizer '{original_name}' → '{name}'")
+
+    # 2. GPT/ChatGPT models (gpt-4o, gpt-4-turbo, chatgpt, etc.) → "openai"
+    elif name.startswith("gpt-") or name.startswith("chatgpt"):
+        model_name_for_kwargs = name
+        name = "openai"
+        logger.debug(f"Normalized recognizer '{original_name}' → '{name}'")
+
+    # 3. HuggingFace format: {org}/{model_name} → "openai" (for OpenRouter)
+    elif "/" in name:
+        model_name_for_kwargs = name
+        name = "openai"
+        logger.debug(f"Normalized recognizer '{original_name}' → '{name}' (HuggingFace format for OpenRouter)")
+
+    # Validate normalized name
     if name not in _RECOGNIZER_REGISTRY:
         available = ", ".join(_RECOGNIZER_REGISTRY.keys())
-        raise ValueError(f"Unknown recognizer: {name}. Available: {available}")
+        raise ValueError(f"Unknown recognizer: {original_name} (normalized: {name}). Available: {available}")
+
+    # If we extracted a model name, pass it to kwargs (unless user already specified 'model')
+    if model_name_for_kwargs is not None and "model" not in kwargs:
+        kwargs["model"] = model_name_for_kwargs
+        logger.debug(f"Auto-set model={model_name_for_kwargs}")
 
     # Apply auto-optimization if enabled
     if use_auto_optimization:

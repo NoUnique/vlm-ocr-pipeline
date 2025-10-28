@@ -150,12 +150,16 @@ def resolve_sorter_backend(sorter: str, backend: str | None) -> tuple[str | None
 
 
 def resolve_recognizer_backend(recognizer: str, backend: str | None) -> tuple[str | None, str | None]:
-    """Resolve recognizer backend with validation.
+    """Resolve recognizer backend with validation and auto-inference.
 
-    For API-based recognizers (openai, gemini), auto-infers backend from recognizer name.
+    Auto-infers backend based on recognizer name pattern:
+    - Gemini models (gemini-*) → gemini backend
+    - GPT/ChatGPT models (gpt-*, chatgpt*) → openai backend
+    - HuggingFace format ({org}/{model}) → openai backend (for OpenRouter)
+    - Registered models (paddleocr-vl, deepseek-ocr) → default_backend from models.yaml
 
     Args:
-        recognizer: Recognizer name (e.g., "openai", "gemini", "paddleocr-vl", "gemini-2.5-flash")
+        recognizer: Recognizer name (e.g., "gemini-2.5-flash", "gpt-4o", "meta-llama/Llama-3-8b")
         backend: User-specified backend (None for auto-selection)
 
     Returns:
@@ -164,29 +168,50 @@ def resolve_recognizer_backend(recognizer: str, backend: str | None) -> tuple[st
         If failed: (default_or_none, error_message)
 
     Examples:
-        >>> resolve_recognizer_backend("openai", None)
-        ("openai", None)  # API recognizer, auto-inferred
-        >>> resolve_recognizer_backend("gemini", None)
-        ("gemini", None)  # API recognizer, auto-inferred
-        >>> resolve_recognizer_backend("paddleocr-vl", "vllm")
-        ("vllm", None)
         >>> resolve_recognizer_backend("gemini-2.5-flash", None)
-        ("gemini", None)  # Model name implies gemini backend
+        ("gemini", None)  # Gemini model → gemini backend
+        >>> resolve_recognizer_backend("gpt-4o", None)
+        ("openai", None)  # GPT model → openai backend
+        >>> resolve_recognizer_backend("meta-llama/Llama-3-8b", None)
+        ("openai", None)  # HuggingFace format → openai (OpenRouter)
+        >>> resolve_recognizer_backend("paddleocr-vl", None)
+        ("pytorch", None)  # Registered model → default_backend
     """
     config = _load_models_config()
     recognizers = config.get("recognizers", {})
 
-    # Handle model names that imply API backend (e.g., "gemini-2.5-flash", "gpt-4o")
+    # Auto-infer backend from recognizer name pattern
+    if backend is None:
+        # 1. Gemini models (gemini-2.5-flash, gemini-2.0-pro, etc.)
+        if recognizer.startswith("gemini"):
+            logger.info("Auto-selected recognizer backend: gemini (for Gemini model: %s)", recognizer)
+            return "gemini", None
+
+        # 2. GPT/ChatGPT models (gpt-4o, gpt-4-turbo, chatgpt, etc.)
+        if recognizer.startswith("gpt-") or recognizer.startswith("chatgpt"):
+            logger.info("Auto-selected recognizer backend: openai (for GPT model: %s)", recognizer)
+            return "openai", None
+
+        # 3. HuggingFace format: {org}/{model_name} → OpenRouter via openai backend
+        if "/" in recognizer:
+            logger.info(
+                "Auto-selected recognizer backend: openai (for HuggingFace model via OpenRouter: %s)", recognizer
+            )
+            return "openai", None
+
+    # Handle registered models (paddleocr-vl, deepseek-ocr, etc.)
     # Infer recognizer type from model name
     inferred_recognizer = None
     if recognizer.startswith("gemini"):
         inferred_recognizer = "gemini"
-    elif recognizer.startswith("gpt-") or recognizer in ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]:
+    elif recognizer.startswith("gpt-") or recognizer.startswith("chatgpt"):
         inferred_recognizer = "openai"
     elif recognizer == "paddleocr-vl" or recognizer.startswith("PaddlePaddle/PaddleOCR"):
         inferred_recognizer = "paddleocr-vl"
+    elif recognizer == "deepseek-ocr" or recognizer.startswith("deepseek-ai/DeepSeek-OCR"):
+        inferred_recognizer = "deepseek-ocr"
 
-    # Use inferred recognizer if available
+    # Use inferred recognizer if available, otherwise use recognizer as-is
     lookup_recognizer = inferred_recognizer or recognizer
 
     if lookup_recognizer not in recognizers:
@@ -194,6 +219,12 @@ def resolve_recognizer_backend(recognizer: str, backend: str | None) -> tuple[st
         if recognizer in recognizers:
             lookup_recognizer = recognizer
         else:
+            # Unknown recognizer - if HuggingFace format, assume OpenRouter
+            if "/" in recognizer:
+                logger.info(
+                    "Unknown recognizer with HuggingFace format, using openai backend for OpenRouter: %s", recognizer
+                )
+                return "openai", None
             return (
                 None,
                 f"Unknown recognizer: {recognizer}. Available: {list(recognizers.keys())}",

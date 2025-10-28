@@ -152,19 +152,6 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cache-dir", type=str, default=".cache", help="Cache directory path (default: ./.cache)")
     parser.add_argument("--temp-dir", type=str, default=".tmp", help="Temporary files directory path (default: ./.tmp)")
 
-    # Deprecated arguments (for backward compatibility)
-    parser.add_argument(
-        "--backend",
-        choices=["openai", "gemini"],
-        help="[DEPRECATED] Use --recognizer and --recognizer-backend instead",
-    )
-    parser.add_argument(
-        "--model",
-        type=str,
-        help="[DEPRECATED] Use --recognizer MODEL_NAME instead",
-    )
-    parser.add_argument("--model-path", type=str, help="[DEPRECATED] Use --detector-model-path instead")
-
     page_group = parser.add_mutually_exclusive_group()
     page_group.add_argument(
         "--max-pages",
@@ -261,22 +248,6 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         help="Gemini API tier for rate limiting (only for gemini-* models, default: free)",
     )
 
-    # Deprecated MinerU/olmOCR options (kept for backward compatibility)
-    legacy_group = parser.add_argument_group("Legacy Options (Deprecated)")
-    legacy_group.add_argument(
-        "--mineru-model",
-        help="[DEPRECATED] Use --detector or --sorter with model name instead",
-    )
-    legacy_group.add_argument(
-        "--mineru-backend",
-        choices=["transformers", "vllm-engine", "vllm-async-engine"],
-        help="[DEPRECATED] Use --detector-backend or --sorter-backend instead",
-    )
-    legacy_group.add_argument(
-        "--olmocr-model",
-        help="[DEPRECATED] Use --sorter with model name instead",
-    )
-
     parser.add_argument(
         "--rate-limit-status",
         action="store_true",
@@ -293,9 +264,6 @@ def _execute_command(args: argparse.Namespace, parser: argparse.ArgumentParser, 
     if not args.input:
         parser.error("the following arguments are required: --input/-i")
         return 1  # pragma: no cover - parser.error raises SystemExit
-
-    # Handle deprecated arguments
-    _handle_deprecated_arguments(args, logger)
 
     try:
         # Lazy import: only load Pipeline when actually processing input
@@ -326,107 +294,6 @@ def _execute_command(args: argparse.Namespace, parser: argparse.ArgumentParser, 
     except Exception as exc:  # noqa: BLE001 - retain broad logging for CLI
         logger.error("Unexpected error: %s", exc, exc_info=True)
         return 1
-
-
-def _handle_deprecated_arguments(args: argparse.Namespace, logger: logging.Logger) -> None:  # noqa: PLR0912
-    """Handle deprecated arguments and migrate to new format."""
-    import warnings  # noqa: PLC0415
-
-    # Handle deprecated --backend and --model
-    if args.backend or args.model:
-        if args.backend:
-            warnings.warn(
-                "--backend is deprecated. Use --recognizer MODEL_NAME --recognizer-backend BACKEND instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            logger.warning("--backend is deprecated, use --recognizer and --recognizer-backend instead")
-
-        if args.model:
-            warnings.warn(
-                "--model is deprecated. Use --recognizer MODEL_NAME instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            logger.warning("--model is deprecated, use --recognizer instead")
-
-        # Auto-migrate to new format
-        if args.model and not hasattr(args, "recognizer") or args.recognizer == "gemini-2.5-flash":
-            args.recognizer = args.model
-            logger.info("Migrated --model=%s to --recognizer=%s", args.model, args.recognizer)
-
-        if args.backend and not hasattr(args, "recognizer_backend") or args.recognizer_backend is None:
-            args.recognizer_backend = args.backend
-            logger.info("Migrated --backend=%s to --recognizer-backend=%s", args.backend, args.recognizer_backend)
-
-    # Handle deprecated --model-path
-    if args.model_path:
-        warnings.warn(
-            "--model-path is deprecated. Use --detector-model-path instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        logger.warning("--model-path is deprecated, use --detector-model-path instead")
-        if not hasattr(args, "detector_model_path") or args.detector_model_path is None:
-            args.detector_model_path = args.model_path
-            logger.info("Migrated --model-path to --detector-model-path")
-
-    # Handle deprecated --mineru-backend
-    if args.mineru_backend:
-        warnings.warn(
-            "--mineru-backend is deprecated. Use --detector-backend or --sorter-backend instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        logger.warning("--mineru-backend is deprecated, use --detector-backend or --sorter-backend instead")
-
-        # Map old MinerU backend names to new backend names
-        backend_mapping = {
-            "transformers": "hf",
-            "vllm-engine": "vllm",
-            "vllm-async-engine": "vllm",
-        }
-        new_backend = backend_mapping.get(args.mineru_backend, args.mineru_backend)
-
-        # Auto-migrate to new format
-        if args.detector == "mineru-vlm" and (not hasattr(args, "detector_backend") or args.detector_backend is None):
-            args.detector_backend = new_backend
-            logger.info("Migrated --mineru-backend=%s to --detector-backend=%s", args.mineru_backend, new_backend)
-
-        if args.sorter == "mineru-vlm" and (not hasattr(args, "sorter_backend") or args.sorter_backend is None):
-            args.sorter_backend = new_backend
-            logger.info("Migrated --mineru-backend=%s to --sorter-backend=%s", args.mineru_backend, new_backend)
-
-    # Handle deprecated --mineru-model
-    if args.mineru_model:
-        warnings.warn(
-            "--mineru-model is deprecated. Use --detector or --sorter with model name directly.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        logger.warning("--mineru-model is deprecated, use --detector or --sorter with model name instead")
-
-        # Auto-migrate to new format
-        if args.detector == "mineru-vlm":
-            args.detector = args.mineru_model
-            logger.info("Migrated --mineru-model to --detector=%s", args.mineru_model)
-
-        if args.sorter == "mineru-vlm":
-            args.sorter = args.mineru_model
-            logger.info("Migrated --mineru-model to --sorter=%s", args.mineru_model)
-
-    # Handle deprecated --olmocr-model
-    if args.olmocr_model:
-        warnings.warn(
-            "--olmocr-model is deprecated. Use --sorter with model name directly.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        logger.warning("--olmocr-model is deprecated, use --sorter with model name instead")
-
-        if args.sorter == "olmocr-vlm":
-            args.sorter = args.olmocr_model
-            logger.info("Migrated --olmocr-model to --sorter=%s", args.olmocr_model)
 
 
 def _handle_rate_limit_status(args: argparse.Namespace) -> bool:
