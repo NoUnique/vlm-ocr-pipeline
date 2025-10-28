@@ -105,6 +105,10 @@ class Pipeline:
         use_dual_resolution: bool = False,
         # Checkpoint options (always enabled, auto-detected from output_dir)
         enable_checkpoints: bool = True,
+        # Distributed Processing (Ray Multi-GPU)
+        use_ray: bool = False,
+        num_gpus: int | None = None,
+        actors_per_gpu: int = 1,
     ):
         """Initialize VLM OCR processing pipeline.
 
@@ -133,6 +137,9 @@ class Pipeline:
             recognition_dpi: DPI for recognition stage (overrides recognition_dpi from config)
             use_dual_resolution: Use different DPIs for detection and recognition stages
             enable_checkpoints: Enable smart resume with checkpoints (default: True, auto-detected from output_dir)
+            use_ray: Enable Ray-based multi-GPU parallelization (requires ray package)
+            num_gpus: Number of GPUs to use (None = auto-detect all available GPUs)
+            actors_per_gpu: Number of Ray actors per GPU (default: 1)
         """
         # Load configuration files
         models_config = _load_yaml_config(Path("settings") / "models.yaml")
@@ -409,14 +416,78 @@ class Pipeline:
             self.recognizer_model, backend=recognizer_backend, **recognizer_kwargs
         )
 
+        # Initialize Ray pools for multi-GPU parallelization (optional)
+        self.use_ray = use_ray
+        self.ray_detector_pool = None
+        self.ray_recognizer_pool = None
+
+        if use_ray:
+            from pipeline.distributed import is_ray_available  # noqa: PLC0415
+
+            if not is_ray_available():
+                logger.warning(
+                    "Ray is not available. Falling back to single-GPU mode. Install Ray with: pip install ray"
+                )
+                self.use_ray = False
+            else:
+                # Calculate number of actors
+                num_actors = num_gpus if num_gpus is not None else None
+                if num_actors is not None and actors_per_gpu > 1:
+                    num_actors = num_actors * actors_per_gpu
+
+                # Initialize Ray detector pool
+                if self.detector is not None:
+                    from pipeline.distributed import RayDetectorPool  # noqa: PLC0415
+
+                    try:
+                        self.ray_detector_pool = RayDetectorPool(
+                            detector_name=detector,
+                            num_actors=num_actors,
+                            num_gpus_per_actor=1.0 / actors_per_gpu if actors_per_gpu > 1 else 1.0,
+                            **detector_kwargs,
+                        )
+                        logger.info(
+                            "Ray detector pool initialized: %d actors (num_gpus=%s, actors_per_gpu=%d)",
+                            self.ray_detector_pool.num_actors,
+                            num_gpus,
+                            actors_per_gpu,
+                        )
+                    except Exception as e:
+                        logger.warning("Failed to initialize Ray detector pool: %s. Falling back to single-GPU.", e)
+                        self.use_ray = False
+
+                # Initialize Ray recognizer pool (only for local model recognizers)
+                if self.use_ray and recognizer_backend in ["pytorch", "vllm", "sglang", "paddleocr-vl", "hf"]:
+                    from pipeline.distributed import RayRecognizerPool  # noqa: PLC0415
+
+                    try:
+                        self.ray_recognizer_pool = RayRecognizerPool(
+                            recognizer_name=recognizer,
+                            num_actors=num_actors,
+                            num_gpus_per_actor=1.0 / actors_per_gpu if actors_per_gpu > 1 else 1.0,
+                            backend=recognizer_backend,
+                            **recognizer_kwargs,
+                        )
+                        logger.info(
+                            "Ray recognizer pool initialized: %d actors (num_gpus=%s, actors_per_gpu=%d)",
+                            self.ray_recognizer_pool.num_actors,
+                            num_gpus,
+                            actors_per_gpu,
+                        )
+                    except Exception as e:
+                        logger.warning("Failed to initialize Ray recognizer pool: %s. Using single-GPU.", e)
+                        self.ray_recognizer_pool = None
+
         logger.info(
-            "Pipeline initialized: detector=%s (backend=%s), sorter=%s (backend=%s), recognizer=%s (backend=%s)",
+            "Pipeline initialized: detector=%s (backend=%s), sorter=%s (backend=%s), "
+            "recognizer=%s (backend=%s), ray=%s",
             detector,
             detector_backend or "auto",
             sorter,
             sorter_backend or "auto",
             recognizer,
             recognizer_backend,
+            self.use_ray,
         )
 
         # Initialize 8 pipeline stages
@@ -438,9 +509,15 @@ class Pipeline:
             recognition_dpi=self.recognition_dpi,
             use_dual_resolution=self.use_dual_resolution,
         )
-        self.detection_stage = DetectionStage(self.detector)  # type: ignore[arg-type]
+        self.detection_stage = DetectionStage(
+            self.detector,  # type: ignore[arg-type]
+            ray_detector_pool=self.ray_detector_pool,
+        )
         self.ordering_stage = OrderingStage(self.sorter)  # type: ignore[arg-type]
-        self.recognition_stage = RecognitionStage(self.recognizer)
+        self.recognition_stage = RecognitionStage(
+            self.recognizer,
+            ray_recognizer_pool=self.ray_recognizer_pool,
+        )
         self.block_correction_stage = BlockCorrectionStage(enable=False)  # Placeholder for future
         self.rendering_stage = RenderingStage(renderer=self.renderer)
         self.page_correction_stage = PageCorrectionStage(recognizer=self.recognizer, backend=self.backend, enable=True)  # type: ignore[arg-type]

@@ -2,21 +2,28 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from pipeline.types import Block, ColumnLayout, Detector
+
+if TYPE_CHECKING:
+    from pipeline.distributed import RayDetectorPool
 
 
 class DetectionStage:
     """Stage 2: Detection - Layout block detection."""
 
-    def __init__(self, detector: Detector):
+    def __init__(self, detector: Detector, ray_detector_pool: RayDetectorPool | None = None):
         """Initialize DetectionStage.
 
         Args:
             detector: Layout detector instance
+            ray_detector_pool: Optional Ray detector pool for multi-GPU parallelization
         """
         self.detector = detector
+        self.ray_detector_pool = ray_detector_pool
 
     def detect(self, image: np.ndarray) -> list[Block]:
         """Detect layout blocks in image.
@@ -27,7 +34,11 @@ class DetectionStage:
         Returns:
             List of detected blocks with bbox, type, confidence
         """
-        blocks = self.detector.detect(image)
+        # Use Ray pool if available, otherwise use regular detector
+        if self.ray_detector_pool is not None:
+            blocks = self.ray_detector_pool.detect(image)
+        else:
+            blocks = self.detector.detect(image)
         return blocks
 
     def extract_column_layout(self, blocks: list[Block]) -> ColumnLayout | None:

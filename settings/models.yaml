@@ -163,6 +163,19 @@ backends:
     description: "Google Gemini models via API"
     use_cases: ["Gemini 2.5 Flash", "Gemini 2.0 Pro"]
 
+  ray:
+    name: "Ray Distributed"
+    description: "Ray-based multi-GPU parallelization (wraps other backends)"
+    use_cases: ["Multi-GPU detector parallelization", "Multi-GPU recognizer parallelization"]
+
+# Distributed processing configuration
+distributed:
+  ray:
+    enabled: false  # Disabled by default (requires ray package)
+    num_gpus: null  # null = auto-detect, or specify number
+    num_actors_per_gpu: 1  # Number of actors per GPU
+    actors_per_model: null  # null = auto-calculate from num_gpus
+
 # Model aliases for convenience
 # Users can use short names instead of full model identifiers
 aliases:
