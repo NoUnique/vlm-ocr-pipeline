@@ -54,6 +54,7 @@ known-first-party = ["pipeline", "models"]
 "pipeline/__init__.py" = ["PLC0415"]  # Lazy imports for optional conversion modules
 "pipeline/stages/input_stage.py" = ["PLC0415"]  # Lazy imports for conversion modules
 "pipeline/distributed/*.py" = ["PLC0415", "N806"]  # Ray is optional, lazy imports required; allow actor class names
+"pipeline/batch/*.py" = ["PLC0415"]  # Lazy imports for batch processing
 # Test files: allow magic numbers (concrete test values) and lazy imports
 "tests/test_*.py" = ["PLR2004", "PLC0415"]
 # Scripts: allow lazy imports (avoid circular dependencies)

@@ -1267,65 +1267,40 @@ class Pipeline:
         page_range: tuple[int, int] | None = None,
         specific_pages: list[int] | None = None,
     ) -> dict[str, Any]:
-        """Process all PDFs in a directory."""
-        input_dir = Path(input_dir)
-        output_base = Path(output_dir)
-        model_base_dir = output_base / self.model
+        """Process all PDFs in a directory using staged batch processing.
 
-        if not input_dir.exists() or not input_dir.is_dir():
-            return {"error": f"Directory not found: {input_dir}"}
+        When input is a directory, automatically uses staged batch processing
+        to maximize GPU utilization by processing all files through each stage
+        sequentially (convert all → detect all → sort all → recognize all).
 
-        # Find all PDF files in directory
-        pdf_files = list(input_dir.glob("*.pdf"))
-        if not pdf_files:
-            return {"error": f"No PDF files found in directory: {input_dir}"}
+        This is more efficient than sequential per-file processing because:
+        - Models are loaded once per stage (not per file)
+        - Better GPU utilization
+        - Optimal for Ray multi-GPU parallelization
 
-        logger.info("Found %d PDF files to process", len(pdf_files))
+        Args:
+            input_dir: Directory containing PDF files
+            output_dir: Output directory
+            max_pages: Maximum pages per PDF to process
+            page_range: Page range per PDF to process
+            specific_pages: Specific pages per PDF to process
 
-        results = {}
-        total_files = len(pdf_files)
-        processed_files = 0
+        Returns:
+            Processing summary dictionary
+        """
+        # Use staged batch processor for directory processing
+        from pipeline.batch import StagedBatchProcessor  # noqa: PLC0415
 
-        for pdf_file in pdf_files:
-            logger.info("Processing PDF %d/%d: %s", processed_files + 1, total_files, pdf_file.name)
+        logger.info("Using staged batch processing for directory input")
 
-            try:
-                # Process the PDF (outputs will be placed under <output>/<model>/<file>)
-                result = self.process_pdf(pdf_file, max_pages=max_pages, page_range=page_range, pages=specific_pages)
-
-                # Store Document object in results
-                results[str(pdf_file)] = result
-                processed_files += 1
-
-                # Note: Document objects don't track processing_stopped
-                # Continue processing next file regardless
-
-            except Exception as e:
-                # Fallback for unexpected errors in batch processing - continue with next file
-                # (allowed per ERROR_HANDLING.md section 3.3)
-                logger.error("Error processing %s: %s", pdf_file, e, exc_info=True)
-                results[str(pdf_file)] = {"error": str(e), "processed_at": tz_now().isoformat()}
-
-        # Ensure model base directory exists
-        model_base_dir.mkdir(parents=True, exist_ok=True)
-
-        summary = {
-            "input_directory": str(input_dir),
-            "output_directory": str(model_base_dir),
-            "total_files": total_files,
-            "processed_files": processed_files,
-            "results": results,
-            "processed_at": tz_now().isoformat(),
-        }
-
-        # Save directory summary under model-specific directory
-        summary_file = model_base_dir / "directory_summary.json"
-        summary_file.parent.mkdir(parents=True, exist_ok=True)
-
-        with summary_file.open("w", encoding="utf-8") as f:
-            json.dump(summary, f, ensure_ascii=False, indent=2)
-
-        logger.info("Directory processing complete. Summary saved to: %s", summary_file)
+        processor = StagedBatchProcessor(self)
+        summary = processor.process_directory(
+            input_dir,
+            output_dir,
+            max_pages=max_pages,
+            page_range=page_range,
+            specific_pages=specific_pages,
+        )
 
         return summary
 
