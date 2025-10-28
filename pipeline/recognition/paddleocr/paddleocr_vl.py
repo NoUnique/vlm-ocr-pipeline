@@ -125,12 +125,26 @@ class PaddleOCRVLRecognizer(Recognizer):
                 logger.warning("Multi-GPU requested but only %d GPU available", self.gpu_count)
 
         # Initialize PaddleOCRVL pipeline
+        # Filter out GPU optimization kwargs that PaddleOCR doesn't recognize
+        filtered_kwargs = {
+            k: v
+            for k, v in kwargs.items()
+            if k
+            not in [
+                "use_bf16",
+                "tensor_parallel_size",
+                "gpu_memory_utilization",
+                "backend",
+                "model",
+            ]
+        }
+
         init_kwargs = {
             "vl_rec_model_name": vl_rec_model_name,
             "vl_rec_backend": vl_rec_backend,
             "use_layout_detection": use_layout_detection,
             "device": device,
-            **kwargs,
+            **filtered_kwargs,
         }
         if vl_rec_model_dir:
             init_kwargs["vl_rec_model_dir"] = str(vl_rec_model_dir)

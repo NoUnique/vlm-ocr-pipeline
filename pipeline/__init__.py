@@ -23,11 +23,7 @@ except ImportError:
     pass
 
 from .constants import DEFAULT_CONFIDENCE_THRESHOLD
-from .layout.detection import create_detector as create_detector_impl
-from .layout.ordering import create_sorter as create_sorter_impl, validate_combination
 from .misc import tz_now
-from .recognition import create_recognizer
-from .recognition.api.ratelimit import rate_limiter
 from .types import Block, Detector, Document, Page, PyMuPDFPage, Recognizer, Sorter
 
 logger = logging.getLogger(__name__)
@@ -121,12 +117,20 @@ class Pipeline:
         models_config = _load_yaml_config(Path("settings") / "models.yaml")
         detection_config = _load_yaml_config(Path("settings") / "detection_config.yaml")
 
-        # Import backend validator
+        # Lazy imports for factory functions (avoid loading heavy dependencies at module import)
         from .backend_validator import (  # noqa: PLC0415
             resolve_detector_backend,
             resolve_recognizer_backend,
             resolve_sorter_backend,
         )
+        from .layout.detection import create_detector as create_detector_impl  # noqa: PLC0415
+        from .layout.ordering import (  # noqa: PLC0415
+            REQUIRED_COMBINATIONS,
+            create_sorter as create_sorter_impl,
+            validate_combination,
+        )
+        from .recognition import create_recognizer  # noqa: PLC0415
+        from .recognition.api.ratelimit import rate_limiter  # noqa: PLC0415
 
         # Resolve and validate backends
         detector_backend, detector_error = resolve_detector_backend(detector, detector_backend)
@@ -155,9 +159,6 @@ class Pipeline:
         # Validate renderer
         if self.renderer not in ["markdown", "plaintext"]:
             raise ValueError(f"Invalid renderer: {renderer}. Must be 'markdown' or 'plaintext'.")
-
-        # Import REQUIRED_COMBINATIONS for bidirectional auto-selection
-        from .layout.ordering import REQUIRED_COMBINATIONS  # noqa: PLC0415
 
         # Default detector
         detector_default = "doclayout-yolo"

@@ -14,17 +14,7 @@ from typing import Any
 
 from pipeline.types import Detector
 
-from .detector import LayoutDetector
-from .doclayout_yolo import DocLayoutYOLODetector
-from .mineru import MinerUDocLayoutYOLODetector, MinerUVLMDetector
-
 logger = logging.getLogger(__name__)
-
-# Lazy import for PaddleOCR (optional dependency)
-try:
-    from .paddleocr import PPDocLayoutV2Detector  # noqa: PLC0415
-except ImportError:
-    PPDocLayoutV2Detector = None  # type: ignore[assignment, misc]
 
 __all__ = [
     "LayoutDetector",
@@ -36,18 +26,33 @@ __all__ = [
     "list_available_detectors",
 ]
 
-_DETECTOR_REGISTRY: dict[str, Callable[..., Detector]] = {
-    "doclayout-yolo": DocLayoutYOLODetector,
-}
+# Lazy import registry - imports detectors only when needed
+_DETECTOR_REGISTRY: dict[str, Callable[..., Detector]] = {}
 
-if MinerUVLMDetector is not None:
-    _DETECTOR_REGISTRY["mineru-vlm"] = MinerUVLMDetector
 
-if MinerUDocLayoutYOLODetector is not None:
-    _DETECTOR_REGISTRY["mineru-doclayout-yolo"] = MinerUDocLayoutYOLODetector
+def _get_detector_class(name: str) -> Callable[..., Detector]:
+    """Lazy load detector class."""
+    if name == "doclayout-yolo":
+        from .doclayout_yolo import DocLayoutYOLODetector  # noqa: PLC0415
 
-if PPDocLayoutV2Detector is not None:
-    _DETECTOR_REGISTRY["paddleocr-doclayout-v2"] = PPDocLayoutV2Detector
+        return DocLayoutYOLODetector
+    elif name == "mineru-vlm":
+        from .mineru import MinerUVLMDetector  # noqa: PLC0415
+
+        return MinerUVLMDetector
+    elif name == "mineru-doclayout-yolo":
+        from .mineru import MinerUDocLayoutYOLODetector  # noqa: PLC0415
+
+        return MinerUDocLayoutYOLODetector
+    elif name == "paddleocr-doclayout-v2":
+        try:
+            from .paddleocr import PPDocLayoutV2Detector  # noqa: PLC0415
+
+            return PPDocLayoutV2Detector
+        except ImportError as e:
+            raise ImportError(f"PaddleOCR detector not available: {e}") from e
+    else:
+        raise ValueError(f"Unknown detector: {name}")
 
 
 def create_detector(name: str, **kwargs: Any) -> Detector:
@@ -60,13 +65,10 @@ def create_detector(name: str, **kwargs: Any) -> Detector:
     Returns:
         Detector instance
     """
-    if name not in _DETECTOR_REGISTRY:
-        available = ", ".join(_DETECTOR_REGISTRY.keys())
-        raise ValueError(f"Unknown detector: {name}. Available: {available}")
-
-    return _DETECTOR_REGISTRY[name](**kwargs)
+    detector_class = _get_detector_class(name)
+    return detector_class(**kwargs)
 
 
 def list_available_detectors() -> list[str]:
     """List available detector names."""
-    return list(_DETECTOR_REGISTRY.keys())
+    return ["doclayout-yolo", "mineru-vlm", "mineru-doclayout-yolo", "paddleocr-doclayout-v2"]
