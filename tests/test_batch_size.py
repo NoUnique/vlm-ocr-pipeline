@@ -54,21 +54,15 @@ class TestBatchSizeCalibrator:
         """Test cache key generation is deterministic."""
         calibrator = BatchSizeCalibrator()
 
-        key1 = calibrator._generate_cache_key(
-            "doclayout-yolo", (1920, 1080, 3), "NVIDIA RTX 4090"
-        )
-        key2 = calibrator._generate_cache_key(
-            "doclayout-yolo", (1920, 1080, 3), "NVIDIA RTX 4090"
-        )
+        key1 = calibrator._generate_cache_key("doclayout-yolo", (1920, 1080, 3), "NVIDIA RTX 4090")
+        key2 = calibrator._generate_cache_key("doclayout-yolo", (1920, 1080, 3), "NVIDIA RTX 4090")
 
         # Same inputs should produce same key
         assert key1 == key2
         assert len(key1) == 16  # MD5 hash truncated to 16 chars
 
         # Different inputs should produce different keys
-        key3 = calibrator._generate_cache_key(
-            "doclayout-yolo", (1920, 1080, 3), "NVIDIA RTX 3090"
-        )
+        key3 = calibrator._generate_cache_key("doclayout-yolo", (1920, 1080, 3), "NVIDIA RTX 3090")
         assert key1 != key3
 
     def test_detect_gpu_model_with_cuda(self):
@@ -252,9 +246,7 @@ class TestBatchSizeCalibrator:
 
             # Save to cache
             cache_key = "test_key_123"
-            calibrator._save_to_cache(
-                cache_key, 16, "doclayout-yolo", "NVIDIA RTX 4090"
-            )
+            calibrator._save_to_cache(cache_key, 16, "doclayout-yolo", "NVIDIA RTX 4090")
 
             # Verify cache file exists
             assert calibrator.cache_file.exists()
@@ -305,12 +297,8 @@ class TestBatchSizeCalibrator:
                 calibrator = BatchSizeCalibrator(cache_dir=cache_dir)
 
                 # Pre-populate cache
-                cache_key = calibrator._generate_cache_key(
-                    "doclayout-yolo", (1920, 1080, 3), "NVIDIA RTX 4090"
-                )
-                calibrator._save_to_cache(
-                    cache_key, 16, "doclayout-yolo", "NVIDIA RTX 4090"
-                )
+                cache_key = calibrator._generate_cache_key("doclayout-yolo", (1920, 1080, 3), "NVIDIA RTX 4090")
+                calibrator._save_to_cache(cache_key, 16, "doclayout-yolo", "NVIDIA RTX 4090")
 
                 # Mock inference (should not be called)
                 def mock_inference(batch_size: int):
@@ -366,9 +354,7 @@ class TestBatchSizeCalibrator:
                     mock_search.assert_called_once()
 
                     # Verify cache was updated
-                    cache_key = calibrator._generate_cache_key(
-                        "doclayout-yolo", (1920, 1080, 3), "NVIDIA RTX 4090"
-                    )
+                    cache_key = calibrator._generate_cache_key("doclayout-yolo", (1920, 1080, 3), "NVIDIA RTX 4090")
                     cached = calibrator._load_from_cache(cache_key)
                     assert cached == 8
         finally:
@@ -426,9 +412,7 @@ class TestConvenienceFunctions:
 
             # Pre-populate cache
             calibrator = BatchSizeCalibrator(cache_dir=cache_dir)
-            cache_key = calibrator._generate_cache_key(
-                "doclayout-yolo", (1920, 1080, 3), "NVIDIA RTX 4090"
-            )
+            cache_key = calibrator._generate_cache_key("doclayout-yolo", (1920, 1080, 3), "NVIDIA RTX 4090")
             cache_data = {
                 cache_key: {
                     "batch_size": 16,

@@ -30,10 +30,9 @@ import gc
 import hashlib
 import json
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
-
-import numpy as np
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -225,10 +224,7 @@ class BatchSizeCalibrator:
         except (RuntimeError, Exception) as e:
             # Check if it's OOM error
             error_msg = str(e).lower()
-            is_oom = any(
-                keyword in error_msg
-                for keyword in ["out of memory", "oom", "cuda", "memory"]
-            )
+            is_oom = any(keyword in error_msg for keyword in ["out of memory", "oom", "cuda", "memory"])
 
             if is_oom:
                 # Expected OOM - batch size too large
@@ -237,6 +233,7 @@ class BatchSizeCalibrator:
                 # Clear GPU cache after OOM
                 try:
                     import torch
+
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
                         gc.collect()

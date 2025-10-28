@@ -37,6 +37,7 @@ uv run mkdocs serve
 - **Model-Specific Prompts**: YAML-based prompt templates organized by model family for optimal results
 - **Local & Cloud Processing**: Choose between local models (PaddleOCR-VL) or cloud APIs (OpenAI, Gemini)
 - **Caching System**: Intelligent caching to avoid reprocessing identical content
+- **Smart Resume**: Automatic checkpoint/resume system - resumes from last successful page after interruption
 - **Flexible Input**: Supports single images, PDFs, or batch processing of directories
 
 ## Project Structure
@@ -85,6 +86,11 @@ vlm-ocr-pipeline/
 │   │
 │   ├── conversion/            # PDF/Image conversion
 │   │   └── converter.py
+│   │
+│   ├── checkpoint/            # Smart resume functionality
+│   │   ├── __init__.py
+│   │   ├── progress.py        # ProgressTracker for state management
+│   │   └── serializer.py      # JSON serialization for checkpoints
 │   │
 │   └── recognition/           # Text recognition and correction
 │       ├── __init__.py        # TextRecognizer
@@ -575,6 +581,33 @@ python main.py --input document.pdf --detector mineru-vlm --sorter mineru-vlm \
 # Use multi-column aware PyMuPDF sorter
 python main.py --input document.pdf --detector doclayout-yolo --sorter pymupdf
 ```
+
+#### Smart Resume (Automatic Checkpointing)
+
+The pipeline automatically saves progress after processing each page. If processing is interrupted (error, Ctrl+C, rate limit), simply re-run the same command and it will automatically resume from where it left off.
+
+```bash
+# First run (fails at page 5 due to error or interruption)
+python main.py --input document.pdf --output results/
+# Creates: results/_progress.json (progress tracker)
+#          results/stage6_output_page1.json, page2.json, ... (checkpoints)
+
+# Re-run (automatically resumes from page 5)
+python main.py --input document.pdf --output results/
+# Reads _progress.json → skips pages 1-4 → continues from page 5
+
+# The system automatically:
+# - Detects existing checkpoints in output directory
+# - Validates input file matches
+# - Skips already-processed pages
+# - Displays resume information (last run time, completed stages, etc.)
+```
+
+**How it works:**
+- `_progress.json` tracks pipeline execution state (completed pages, timestamps, errors)
+- Each page is saved as a checkpoint after successful processing
+- No CLI arguments needed - always enabled, uses existing `--output` directory
+- Checkpoint files are human-readable JSON for easy debugging
 
 #### PaddleOCR End-to-End Pipeline
 
