@@ -277,6 +277,22 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         type=str,
         help="Custom detector model path (overrides model name resolution)",
     )
+    detection_group.add_argument(
+        "--auto-batch-size",
+        action="store_true",
+        help="Auto-calibrate optimal batch size for detector (recommended for multi-image processing)",
+    )
+    detection_group.add_argument(
+        "--batch-size",
+        type=int,
+        help="Manual batch size for detector (default: 1, ignored if --auto-batch-size is set)",
+    )
+    detection_group.add_argument(
+        "--target-memory-fraction",
+        type=float,
+        default=0.85,
+        help="Target GPU memory usage fraction for auto batch size calibration (default: 0.85)",
+    )
 
     # Reading Order Stage
     ordering_group = parser.add_argument_group("Reading Order")
@@ -362,6 +378,9 @@ def _execute_command(args: argparse.Namespace, parser: argparse.ArgumentParser, 
             detector=args.detector,
             detector_backend=args.detector_backend,
             detector_model_path=args.detector_model_path,
+            auto_batch_size=args.auto_batch_size,
+            batch_size=args.batch_size,
+            target_memory_fraction=args.target_memory_fraction,
             sorter=args.sorter,
             sorter_backend=args.sorter_backend,
             sorter_model_path=args.sorter_model_path,

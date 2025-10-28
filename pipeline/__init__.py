@@ -79,6 +79,10 @@ class Pipeline:
         detector: str = "doclayout-yolo",
         detector_backend: str | None = None,
         detector_model_path: str | Path | None = None,
+        # Batch processing options
+        auto_batch_size: bool = False,
+        batch_size: int | None = None,
+        target_memory_fraction: float = 0.85,
         # Reading Order Stage
         sorter: str | None = None,
         sorter_backend: str | None = None,
@@ -109,6 +113,9 @@ class Pipeline:
             detector: Detector model name or alias (e.g., "doclayout-yolo", "mineru-vlm")
             detector_backend: Inference backend for detector (None = auto-select)
             detector_model_path: Custom detector model path (overrides model name resolution)
+            auto_batch_size: Auto-calibrate optimal batch size for detector (recommended for multi-image)
+            batch_size: Manual batch size for detector (ignored if auto_batch_size=True)
+            target_memory_fraction: Target GPU memory fraction for auto-calibration (0.0-1.0)
             sorter: Sorter model name or alias (None = auto-select)
             sorter_backend: Inference backend for sorter (None = auto-select)
             sorter_model_path: Custom sorter model path (overrides model name resolution)
@@ -290,6 +297,9 @@ class Pipeline:
             detector_kwargs = {
                 "model_path": detector_model_path,
                 "confidence_threshold": confidence_threshold,
+                "auto_batch_size": auto_batch_size,
+                "batch_size": batch_size,
+                "target_memory_fraction": target_memory_fraction,
             }
         elif detector == "mineru-vlm":
             # Use detector as model name (e.g., "opendatalab/PDF-Extract-Kit-1.0")

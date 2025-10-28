@@ -77,6 +77,11 @@ python main.py --input doc.pdf --dpi quality   # 300 DPI - best quality
 python main.py --input doc.pdf --dpi 200       # Custom single DPI
 python main.py --input doc.pdf --dpi 150,300   # Custom dual (detection,recognition)
 
+# Adaptive batch size (automatic GPU memory optimization)
+python main.py --input doc.pdf --auto-batch-size  # Auto-calibrate optimal batch size
+python main.py --input doc.pdf --batch-size 16    # Manual batch size
+python main.py --input doc.pdf --auto-batch-size --target-memory-fraction 0.9  # Use 90% GPU memory
+
 # Check rate limits (Gemini only)
 python main.py --rate-limit-status --recognizer gemini-2.5-flash --gemini-tier free
 ```
@@ -338,6 +343,13 @@ class Block:
 **Conversion** (Stages 1 & 5):
 - Input (Stage 1): `pipeline/conversion/input/` - PDF/image loading
 - Output (Stage 5): `pipeline/conversion/output/markdown/` - Markdown generation (two strategies: region-based and font-based)
+
+**Optimization**:
+- `pipeline/optimization/batch_size.py` - Adaptive batch size calibration with GPU memory profiling
+  - `BatchSizeCalibrator` - Binary search-based optimal batch size finder
+  - `calibrate_batch_size()` - Convenience function for one-off calibration
+  - `get_optimal_batch_size()` - Read cached batch size without calibration
+  - Cache location: `~/.cache/vlm-ocr-pipeline/batch_size_cache.json`
 
 **Prompt Management**: `settings/prompts/{gemini,openai,internvl,qwen,phi4}/` - Model-specific YAML templates
 
