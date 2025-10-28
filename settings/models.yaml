@@ -14,23 +14,24 @@ detectors:
   doclayout-yolo:
     default_model: "models/doclayout_yolo_docstructbench_imgsz1024.pt"
     description: "DocLayout-YOLO trained on DocStructBench"
-    supported_backends: []  # Native PyTorch only, no backend parameter
-    default_backend: null
+    supported_backends: ["pytorch", "pt-ray"]  # PyTorch with optional Ray multi-GPU
+    default_backend: "pytorch"
 
   mineru-doclayout-yolo:
     default_model: null  # Uses MinerU's bundled model
     description: "MinerU's DocLayout-YOLO implementation"
-    supported_backends: []  # Native PyTorch only, no backend parameter
-    default_backend: null
+    supported_backends: ["pytorch", "pt-ray"]  # PyTorch with optional Ray multi-GPU
+    default_backend: "pytorch"
 
   mineru-vlm:
     default_model: "opendatalab/MinerU2.5-2509-1.2B"
     description: "MinerU 2.5 VLM detector (1.2B parameters)"
-    supported_backends: ["hf", "vllm"]  # Only transformers and vllm are tested
+    supported_backends: ["hf", "hf-ray", "vllm"]  # HF with optional Ray, or vLLM
     default_backend: "hf"
     backend_param_name: "backend"
     backend_mapping:
       hf: "transformers"          # HuggingFace Transformers
+      hf-ray: "transformers"      # HuggingFace + Ray (uses same underlying backend)
       vllm: "vllm-engine"         # vLLM inference engine
     alternative_models:
       - "opendatalab/PDF-Extract-Kit-1.0"
@@ -109,11 +110,12 @@ recognizers:
   paddleocr-vl:
     default_model: "PaddlePaddle/PaddleOCR-VL-0.9B"
     description: "PaddleOCR-VL recognizer (0.9B parameters)"
-    supported_backends: ["pytorch", "vllm", "sglang"]
+    supported_backends: ["pytorch", "pt-ray", "vllm", "sglang"]
     default_backend: "pytorch"
     backend_param_name: "vl_rec_backend"
     backend_mapping:
       pytorch: "native"          # Native PaddlePaddle inference
+      pt-ray: "native"           # PaddlePaddle + Ray (uses same underlying backend)
       vllm: "vllm-server"        # vLLM server
       sglang: "sglang-server"    # SGLang server
     alternative_models:
@@ -122,11 +124,12 @@ recognizers:
   deepseek-ocr:
     default_model: "deepseek-ai/DeepSeek-OCR"
     description: "DeepSeek-OCR VLM for document understanding with contextual optical compression"
-    supported_backends: ["hf", "vllm"]  # HuggingFace Transformers or vLLM
+    supported_backends: ["hf", "hf-ray", "vllm"]  # HF with optional Ray, or vLLM
     default_backend: "hf"
     backend_param_name: "backend"
     backend_mapping:
       hf: "hf"          # HuggingFace Transformers (flash_attention_2)
+      hf-ray: "hf"      # HuggingFace + Ray (uses same underlying backend)
       vllm: "vllm"      # vLLM AsyncLLMEngine
     alternative_models: []
 
@@ -138,10 +141,20 @@ backends:
     description: "Native PyTorch inference (single GPU)"
     use_cases: ["DocLayout-YOLO", "PaddleOCR models"]
 
+  pt-ray:
+    name: "PyTorch + Ray"
+    description: "PyTorch with Ray multi-GPU parallelization"
+    use_cases: ["Multi-GPU DocLayout-YOLO", "Multi-GPU PaddleOCR models"]
+
   hf:
     name: "HuggingFace Transformers"
     description: "HuggingFace Transformers library (single GPU)"
     use_cases: ["MinerU VLM", "olmOCR", "LayoutReader"]
+
+  hf-ray:
+    name: "HuggingFace + Ray"
+    description: "HuggingFace Transformers with Ray multi-GPU parallelization"
+    use_cases: ["Multi-GPU MinerU VLM", "Multi-GPU recognizers"]
 
   vllm:
     name: "vLLM"
@@ -162,19 +175,6 @@ backends:
     name: "Google Gemini API"
     description: "Google Gemini models via API"
     use_cases: ["Gemini 2.5 Flash", "Gemini 2.0 Pro"]
-
-  ray:
-    name: "Ray Distributed"
-    description: "Ray-based multi-GPU parallelization (wraps other backends)"
-    use_cases: ["Multi-GPU detector parallelization", "Multi-GPU recognizer parallelization"]
-
-# Distributed processing configuration
-distributed:
-  ray:
-    enabled: false  # Disabled by default (requires ray package)
-    num_gpus: null  # null = auto-detect, or specify number
-    num_actors_per_gpu: 1  # Number of actors per GPU
-    actors_per_model: null  # null = auto-calculate from num_gpus
 
 # Model aliases for convenience
 # Users can use short names instead of full model identifiers

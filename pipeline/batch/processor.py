@@ -218,7 +218,7 @@ class StagedBatchProcessor:
         valid_pages = [p for p in pages if p.image is not None and p.status != "failed"]
 
         # Use Ray pool if available for batch detection
-        if self.pipeline.use_ray and self.pipeline.ray_detector_pool:
+        if self.pipeline.ray_detector_pool:
             logger.info("Using Ray detector pool for batch detection")
             images = [p.image for p in valid_pages]
             all_blocks = self.pipeline.ray_detector_pool.detect_batch(images)
@@ -300,7 +300,7 @@ class StagedBatchProcessor:
         valid_pages = [p for p in pages if p.sorted_blocks is not None and p.status != "failed"]
 
         # Use Ray pool if available for batch recognition
-        if self.pipeline.use_ray and self.pipeline.ray_recognizer_pool:
+        if self.pipeline.ray_recognizer_pool:
             logger.info("Using Ray recognizer pool for batch recognition")
             images = [p.image for p in valid_pages]
             blocks_list = [p.sorted_blocks for p in valid_pages]

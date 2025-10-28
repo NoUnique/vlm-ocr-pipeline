@@ -350,25 +350,6 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         help="Show current rate limit status and exit",
     )
 
-    # Distributed Processing
-    distributed_group = parser.add_argument_group("Distributed Processing (Multi-GPU)")
-    distributed_group.add_argument(
-        "--use-ray",
-        action="store_true",
-        help="Enable Ray-based multi-GPU parallelization (requires ray package)",
-    )
-    distributed_group.add_argument(
-        "--num-gpus",
-        type=int,
-        help="Number of GPUs to use (None = auto-detect all available GPUs)",
-    )
-    distributed_group.add_argument(
-        "--actors-per-gpu",
-        type=int,
-        default=1,
-        help="Number of Ray actors per GPU (default: 1)",
-    )
-
     return parser
 
 
@@ -411,10 +392,6 @@ def _execute_command(args: argparse.Namespace, parser: argparse.ArgumentParser, 
             detection_dpi=detection_dpi,
             recognition_dpi=recognition_dpi,
             use_dual_resolution=use_dual_resolution,
-            # Distributed processing options
-            use_ray=args.use_ray if hasattr(args, "use_ray") else False,
-            num_gpus=args.num_gpus if hasattr(args, "num_gpus") else None,
-            actors_per_gpu=args.actors_per_gpu if hasattr(args, "actors_per_gpu") else 1,
         )
 
         return _run_pipeline(pipeline, args, logger)
