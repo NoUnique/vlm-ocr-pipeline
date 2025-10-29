@@ -35,16 +35,16 @@ uv run pytest tests/test_types.py::test_bbox_from_xywh  # Single test
 
 ### Running the Pipeline
 ```bash
-# Basic usage (default: doclayout-yolo detector + gemini-2.5-flash recognizer)
+# Basic usage (default: paddleocr-doclayout-v2 detector + paddleocr-vl recognizer, balanced DPI)
 python main.py --input document.pdf
 
 # Different recognizers (backend auto-selected)
+python main.py --input document.pdf --recognizer deepseek-ocr  # → hf backend
+python main.py --input document.pdf --recognizer gemini-2.5-flash  # → gemini backend
 python main.py --input document.pdf --recognizer gpt-4o  # → openai backend
-python main.py --input document.pdf --recognizer gemini-2.0-pro  # → gemini backend
 python main.py --input document.pdf --recognizer meta-llama/Llama-3-8b  # → openai backend (OpenRouter)
 
-# Local model recognizers (backend auto-selected)
-python main.py --input document.pdf --recognizer paddleocr-vl  # → pytorch backend
+# Alternative local recognizers (backend auto-selected)
 python main.py --input document.pdf --recognizer deepseek-ocr  # → hf backend
 
 # Manual backend selection (optional, for advanced users)
@@ -61,8 +61,8 @@ python main.py --input doc.pdf \
 python main.py --input doc.pdf --detector doclayout-yolo --sorter mineru-xycut
 python main.py --input doc.pdf --detector mineru-vlm --sorter mineru-vlm
 
-# PaddleOCR pipeline (PP-DocLayoutV2 detector + PaddleOCR-VL-0.9B recognizer)
-# Note: paddleocr-doclayout-v2 detector auto-selects its sorter (preserves pointer network ordering)
+# Alternative detectors and recognizers
+python main.py --input doc.pdf --detector doclayout-yolo --recognizer gemini-2.5-flash
 python main.py --input doc.pdf --detector paddleocr-doclayout-v2 --recognizer paddleocr-vl
 
 # Page limiting (for testing/cost control)

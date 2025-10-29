@@ -509,13 +509,13 @@ For detailed backend configuration, see `settings/models.yaml`.
 #### Basic Usage
 
 ```bash
-# Process a single PDF (uses default: doclayout-yolo detector + gemini-2.5-flash recognizer)
+# Process a single PDF (uses default: paddleocr-doclayout-v2 detector + paddleocr-vl recognizer, balanced DPI)
 python main.py --input document.pdf
 
 # Use different recognizer
+python main.py --input document.pdf --recognizer deepseek-ocr
+python main.py --input document.pdf --recognizer gemini-2.5-flash
 python main.py --input document.pdf --recognizer gpt-4o
-python main.py --input document.pdf --recognizer gemini-2.0-pro
-python main.py --input document.pdf --recognizer deepseek-ocr --recognizer-backend hf
 
 # Process a directory of PDFs
 python main.py --input /path/to/pdfs/

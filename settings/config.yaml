@@ -8,9 +8,9 @@ conversion:
   detection_dpi: 150        # Lower DPI for layout detection (faster, less memory)
   recognition_dpi: 300      # Higher DPI for text recognition (better accuracy)
 
-  # Dual-resolution mode
+  # Dual-resolution mode (balanced preset)
   # When enabled, uses detection_dpi for layout detection and recognition_dpi for text extraction
-  use_dual_resolution: false  # Set to true to enable proxy-based detection
+  use_dual_resolution: true   # Balanced mode: fast detection (150 DPI) + accurate recognition (300 DPI)
 
   # Image quality settings
   jpeg_quality: 95          # JPEG quality for saved images (0-100)

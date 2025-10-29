@@ -78,7 +78,7 @@ class Pipeline:
         output_dir: str | Path = "output",
         temp_dir: str | Path = ".tmp",
         # Layout Detection Stage
-        detector: str = "doclayout-yolo",
+        detector: str = "paddleocr-doclayout-v2",
         detector_backend: str | None = None,
         detector_model_path: str | Path | None = None,
         # Batch processing options
@@ -90,7 +90,7 @@ class Pipeline:
         sorter_backend: str | None = None,
         sorter_model_path: str | Path | None = None,
         # Text Recognition Stage
-        recognizer: str = "gemini-2.5-flash",
+        recognizer: str = "paddleocr-vl",
         recognizer_backend: str | None = None,
         # API-specific options
         gemini_tier: str = "free",
@@ -114,7 +114,7 @@ class Pipeline:
             cache_dir: Cache directory path
             output_dir: Output directory path
             temp_dir: Temporary files directory path
-            detector: Detector model name or alias (e.g., "doclayout-yolo", "mineru-vlm")
+            detector: Detector model name or alias (default: "paddleocr-doclayout-v2")
             detector_backend: Inference backend for detector (None = auto-select)
             detector_model_path: Custom detector model path (overrides model name resolution)
             auto_batch_size: Auto-calibrate optimal batch size for detector (recommended for multi-image)
@@ -123,7 +123,7 @@ class Pipeline:
             sorter: Sorter model name or alias (None = auto-select)
             sorter_backend: Inference backend for sorter (None = auto-select)
             sorter_model_path: Custom sorter model path (overrides model name resolution)
-            recognizer: Recognizer model name (e.g., "gemini-2.5-flash", "gpt-4o", "paddleocr-vl")
+            recognizer: Recognizer model name (default: "paddleocr-vl")
             recognizer_backend: Inference backend for recognizer (None = auto-select)
             gemini_tier: Gemini API tier for rate limiting (only for gemini-* recognizers)
             renderer: Output format renderer ("markdown" or "plaintext")
@@ -520,8 +520,8 @@ class Pipeline:
             directory.mkdir(parents=True, exist_ok=True)
 
     def _get_pdf_output_dir(self, pdf_path: Path) -> Path:
-        """Return the output directory for a given PDF as <output>/<model>/<file_stem>."""
-        return self.output_dir / self.model / pdf_path.stem
+        """Return the output directory for a given PDF as <output>/<file_stem>."""
+        return self.output_dir / pdf_path.stem
 
     def _scale_blocks(self, blocks: list[Block], scale_factor: float) -> list[Block]:
         """Scale block bounding boxes by a factor.
@@ -1088,50 +1088,19 @@ class Pipeline:
         Returns:
             Document object with full page data
         """
-        pages_summary, status_counts = self._build_pages_summary(processed_pages)
-
-        # Check if any pages have errors
-        has_errors = any(page.status == "failed" for page in processed_pages)
-
-        # Create Document object with full page data
-        document = Document(
-            pdf_name=pdf_path.stem,
-            pdf_path=str(pdf_path),
-            num_pages=total_pages,
-            processed_pages=len(processed_pages),
-            pages=processed_pages,  # Full Page objects
-            detected_by=self.detector_name,
-            ordered_by=self.sorter_name,
-            recognized_by=f"{self.backend}/{self.model}",
-            rendered_by=self.renderer,
-            output_directory=str(summary_output_dir),
-            processed_at=tz_now().isoformat(),
-            status_summary={k: v for k, v in status_counts.items() if v > 0},
+        # Delegate to OutputStage for consistent summary creation
+        return self.output_stage.create_pdf_summary(
+            pdf_path=pdf_path,
+            total_pages=total_pages,
+            processed_pages=processed_pages,
+            processing_stopped=processing_stopped,
+            summary_output_dir=summary_output_dir,
+            detector_name=self.detector_name,
+            sorter_name=self.sorter_name,
+            backend=self.backend,
+            model=self.model,
+            renderer=self.renderer,
         )
-
-        # Create summary dict for JSON output (subset of Document data)
-        summary = {
-            "pdf_name": document.pdf_name,
-            "pdf_path": document.pdf_path,
-            "num_pages": document.num_pages,
-            "processed_pages": document.processed_pages,
-            "detected_by": document.detected_by,
-            "ordered_by": document.ordered_by,
-            "recognized_by": document.recognized_by,
-            "rendered_by": document.rendered_by,
-            "output_directory": document.output_directory,
-            "processed_at": document.processed_at,
-            "status_summary": document.status_summary,
-            "pages": pages_summary,  # Use simplified page summary, not full pages
-        }
-
-        summary_filename = self._determine_summary_filename(processing_stopped, has_errors)
-        summary_output_file = summary_output_dir / summary_filename
-        with summary_output_file.open("w", encoding="utf-8") as f:
-            json.dump(summary, f, ensure_ascii=False, indent=2)
-        logger.info("Results saved to %s", summary_output_file)
-
-        return document
 
     def _build_pages_summary(self, processed_pages: list[Page]) -> tuple[list[dict[str, Any]], dict[str, int]]:
         """Build summary of processed pages.

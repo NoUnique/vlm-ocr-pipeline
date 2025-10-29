@@ -166,12 +166,13 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         epilog=textwrap.dedent(
             """
             Examples:
-              # Basic usage (default: doclayout-yolo detector + gemini recognizer)
+              # Basic usage (default: paddleocr-doclayout-v2 detector + paddleocr-vl recognizer)
               python main.py --input document.pdf
 
               # Different recognizers
+              python main.py --input document.pdf --recognizer deepseek-ocr
+              python main.py --input document.pdf --recognizer gemini-2.5-flash
               python main.py --input document.pdf --recognizer gpt-4o
-              python main.py --input document.pdf --recognizer paddleocr-vl
 
               # Custom backends
               python main.py --input document.pdf \
@@ -224,8 +225,9 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dpi",
         type=str,
+        default="balanced",
         help=(
-            "DPI for PDF-to-image conversion. Supports: "
+            "DPI for PDF-to-image conversion (default: balanced). Supports: "
             "presets (fast/balanced/quality), "
             "single value (200), "
             "or dual resolution (150,300 for detection,recognition)"
@@ -260,9 +262,9 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     detection_group.add_argument(
         "--detector",
         type=str,
-        default="doclayout-yolo",
+        default="paddleocr-doclayout-v2",
         help=(
-            "Detector model name or alias (default: doclayout-yolo). "
+            "Detector model name or alias (default: paddleocr-doclayout-v2). "
             "Options: doclayout-yolo, mineru-doclayout-yolo, mineru-vlm, paddleocr-doclayout-v2, "
             "or HuggingFace model path (e.g., opendatalab/PDF-Extract-Kit-1.0)"
         ),
@@ -321,10 +323,10 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     recognition_group.add_argument(
         "--recognizer",
         type=str,
-        default="gemini-2.5-flash",
+        default="paddleocr-vl",
         help=(
-            "Recognizer model name (default: gemini-2.5-flash). "
-            "Examples: gemini-2.5-flash, gpt-4o, paddleocr-vl, "
+            "Recognizer model name (default: paddleocr-vl). "
+            "Examples: paddleocr-vl, deepseek-ocr, gemini-2.5-flash, gpt-4o, "
             "or full model name (e.g., PaddlePaddle/PaddleOCR-VL-0.9B)"
         ),
     )
