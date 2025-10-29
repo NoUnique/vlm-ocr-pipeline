@@ -750,6 +750,11 @@ class Pipeline:
 
         logger.info("[Stage 2/7] Detection complete")
 
+        # Save intermediate results after detection
+        self._save_intermediate_results(
+            pdf_path, pages_to_process, page_output_dir, detected_blocks=detected_blocks, stage="detection"
+        )
+
         # Stage 3: Ordering - sort all pages
         logger.info("[Stage 3/7] Sorting blocks for %d pages...", len(detected_blocks))
         sorted_blocks: dict[int, list[Block]] = {}
@@ -765,6 +770,11 @@ class Pipeline:
             pymupdf_doc.close()
 
         logger.info("[Stage 3/7] Ordering complete")
+
+        # Save intermediate results after ordering
+        self._save_intermediate_results(
+            pdf_path, pages_to_process, page_output_dir, detected_blocks=sorted_blocks, stage="ordering"
+        )
 
         # Scale blocks if using dual resolution
         if self.use_dual_resolution and self.detection_dpi != self.recognition_dpi:
@@ -787,6 +797,16 @@ class Pipeline:
 
         logger.info("[Stage 4/7] Recognition complete")
 
+        # Save intermediate results after recognition
+        self._save_intermediate_results(
+            pdf_path,
+            pages_to_process,
+            page_output_dir,
+            detected_blocks=recognized_blocks,
+            page_images=page_images,
+            stage="recognition",
+        )
+
         # Stage 5: Block Correction (currently disabled)
         logger.info("[Stage 5/7] Block correction (skipped)")
         corrected_blocks: dict[int, list[Block]] = {}
@@ -802,6 +822,17 @@ class Pipeline:
             )
 
         logger.info("[Stage 6/7] Rendering complete")
+
+        # Save intermediate results after rendering
+        self._save_intermediate_results(
+            pdf_path,
+            pages_to_process,
+            page_output_dir,
+            detected_blocks=corrected_blocks,
+            page_images=page_images,
+            rendered_texts=rendered_texts,
+            stage="rendering",
+        )
 
         # Stage 7: Page Correction & Output
         logger.info("[Stage 7/7] Correcting and saving %d pages...", len(rendered_texts))
@@ -841,6 +872,92 @@ class Pipeline:
         gc.collect()
 
         return processed_pages, processing_stopped
+
+    def _save_intermediate_results(
+        self,
+        pdf_path: Path,
+        pages_to_process: list[int],
+        page_output_dir: Path,
+        detected_blocks: dict[int, list[Block]],
+        page_images: dict[int, Any] | None = None,
+        rendered_texts: dict[int, str] | None = None,
+        stage: str = "detection",
+    ) -> None:
+        """Save intermediate results after each stage.
+
+        Args:
+            pdf_path: Path to PDF file
+            pages_to_process: List of page numbers
+            page_output_dir: Output directory
+            detected_blocks: Blocks for each page (at current stage)
+            page_images: Page images (optional)
+            rendered_texts: Rendered markdown texts (optional)
+            stage: Current stage name
+        """
+        import numpy as np
+
+        # Create json directory
+        json_dir = page_output_dir / "json"
+        json_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save each page's current state
+        for page_num in pages_to_process:
+            blocks = detected_blocks.get(page_num, [])
+
+            # Build auxiliary_info based on available data
+            auxiliary_info: dict[str, Any] = {}
+            if page_images and page_num in page_images:
+                img = page_images[page_num]
+                auxiliary_info["width"] = int(img.shape[1])
+                auxiliary_info["height"] = int(img.shape[0])
+
+            if rendered_texts and page_num in rendered_texts:
+                auxiliary_info["text"] = rendered_texts[page_num]
+
+            # Create Page object with current state
+            page = Page(
+                page_num=page_num,
+                blocks=blocks,
+                auxiliary_info=auxiliary_info if auxiliary_info else None,
+                status="in_progress",
+                processed_at=tz_now().isoformat(),
+            )
+
+            # Save to JSON
+            page_json_file = json_dir / f"page_{page_num}.json"
+            with page_json_file.open("w", encoding="utf-8") as f:
+                json.dump(page.to_dict(), f, ensure_ascii=False, indent=2)
+
+        # Update summary.json with stage progress
+        stage_progress = {
+            "input": "complete",
+            "detection": "complete" if stage in ["detection", "ordering", "recognition", "rendering"] else "pending",
+            "ordering": "complete" if stage in ["ordering", "recognition", "rendering"] else "pending",
+            "recognition": "complete" if stage in ["recognition", "rendering"] else "pending",
+            "correction": "pending",
+            "rendering": "complete" if stage == "rendering" else "pending",
+        }
+
+        summary = {
+            "pdf_name": pdf_path.stem,
+            "pdf_path": str(pdf_path),
+            "num_pages": len(pages_to_process),
+            "processed_pages": len(pages_to_process),
+            "detected_by": self.detector_name,
+            "ordered_by": self.sorter_name if stage in ["ordering", "recognition", "rendering"] else "pending",
+            "recognized_by": f"{self.backend}/{self.model}" if stage in ["recognition", "rendering"] else "pending",
+            "rendered_by": self.renderer if stage == "rendering" else "pending",
+            "output_directory": str(page_output_dir),
+            "processed_at": tz_now().isoformat(),
+            "stage_progress": stage_progress,
+            "status": f"in_progress ({stage})",
+        }
+
+        summary_file = page_output_dir / "summary.json"
+        with summary_file.open("w", encoding="utf-8") as f:
+            json.dump(summary, f, ensure_ascii=False, indent=2)
+
+        logger.info("Saved intermediate results for stage: %s", stage)
 
     def _create_pdf_summary(
         self,
