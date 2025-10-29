@@ -5,7 +5,6 @@ from __future__ import annotations
 import gc
 import json
 import logging
-from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -13,6 +12,15 @@ import yaml
 
 if TYPE_CHECKING:
     import numpy as np
+
+    from pipeline.stages import (
+        BlockCorrectionStage,
+        DetectionStage,
+        OrderingStage,
+        PageCorrectionStage,
+        RecognitionStage,
+        RenderingStage,
+    )
 
 # Load environment variables if not already loaded
 try:
@@ -24,7 +32,7 @@ except ImportError:
 
 from .constants import DEFAULT_CONFIDENCE_THRESHOLD
 from .misc import tz_now
-from .types import Block, Detector, Document, Page, PyMuPDFPage, Recognizer, Sorter
+from .types import Block, ColumnLayout, Detector, Document, Page, PyMuPDFPage, Recognizer, Sorter
 
 logger = logging.getLogger(__name__)
 
@@ -465,18 +473,11 @@ class Pipeline:
             recognizer_backend,
         )
 
-        # Initialize 8 pipeline stages
-        from pipeline.stages import (
-            BlockCorrectionStage,
-            DetectionStage,
-            InputStage,
-            OrderingStage,
-            OutputStage,
-            PageCorrectionStage,
-            RecognitionStage,
-            RenderingStage,
-        )
+        # Initialize lightweight stages (InputStage and OutputStage)
+        # Heavy stages will be created on-demand via factory methods
+        from pipeline.stages import InputStage, OutputStage
 
+        # InputStage and OutputStage are always needed (no heavy models)
         self.input_stage = InputStage(
             temp_dir=self.temp_dir,
             dpi=self.dpi,
@@ -484,24 +485,78 @@ class Pipeline:
             recognition_dpi=self.recognition_dpi,
             use_dual_resolution=self.use_dual_resolution,
         )
-        self.detection_stage = DetectionStage(
-            self.detector,  # type: ignore[arg-type]
-            ray_detector_pool=self.ray_detector_pool,
-        )
-        self.ordering_stage = OrderingStage(self.sorter)  # type: ignore[arg-type]
-        self.recognition_stage = RecognitionStage(
-            self.recognizer,
-            ray_recognizer_pool=self.ray_recognizer_pool,
-        )
-        self.block_correction_stage = BlockCorrectionStage(enable=False)  # Placeholder for future
-        self.rendering_stage = RenderingStage(renderer=self.renderer)
-        self.page_correction_stage = PageCorrectionStage(recognizer=self.recognizer, backend=self.backend, enable=True)  # type: ignore[arg-type]
         self.output_stage = OutputStage(temp_dir=self.temp_dir)
+
+        # Heavy stages will be created on-demand (lazy loading)
+        # This avoids loading all models at initialization
+        self.detection_stage: DetectionStage | None = None
+        self.ordering_stage: OrderingStage | None = None
+        self.recognition_stage: RecognitionStage | None = None
+        self.block_correction_stage: BlockCorrectionStage | None = None
+        self.rendering_stage: RenderingStage | None = None
+        self.page_correction_stage: PageCorrectionStage | None = None
 
     def _setup_directories(self) -> None:
         """Create necessary directories."""
         for directory in [self.cache_dir, self.output_dir, self.temp_dir]:
             directory.mkdir(parents=True, exist_ok=True)
+
+    def _create_detection_stage(self) -> DetectionStage:
+        """Create detection stage on-demand."""
+        from pipeline.stages import DetectionStage
+
+        logger.info("Loading detection stage (%s)...", self.detector_name)
+        return DetectionStage(
+            self.detector,  # type: ignore[arg-type]
+            ray_detector_pool=self.ray_detector_pool,
+        )
+
+    def _create_ordering_stage(self) -> OrderingStage:
+        """Create ordering stage on-demand."""
+        from pipeline.stages import OrderingStage
+
+        logger.info("Loading ordering stage (%s)...", self.sorter_name)
+        return OrderingStage(self.sorter)  # type: ignore[arg-type]
+
+    def _create_recognition_stage(self) -> RecognitionStage:
+        """Create recognition stage on-demand."""
+        from pipeline.stages import RecognitionStage
+
+        logger.info("Loading recognition stage (%s/%s)...", self.backend, self.model)
+        return RecognitionStage(
+            self.recognizer,
+            ray_recognizer_pool=self.ray_recognizer_pool,
+        )
+
+    def _create_block_correction_stage(self) -> BlockCorrectionStage:
+        """Create block correction stage on-demand."""
+        from pipeline.stages import BlockCorrectionStage
+
+        return BlockCorrectionStage(enable=False)
+
+    def _create_rendering_stage(self) -> RenderingStage:
+        """Create rendering stage on-demand."""
+        from pipeline.stages import RenderingStage
+
+        return RenderingStage(renderer=self.renderer)
+
+    def _create_page_correction_stage(self) -> PageCorrectionStage:
+        """Create page correction stage on-demand."""
+        from pipeline.stages import PageCorrectionStage
+
+        logger.info("Loading page correction stage...")
+        return PageCorrectionStage(recognizer=self.recognizer, backend=self.backend, enable=True)  # type: ignore[arg-type]
+
+    def _cleanup_stage(self, stage_name: str) -> None:
+        """Cleanup and unload a stage to free memory."""
+        stage_attr = f"{stage_name}_stage"
+        if hasattr(self, stage_attr):
+            stage = getattr(self, stage_attr)
+            if stage is not None:
+                del stage
+                setattr(self, stage_attr, None)
+                gc.collect()
+                logger.info("Unloaded %s stage", stage_name)
 
     def _get_pdf_output_dir(self, pdf_path: Path) -> Path:
         """Return the output directory for a given PDF as <output>/<file_stem>."""
@@ -697,8 +752,6 @@ class Pipeline:
         Returns:
             Tuple of (list of Page objects, processing_stopped flag)
         """
-        import numpy as np
-
         processing_stopped = False
         processed_pages: list[Page] = []
 
@@ -744,11 +797,14 @@ class Pipeline:
 
         # Stage 2: Detection - batch process all pages
         logger.info("[Stage 2/7] Detecting layout blocks for %d pages...", len(page_images))
+        detection_stage = self._create_detection_stage()
         detected_blocks: dict[int, list[Block]] = {}
         for page_num in pages_to_process:
-            detected_blocks[page_num] = self.detection_stage.detect(page_images[page_num])
+            detected_blocks[page_num] = detection_stage.detect(page_images[page_num])
 
         logger.info("[Stage 2/7] Detection complete")
+        del detection_stage
+        gc.collect()
 
         # Save intermediate results after detection
         self._save_intermediate_results(
@@ -757,9 +813,10 @@ class Pipeline:
 
         # Stage 3: Ordering - sort all pages
         logger.info("[Stage 3/7] Sorting blocks for %d pages...", len(detected_blocks))
+        ordering_stage = self._create_ordering_stage()
         sorted_blocks: dict[int, list[Block]] = {}
         for page_num in pages_to_process:
-            sorted_blocks[page_num] = self.ordering_stage.sort(
+            sorted_blocks[page_num] = ordering_stage.sort(
                 detected_blocks[page_num],
                 page_images[page_num],
                 pymupdf_page=pymupdf_pages.get(page_num),
@@ -770,6 +827,8 @@ class Pipeline:
             pymupdf_doc.close()
 
         logger.info("[Stage 3/7] Ordering complete")
+        del ordering_stage
+        gc.collect()
 
         # Save intermediate results after ordering
         self._save_intermediate_results(
@@ -785,17 +844,20 @@ class Pipeline:
 
         # Stage 4: Recognition - batch process all pages
         logger.info("[Stage 4/7] Recognizing text for %d pages...", len(sorted_blocks))
+        recognition_stage = self._create_recognition_stage()
         recognized_blocks: dict[int, list[Block]] = {}
         for page_num in pages_to_process:
             if self.sorter_name == "olmocr-vlm":
                 # olmocr-vlm already includes text
                 recognized_blocks[page_num] = sorted_blocks[page_num]
             else:
-                recognized_blocks[page_num] = self.recognition_stage.recognize_blocks(
+                recognized_blocks[page_num] = recognition_stage.recognize_blocks(
                     sorted_blocks[page_num], recognition_images[page_num]
                 )
 
         logger.info("[Stage 4/7] Recognition complete")
+        del recognition_stage
+        gc.collect()
 
         # Save intermediate results after recognition
         self._save_intermediate_results(
@@ -809,19 +871,23 @@ class Pipeline:
 
         # Stage 5: Block Correction (currently disabled)
         logger.info("[Stage 5/7] Block correction (skipped)")
+        block_correction_stage = self._create_block_correction_stage()
         corrected_blocks: dict[int, list[Block]] = {}
         for page_num in pages_to_process:
-            corrected_blocks[page_num] = self.block_correction_stage.correct_blocks(recognized_blocks[page_num])
+            corrected_blocks[page_num] = block_correction_stage.correct_blocks(recognized_blocks[page_num])
+        del block_correction_stage
+        gc.collect()
 
         # Stage 6: Rendering - render all pages
         logger.info("[Stage 6/7] Rendering %d pages...", len(corrected_blocks))
+        rendering_stage = self._create_rendering_stage()
         rendered_texts: dict[int, str] = {}
         for page_num in pages_to_process:
-            rendered_texts[page_num] = self.rendering_stage.render(
-                corrected_blocks[page_num], auxiliary_infos[page_num]
-            )
+            rendered_texts[page_num] = rendering_stage.render(corrected_blocks[page_num], auxiliary_infos[page_num])
 
         logger.info("[Stage 6/7] Rendering complete")
+        del rendering_stage
+        gc.collect()
 
         # Save intermediate results after rendering
         self._save_intermediate_results(
@@ -836,9 +902,10 @@ class Pipeline:
 
         # Stage 7: Page Correction & Output
         logger.info("[Stage 7/7] Correcting and saving %d pages...", len(rendered_texts))
+        page_correction_stage = self._create_page_correction_stage()
         for page_num in pages_to_process:
             # Page correction
-            corrected_text, correction_ratio, stop_due_to_correction = self.page_correction_stage.correct_page(
+            corrected_text, correction_ratio, stop_due_to_correction = page_correction_stage.correct_page(
                 rendered_texts[page_num], page_num
             )
 
@@ -847,7 +914,8 @@ class Pipeline:
                 break
 
             # Build Page result
-            column_layout = self.detection_stage.extract_column_layout(sorted_blocks[page_num])
+            # Note: column_layout extraction doesn't require heavy model, use helper method
+            column_layout = self._extract_column_layout(sorted_blocks[page_num])
             page_result = self.output_stage.build_page_result(
                 pdf_path=pdf_path,
                 page_num=page_num,
@@ -866,6 +934,8 @@ class Pipeline:
             processed_pages.append(page_result)
 
         logger.info("[Stage 7/7] Processing complete")
+        del page_correction_stage
+        gc.collect()
 
         # Cleanup
         del page_images, recognition_images, detected_blocks, sorted_blocks, recognized_blocks, corrected_blocks
@@ -894,8 +964,6 @@ class Pipeline:
             rendered_texts: Rendered markdown texts (optional)
             stage: Current stage name
         """
-        import numpy as np
-
         # Create json directory
         json_dir = page_output_dir / "json"
         json_dir.mkdir(parents=True, exist_ok=True)
@@ -1144,7 +1212,7 @@ class Pipeline:
 
         return summary
 
-    def _extract_column_layout(self, blocks: list[Block]) -> dict[str, Any] | None:
+    def _extract_column_layout(self, blocks: list[Block]) -> ColumnLayout | None:
         """Extract column layout information from sorted blocks.
 
         Args:
