@@ -87,17 +87,31 @@ class OutputStage:
         return page
 
     def save_page_output(self, page_output_dir: Path, page_num: int, page: Page) -> None:
-        """Save page processing output as JSON.
+        """Save page processing output as JSON and Markdown.
 
         Args:
             page_output_dir: Directory to save page output
             page_num: Page number
             page: Page object to save
         """
-        page_output_file = page_output_dir / f"page_{page_num}.json"
-        with page_output_file.open("w", encoding="utf-8") as f:
+        # Create json subdirectory
+        json_dir = page_output_dir / "json"
+        json_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save JSON to json/ subdirectory
+        page_json_file = json_dir / f"page_{page_num}.json"
+        with page_json_file.open("w", encoding="utf-8") as f:
             json.dump(page.to_dict(), f, ensure_ascii=False, indent=2)
-        logger.info("Results saved to %s", page_output_file)
+        logger.info("JSON saved to %s", page_json_file)
+
+        # Save Markdown to main directory (use corrected_text if available, else text)
+        page_md_file = page_output_dir / f"page_{page_num}.md"
+        auxiliary_info = page.auxiliary_info or {}
+        markdown_text = auxiliary_info.get("corrected_text") or auxiliary_info.get("text", "")
+
+        with page_md_file.open("w", encoding="utf-8") as f:
+            f.write(markdown_text)
+        logger.info("Markdown saved to %s", page_md_file)
 
     def create_pdf_summary(
         self,
@@ -134,6 +148,9 @@ class OutputStage:
         # Check if any pages have errors
         has_errors = any(page.status == "failed" for page in processed_pages)
 
+        # Build stage progress information
+        stage_progress = self._build_stage_progress(processed_pages, processing_stopped)
+
         # Create Document object with full page data
         document = Document(
             pdf_name=pdf_path.stem,
@@ -163,6 +180,7 @@ class OutputStage:
             "output_directory": document.output_directory,
             "processed_at": document.processed_at,
             "status_summary": document.status_summary,
+            "stage_progress": stage_progress,  # Add stage progress information
             "pages": pages_summary,  # Use simplified page summary, not full pages
         }
 
@@ -195,6 +213,45 @@ class OutputStage:
             pages_summary.append({"id": page_no, "status": status})
 
         return pages_summary, status_counts
+
+    def _build_stage_progress(self, processed_pages: list[Page], processing_stopped: bool) -> dict[str, str]:
+        """Build stage progress information.
+
+        Args:
+            processed_pages: List of processed pages
+            processing_stopped: Whether processing was stopped early
+
+        Returns:
+            Dictionary with stage progress status
+        """
+        if processing_stopped:
+            # Determine which stage was incomplete
+            return {
+                "input": "complete",
+                "detection": "complete",
+                "ordering": "complete",
+                "recognition": "incomplete",
+                "correction": "pending",
+                "rendering": "pending",
+            }
+
+        # All pages processed successfully
+        has_blocks = any(len(page.blocks) > 0 for page in processed_pages)
+        has_text = any(page.auxiliary_info and page.auxiliary_info.get("text") for page in processed_pages)
+        has_corrected_text = any(
+            page.auxiliary_info and page.auxiliary_info.get("corrected_text") for page in processed_pages
+        )
+
+        stage_progress = {
+            "input": "complete",
+            "detection": "complete" if has_blocks else "incomplete",
+            "ordering": "complete" if has_blocks else "incomplete",
+            "recognition": "complete" if has_text else "incomplete",
+            "correction": "complete" if has_corrected_text else "incomplete",
+            "rendering": "complete" if has_text or has_corrected_text else "incomplete",
+        }
+
+        return stage_progress
 
     def _determine_summary_filename(self, processing_stopped: bool, has_errors: bool) -> str:
         """Determine summary filename based on processing status."""

@@ -254,7 +254,7 @@ def save_checkpoint(
     data: Any,
     output_dir: Path,
     page_num: int | None = None,
-) -> Path:
+) -> str:
     """Save checkpoint for a stage.
 
     Args:
@@ -264,11 +264,11 @@ def save_checkpoint(
         page_num: Optional page number for multi-page documents
 
     Returns:
-        Path to saved checkpoint file
+        Relative path to saved checkpoint file (filename only)
 
     Example:
         >>> save_checkpoint("detection", page, Path("results"), page_num=1)
-        Path("results/stage2_detection_page1.json")
+        "stage2_detection_page1.json"
     """
     # Generate filename
     stage_num = _get_stage_number(stage)
@@ -282,7 +282,8 @@ def save_checkpoint(
     # Serialize
     serialize_stage_result(stage, data, output_file)
 
-    return output_file
+    # Return relative path (filename only) for checkpoint tracking
+    return filename
 
 
 def load_checkpoint(

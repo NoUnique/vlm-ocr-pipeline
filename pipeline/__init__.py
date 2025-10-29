@@ -14,8 +14,6 @@ import yaml
 if TYPE_CHECKING:
     import numpy as np
 
-    from pipeline.checkpoint import ProgressTracker
-
 # Load environment variables if not already loaded
 try:
     from dotenv import load_dotenv
@@ -103,8 +101,6 @@ class Pipeline:
         detection_dpi: int | None = None,
         recognition_dpi: int | None = None,
         use_dual_resolution: bool = False,
-        # Checkpoint options (always enabled, auto-detected from output_dir)
-        enable_checkpoints: bool = True,
     ):
         """Initialize VLM OCR processing pipeline.
 
@@ -132,7 +128,6 @@ class Pipeline:
             detection_dpi: DPI for detection stage (overrides detection_dpi from config)
             recognition_dpi: DPI for recognition stage (overrides recognition_dpi from config)
             use_dual_resolution: Use different DPIs for detection and recognition stages
-            enable_checkpoints: Enable smart resume with checkpoints (default: True, auto-detected from output_dir)
         """
         # Load configuration files
         models_config = _load_yaml_config(Path("settings") / "models.yaml")
@@ -503,17 +498,6 @@ class Pipeline:
         self.page_correction_stage = PageCorrectionStage(recognizer=self.recognizer, backend=self.backend, enable=True)  # type: ignore[arg-type]
         self.output_stage = OutputStage(temp_dir=self.temp_dir)
 
-        # Checkpoint support (auto-enabled, uses output_dir)
-        self.enable_checkpoints = enable_checkpoints
-        self.checkpoint_dir = Path(output_dir)
-        self.progress_tracker: ProgressTracker | None = None
-
-        if self.enable_checkpoints:
-            from pipeline.checkpoint import ProgressTracker  # noqa: PLC0415
-
-            self.progress_tracker = ProgressTracker(self.checkpoint_dir)
-            logger.info("Smart resume enabled: checkpoint_dir=%s", self.checkpoint_dir)
-
     def _setup_directories(self) -> None:
         """Create necessary directories."""
         for directory in [self.cache_dir, self.output_dir, self.temp_dir]:
@@ -695,7 +679,7 @@ class Pipeline:
         total_pages: int,
         page_output_dir: Path,
     ) -> tuple[list[Page], bool]:
-        """Process multiple PDF pages with smart checkpoint resume.
+        """Process multiple PDF pages sequentially.
 
         Args:
             pdf_path: Path to PDF file
@@ -711,52 +695,11 @@ class Pipeline:
 
         from .conversion.input import pdf as pdf_converter
 
-        # Smart Resume: Check for existing checkpoints
-        pages_to_skip: set[int] = set()
-        if self.enable_checkpoints and self.progress_tracker:
-            # Validate input file matches checkpoint
-            if not self.progress_tracker.validate_input(str(pdf_path)):
-                logger.warning("Checkpoint input file mismatch - starting fresh")
-                # Clear checkpoint data
-                self.progress_tracker.data = self.progress_tracker._load_or_init()
-            else:
-                # Print resume info
-                self.progress_tracker.print_resume_info()
-
-                # Load completed pages from checkpoint
-                completed_stages = self.progress_tracker.data.get("completed_stages", [])
-                for stage_name in completed_stages:
-                    if stage_name.startswith("page_"):
-                        page_num = int(stage_name.split("_")[1])
-                        pages_to_skip.add(page_num)
-
-                        # Load page result from checkpoint
-                        stage_info = self.progress_tracker.data["stages"].get(stage_name)
-                        if stage_info and "output_file" in stage_info:
-                            try:
-                                from pipeline.checkpoint import deserialize_stage_result
-
-                                checkpoint_file = self.checkpoint_dir / stage_info["output_file"]
-                                page_result = deserialize_stage_result("output", checkpoint_file)
-                                processed_pages.append(page_result)
-                                logger.info("Loaded page %d from checkpoint", page_num)
-                            except Exception as e:
-                                logger.warning("Failed to load checkpoint for page %d: %s", page_num, e)
-                                pages_to_skip.discard(page_num)  # Re-process this page
-
-                if pages_to_skip:
-                    logger.info("Skipping %d already-processed pages: %s", len(pages_to_skip), sorted(pages_to_skip))
-
         # Open PyMuPDF document only if using pymupdf sorter for multi-column ordering
         pymupdf_doc = pdf_converter.open_pymupdf_document(pdf_path) if self.sorter_name == "pymupdf" else None
         disable_multi_column = False
 
         for page_num in pages_to_process:
-            # Skip already-processed pages
-            if page_num in pages_to_skip:
-                logger.debug("Skipping page %d (already processed)", page_num)
-                continue
-
             logger.info("Processing page %d/%d", page_num, total_pages)
             pymupdf_page = None
             if pymupdf_doc is not None and not disable_multi_column:
@@ -771,11 +714,6 @@ class Pipeline:
                     disable_multi_column = True
                     pymupdf_page = None
 
-            # Start stage tracking
-            stage_name = f"page_{page_num}"
-            if self.enable_checkpoints and self.progress_tracker:
-                self.progress_tracker.start_stage(stage_name)
-
             page_result, stop_processing = self._process_pdf_page(
                 pdf_path,
                 page_num,
@@ -786,31 +724,12 @@ class Pipeline:
             if page_result is not None:
                 processed_pages.append(page_result)
 
-                # Save checkpoint after successful page processing
-                if self.enable_checkpoints and self.progress_tracker:
-                    try:
-                        from pipeline.checkpoint import save_checkpoint
-
-                        checkpoint_file = save_checkpoint("output", page_result, self.checkpoint_dir, page_num)
-                        self.progress_tracker.complete_stage(stage_name, checkpoint_file)
-                        logger.debug("Saved checkpoint for page %d", page_num)
-                    except Exception as e:
-                        logger.warning("Failed to save checkpoint for page %d: %s", page_num, e)
-            # Page processing failed
-            elif self.enable_checkpoints and self.progress_tracker:
-                self.progress_tracker.fail_stage(stage_name, Exception("Page processing failed"))
-
             if stop_processing:
                 processing_stopped = True
                 break
 
         if pymupdf_doc is not None:
             pymupdf_doc.close()
-
-        # Mark pipeline as complete if all pages processed successfully
-        if self.enable_checkpoints and self.progress_tracker and not processing_stopped:
-            self.progress_tracker.mark_complete()
-            logger.info("All pages processed successfully - checkpoint complete")
 
         return processed_pages, processing_stopped
 
