@@ -679,7 +679,14 @@ class Pipeline:
         total_pages: int,
         page_output_dir: Path,
     ) -> tuple[list[Page], bool]:
-        """Process multiple PDF pages sequentially.
+        """Process PDF pages using staged batch processing.
+
+        This method processes all pages through each stage sequentially:
+        1. Load all page images
+        2. Detect all pages (batch) → unload detector
+        3. Sort all pages → unload sorter
+        4. Recognize all pages (batch) → unload recognizer
+        5. Render and save all pages
 
         Args:
             pdf_path: Path to PDF file
@@ -690,302 +697,150 @@ class Pipeline:
         Returns:
             Tuple of (list of Page objects, processing_stopped flag)
         """
-        processed_pages: list[Page] = []
+        import numpy as np
+
         processing_stopped = False
+        processed_pages: list[Page] = []
 
         from .conversion.input import pdf as pdf_converter
 
-        # Open PyMuPDF document only if using pymupdf sorter for multi-column ordering
-        pymupdf_doc = pdf_converter.open_pymupdf_document(pdf_path) if self.sorter_name == "pymupdf" else None
-        disable_multi_column = False
+        # Stage 1: Load all page images and auxiliary info
+        logger.info("[Stage 1/7] Loading %d page images...", len(pages_to_process))
+        page_images: dict[int, np.ndarray] = {}
+        recognition_images: dict[int, np.ndarray] = {}
+        auxiliary_infos: dict[int, dict[str, Any]] = {}
+        pymupdf_pages: dict[int, PyMuPDFPage | None] = {}
+
+        # Open PyMuPDF document if needed
+        pymupdf_doc = None
+        if self.sorter_name == "pymupdf":
+            pymupdf_doc = pdf_converter.open_pymupdf_document(pdf_path)
 
         for page_num in pages_to_process:
-            logger.info("Processing page %d/%d", page_num, total_pages)
-            pymupdf_page = None
-            if pymupdf_doc is not None and not disable_multi_column:
-                try:
-                    pymupdf_page = pymupdf_doc.load_page(page_num - 1)
-                except Exception as exc:  # pragma: no cover - PyMuPDF failure path
-                    logger.warning(
-                        "Failed to load page %d with PyMuPDF for multi-column ordering: %s",
-                        page_num,
-                        exc,
-                    )
-                    disable_multi_column = True
-                    pymupdf_page = None
+            # Load images
+            if self.use_dual_resolution:
+                page_images[page_num] = self.input_stage.load_pdf_page(pdf_path, page_num, dpi=self.detection_dpi)
+                recognition_images[page_num] = self.input_stage.load_pdf_page(
+                    pdf_path, page_num, dpi=self.recognition_dpi
+                )
+            else:
+                page_img = self.input_stage.load_pdf_page(pdf_path, page_num)
+                page_images[page_num] = page_img
+                recognition_images[page_num] = page_img
 
-            page_result, stop_processing = self._process_pdf_page(
-                pdf_path,
-                page_num,
-                page_output_dir,
-                pymupdf_page,
+            # Extract auxiliary info
+            aux_info = self.input_stage.extract_auxiliary_info(pdf_path, page_num)
+            auxiliary_infos[page_num] = aux_info if aux_info is not None else {}
+
+            # Load PyMuPDF page if needed
+            if pymupdf_doc is not None:
+                try:
+                    pymupdf_pages[page_num] = pymupdf_doc.load_page(page_num - 1)
+                except Exception as e:
+                    logger.warning("Failed to load PyMuPDF page %d: %s", page_num, e)
+                    pymupdf_pages[page_num] = None
+
+        logger.info("[Stage 1/7] Loaded %d pages", len(page_images))
+
+        # Stage 2: Detection - batch process all pages
+        logger.info("[Stage 2/7] Detecting layout blocks for %d pages...", len(page_images))
+        detected_blocks: dict[int, list[Block]] = {}
+        for page_num in pages_to_process:
+            detected_blocks[page_num] = self.detection_stage.detect(page_images[page_num])
+
+        logger.info("[Stage 2/7] Detection complete")
+
+        # Stage 3: Ordering - sort all pages
+        logger.info("[Stage 3/7] Sorting blocks for %d pages...", len(detected_blocks))
+        sorted_blocks: dict[int, list[Block]] = {}
+        for page_num in pages_to_process:
+            sorted_blocks[page_num] = self.ordering_stage.sort(
+                detected_blocks[page_num],
+                page_images[page_num],
+                pymupdf_page=pymupdf_pages.get(page_num),
             )
 
-            if page_result is not None:
-                processed_pages.append(page_result)
-
-            if stop_processing:
-                processing_stopped = True
-                break
-
+        # Close PyMuPDF document
         if pymupdf_doc is not None:
             pymupdf_doc.close()
 
-        return processed_pages, processing_stopped
+        logger.info("[Stage 3/7] Ordering complete")
 
-    def _process_pdf_page(
-        self,
-        pdf_path: Path,
-        page_num: int,
-        page_output_dir: Path,
-        pymupdf_page: PyMuPDFPage | None,
-    ) -> tuple[Page | None, bool]:
-        """Process a single PDF page through 8-stage pipeline.
+        # Scale blocks if using dual resolution
+        if self.use_dual_resolution and self.detection_dpi != self.recognition_dpi:
+            scale_factor = self.recognition_dpi / self.detection_dpi
+            logger.info("[Stage 3.5/7] Scaling blocks by factor %.2f", scale_factor)
+            for page_num in pages_to_process:
+                sorted_blocks[page_num] = self._scale_blocks(sorted_blocks[page_num], scale_factor)
 
-        8-Stage Pipeline:
-            1. Input: Load PDF page as image + extract auxiliary info
-            2. Detection: Detect layout blocks
-            3. BlockOrdering: Sort blocks by reading order
-            4. Recognition: Extract text from blocks
-            5. BlockCorrection: Block-level text correction (optional, disabled by default)
-            6. Rendering: Convert blocks to Markdown/plaintext
-            7. PageCorrection: Page-level text correction
-            8. Output: Build Page object and save
-
-        Args:
-            pdf_path: Path to PDF file
-            page_num: Page number to process
-            page_output_dir: Directory to save page output
-            pymupdf_page: PyMuPDF page object (optional, for pymupdf sorter)
-
-        Returns:
-            Tuple of (Page object or None, should_stop)
-        """
-        page_image = None
-        recognition_image = None
-
-        try:
-            # Stage 1: Input - Load PDF page
-            if self.use_dual_resolution:
-                # Dual-resolution mode: load page twice with different DPIs
-                logger.debug(
-                    "Using dual-resolution mode: detection_dpi=%d, recognition_dpi=%d",
-                    self.detection_dpi,
-                    self.recognition_dpi,
-                )
-                # Low DPI for detection (faster, less memory)
-                page_image = self.input_stage.load_pdf_page(pdf_path, page_num, dpi=self.detection_dpi)
-                # High DPI for recognition (better accuracy)
-                recognition_image = self.input_stage.load_pdf_page(pdf_path, page_num, dpi=self.recognition_dpi)
-            else:
-                # Single resolution mode: use default DPI for all stages
-                page_image = self.input_stage.load_pdf_page(pdf_path, page_num)
-                recognition_image = page_image  # Use same image for recognition
-
-            auxiliary_info = self.input_stage.extract_auxiliary_info(pdf_path, page_num)
-
-            # Stage 2: Detection - Detect layout blocks (uses detection DPI)
-            blocks: list[Block] = self.detection_stage.detect(page_image)
-
-            # Stage 3: BlockOrdering - Sort blocks by reading order (uses detection DPI)
-            sorted_blocks: list[Block] = self.ordering_stage.sort(blocks, page_image, pymupdf_page=pymupdf_page)
-
-            # Extract column layout info (for backward compatibility)
-            column_layout = self.detection_stage.extract_column_layout(sorted_blocks)
-
-            # Scale blocks if using dual-resolution (bbox coordinates need adjustment)
-            if self.use_dual_resolution and self.detection_dpi != self.recognition_dpi:
-                scale_factor = self.recognition_dpi / self.detection_dpi
-                logger.debug("Scaling blocks by factor %.2f for recognition", scale_factor)
-                sorted_blocks = self._scale_blocks(sorted_blocks, scale_factor)
-
-            # Stage 4: Recognition - Extract text from blocks (uses recognition DPI)
-            # Note: olmocr-vlm sorter already includes text, skip recognition
+        # Stage 4: Recognition - batch process all pages
+        logger.info("[Stage 4/7] Recognizing text for %d pages...", len(sorted_blocks))
+        recognized_blocks: dict[int, list[Block]] = {}
+        for page_num in pages_to_process:
             if self.sorter_name == "olmocr-vlm":
-                processed_blocks = sorted_blocks
+                # olmocr-vlm already includes text
+                recognized_blocks[page_num] = sorted_blocks[page_num]
             else:
-                processed_blocks = self.recognition_stage.recognize_blocks(sorted_blocks, recognition_image)
+                recognized_blocks[page_num] = self.recognition_stage.recognize_blocks(
+                    sorted_blocks[page_num], recognition_images[page_num]
+                )
 
-            # Check for rate limit errors after recognition
-            if self._check_for_rate_limit_errors({"blocks": processed_blocks}):
-                logger.warning("Rate limit detected on page %d. Stopping processing.", page_num)
-                return None, True
+        logger.info("[Stage 4/7] Recognition complete")
 
-            # Stage 5: BlockCorrection - Block-level correction (optional, currently disabled)
-            processed_blocks = self.block_correction_stage.correct_blocks(processed_blocks)
+        # Stage 5: Block Correction (currently disabled)
+        logger.info("[Stage 5/7] Block correction (skipped)")
+        corrected_blocks: dict[int, list[Block]] = {}
+        for page_num in pages_to_process:
+            corrected_blocks[page_num] = self.block_correction_stage.correct_blocks(recognized_blocks[page_num])
 
-            # Stage 6: Rendering - Convert blocks to Markdown/plaintext
-            text = self.rendering_stage.render(processed_blocks, auxiliary_info)
+        # Stage 6: Rendering - render all pages
+        logger.info("[Stage 6/7] Rendering %d pages...", len(corrected_blocks))
+        rendered_texts: dict[int, str] = {}
+        for page_num in pages_to_process:
+            rendered_texts[page_num] = self.rendering_stage.render(
+                corrected_blocks[page_num], auxiliary_infos[page_num]
+            )
 
-            # Stage 7: PageCorrection - Page-level text correction
+        logger.info("[Stage 6/7] Rendering complete")
+
+        # Stage 7: Page Correction & Output
+        logger.info("[Stage 7/7] Correcting and saving %d pages...", len(rendered_texts))
+        for page_num in pages_to_process:
+            # Page correction
             corrected_text, correction_ratio, stop_due_to_correction = self.page_correction_stage.correct_page(
-                text, page_num
+                rendered_texts[page_num], page_num
             )
 
             if stop_due_to_correction:
-                return None, True
+                processing_stopped = True
+                break
 
-            # Stage 8: Output - Build Page object and save
+            # Build Page result
+            column_layout = self.detection_stage.extract_column_layout(sorted_blocks[page_num])
             page_result = self.output_stage.build_page_result(
                 pdf_path=pdf_path,
                 page_num=page_num,
-                page_image=page_image,
-                detected_blocks=sorted_blocks,
-                processed_blocks=processed_blocks,
-                text=text,
+                page_image=page_images[page_num],
+                detected_blocks=sorted_blocks[page_num],
+                processed_blocks=corrected_blocks[page_num],
+                text=rendered_texts[page_num],
                 corrected_text=corrected_text,
                 correction_ratio=correction_ratio,
                 column_layout=column_layout,
-                auxiliary_info=auxiliary_info,
+                auxiliary_info=auxiliary_infos[page_num],
             )
 
+            # Save output
             self.output_stage.save_page_output(page_output_dir, page_num, page_result)
+            processed_pages.append(page_result)
 
-            return page_result, False
+        logger.info("[Stage 7/7] Processing complete")
 
-        except Exception as e:
-            # Fallback for unexpected errors (allowed per ERROR_HANDLING.md section 3.3)
-            logger.error("Error processing page %d: %s", page_num, e, exc_info=True)
-            error_page = Page(
-                page_num=page_num,
-                blocks=[],
-                auxiliary_info={"error": str(e)},
-                status="failed",
-                processed_at=tz_now().isoformat(),
-            )
-            return error_page, False
+        # Cleanup
+        del page_images, recognition_images, detected_blocks, sorted_blocks, recognized_blocks, corrected_blocks
+        gc.collect()
 
-        finally:
-            if page_image is not None:
-                del page_image
-            gc.collect()
-
-    def _perform_page_correction(self, raw_text: str, page_num: int) -> tuple[str, float, bool]:
-        """Perform page-level text correction.
-
-        Returns:
-            tuple: (corrected_text, correction_ratio, should_stop)
-                correction_ratio: 0.0 = no change, 1.0 = completely different
-        """
-        # Skip page correction for PaddleOCR-VL (it already extracts text directly)
-        if self.backend == "paddleocr-vl":
-            return raw_text, 0.0, False
-
-        correction_result = self.recognizer.correct_text(raw_text)
-
-        if isinstance(correction_result, dict):
-            corrected_text = correction_result.get("corrected_text", raw_text)
-            correction_ratio = float(correction_result.get("correction_ratio", 0.0))
-            return corrected_text, correction_ratio, False
-
-        corrected_text = str(correction_result)
-        rate_limit_indicators = ["RATE_LIMIT_EXCEEDED", "DAILY_LIMIT_EXCEEDED"]
-        if any(indicator in corrected_text for indicator in rate_limit_indicators):
-            logger.warning(
-                "Rate limit detected during page text correction on page %d. Stopping processing.",
-                page_num,
-            )
-            return corrected_text, 0.0, True
-
-        return corrected_text, 0.0, False
-
-    def _extract_auxiliary_info(self, pdf_path: Path, page_num: int) -> dict[str, Any] | None:
-        """Extract auxiliary information from PDF page.
-
-        This includes text spans with font information for pymupdf4llm-style
-        markdown conversion. Uses PyMuPDF terminology.
-
-        Args:
-            pdf_path: Path to PDF file
-            page_num: Page number (1-indexed)
-
-        Returns:
-            Dictionary with auxiliary info or None if extraction fails
-        """
-        try:
-            from .conversion.input.pdf import extract_text_spans_from_pdf
-
-            text_spans = extract_text_spans_from_pdf(pdf_path, page_num)
-            if text_spans:
-                return {
-                    "text_spans": text_spans,  # PyMuPDF spans with size, font
-                }
-            return None
-        except Exception as exc:
-            # Fallback for unexpected errors - auxiliary info is optional (allowed per ERROR_HANDLING.md section 3.3)
-            logger.warning("Failed to extract auxiliary info from page %d: %s", page_num, exc)
-            return None
-
-    def _build_page_result(
-        self,
-        pdf_path: Path,
-        page_num: int,
-        page_image: np.ndarray,
-        detected_blocks: Sequence[Block],
-        processed_blocks: Sequence[Block],
-        text: str,
-        corrected_text: str,
-        correction_ratio: float,
-        column_layout: dict[str, Any] | None,
-        auxiliary_info: dict[str, Any] | None = None,
-    ) -> Page:
-        """Build Page object from processing results.
-
-        Args:
-            pdf_path: Path to PDF file
-            page_num: Page number
-            page_image: Page image array
-            detected_blocks: Detected blocks
-            processed_blocks: Blocks with extracted text
-            text: Rendered text (markdown or plaintext based on renderer setting)
-            corrected_text: VLM-corrected text
-            correction_ratio: How much text was changed (0.0 = no change, 1.0 = completely different)
-            column_layout: Column layout information
-            auxiliary_info: Auxiliary information (e.g., text_spans with font info)
-
-        Returns:
-            Page object with all processing results
-        """
-        page_height, page_width = page_image.shape[0], page_image.shape[1]
-
-        # Build auxiliary_info dict that includes all additional metadata
-        full_auxiliary_info = auxiliary_info.copy() if auxiliary_info else {}
-        full_auxiliary_info.update(
-            {
-                "image_path": str(self.temp_dir / f"{pdf_path.stem}_page_{page_num}.jpg"),
-                "width": int(page_width),
-                "height": int(page_height),
-                "text": text,
-                "corrected_text": corrected_text,
-                "correction_ratio": correction_ratio,
-            }
-        )
-
-        if column_layout is not None:
-            full_auxiliary_info["column_layout"] = column_layout
-
-        page = Page(
-            page_num=page_num,
-            blocks=list(processed_blocks),  # Use processed_blocks (includes text)
-            auxiliary_info=full_auxiliary_info,
-            status="completed",
-            processed_at=tz_now().isoformat(),
-        )
-
-        return page
-
-    def _save_page_output(self, page_output_dir: Path, page_num: int, page: Page) -> None:
-        """Save page processing output as JSON.
-
-        Args:
-            page_output_dir: Directory to save page output
-            page_num: Page number
-            page: Page object to save
-        """
-        page_output_file = page_output_dir / f"page_{page_num}.json"
-        with page_output_file.open("w", encoding="utf-8") as f:
-            json.dump(page.to_dict(), f, ensure_ascii=False, indent=2)
-        logger.info("Results saved to %s", page_output_file)
+        return processed_pages, processing_stopped
 
     def _create_pdf_summary(
         self,
