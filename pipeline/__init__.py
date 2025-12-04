@@ -5,10 +5,9 @@ from __future__ import annotations
 import gc
 import json
 import logging
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-
-import yaml
 
 if TYPE_CHECKING:
     import numpy as np
@@ -30,40 +29,12 @@ try:
 except ImportError:
     pass
 
-from .constants import DEFAULT_CONFIDENCE_THRESHOLD
+from .config import PipelineConfig
+from .factory import ComponentFactory
 from .misc import tz_now
 from .types import Block, ColumnLayout, Detector, Document, Page, PyMuPDFPage, Recognizer, Sorter
 
 logger = logging.getLogger(__name__)
-
-
-def _load_yaml_config(config_path: Path) -> dict[str, Any]:
-    """Load YAML configuration file with error handling.
-
-    Args:
-        config_path: Path to YAML config file
-
-    Returns:
-        Configuration dict, or empty dict if file not found or invalid
-    """
-    try:
-        if config_path.exists():
-            with open(config_path, encoding="utf-8") as f:
-                return yaml.safe_load(f) or {}
-        logger.debug("Config file not found: %s", config_path)
-        return {}
-    except yaml.YAMLError as e:
-        logger.warning("Failed to parse config file %s: %s", config_path, e)
-        return {}
-    except (OSError, UnicodeDecodeError) as e:
-        logger.warning("Failed to read config file %s: %s", config_path, e)
-        return {}
-
-
-try:
-    import fitz  # type: ignore
-except Exception:  # pragma: no cover - optional dependency guard
-    fitz = None  # type: ignore
 
 
 class Pipeline:
@@ -74,10 +45,30 @@ class Pipeline:
     2. Layout Detection: Identify blocks (text, tables, figures, etc.)
     3. Layout Analysis: Determine reading order of blocks
     4. Recognition: Extract and correct text from blocks
+
+    Example:
+        >>> # New recommended way (using PipelineConfig)
+        >>> from pipeline import Pipeline
+        >>> from pipeline.config import PipelineConfig
+        >>>
+        >>> config = PipelineConfig(
+        ...     detector="paddleocr-doclayout-v2",
+        ...     recognizer="gemini-2.5-flash",
+        ... )
+        >>> pipeline = Pipeline(config=config)
+        >>> document = pipeline.process_pdf(Path("document.pdf"))
+
+        >>> # Legacy way (still supported with deprecation warning)
+        >>> pipeline = Pipeline(
+        ...     detector="paddleocr-doclayout-v2",
+        ...     recognizer="gemini-2.5-flash",
+        ... )
     """
 
-    def __init__(  # noqa: PLR0912, PLR0915
+    def __init__(
         self,
+        config: PipelineConfig | None = None,
+        # Legacy parameters (for backward compatibility)
         confidence_threshold: float | None = None,
         use_cache: bool = True,
         cache_dir: str | Path = ".cache",
@@ -113,6 +104,10 @@ class Pipeline:
         """Initialize VLM OCR processing pipeline.
 
         Args:
+            config: Pipeline configuration object (recommended).
+                   If provided, other parameters are ignored.
+
+            # Legacy parameters (deprecated, use PipelineConfig instead):
             confidence_threshold: Detection confidence threshold (None = load from config)
             use_cache: Whether to use caching
             cache_dir: Cache directory path
@@ -120,375 +115,139 @@ class Pipeline:
             temp_dir: Temporary files directory path
             detector: Detector model name or alias (default: "paddleocr-doclayout-v2")
             detector_backend: Inference backend for detector (None = auto-select)
-            detector_model_path: Custom detector model path (overrides model name resolution)
-            auto_batch_size: Auto-calibrate optimal batch size for detector (recommended for multi-image)
-            batch_size: Manual batch size for detector (ignored if auto_batch_size=True)
+            detector_model_path: Custom detector model path
+            auto_batch_size: Auto-calibrate optimal batch size for detector
+            batch_size: Manual batch size for detector
             target_memory_fraction: Target GPU memory fraction for auto-calibration (0.0-1.0)
             sorter: Sorter model name or alias (None = auto-select)
             sorter_backend: Inference backend for sorter (None = auto-select)
-            sorter_model_path: Custom sorter model path (overrides model name resolution)
+            sorter_model_path: Custom sorter model path
             recognizer: Recognizer model name (default: "paddleocr-vl")
             recognizer_backend: Inference backend for recognizer (None = auto-select)
-            gemini_tier: Gemini API tier for rate limiting (only for gemini-* recognizers)
+            gemini_tier: Gemini API tier for rate limiting
             renderer: Output format renderer ("markdown" or "plaintext")
-            use_async: Enable async API clients for concurrent block processing (improves performance)
-            dpi: DPI for PDF-to-image conversion (overrides default_dpi from config)
-            detection_dpi: DPI for detection stage (overrides detection_dpi from config)
-            recognition_dpi: DPI for recognition stage (overrides recognition_dpi from config)
+            use_async: Enable async API clients for concurrent block processing
+            dpi: DPI for PDF-to-image conversion
+            detection_dpi: DPI for detection stage
+            recognition_dpi: DPI for recognition stage
             use_dual_resolution: Use different DPIs for detection and recognition stages
         """
-        # Load configuration files
-        models_config = _load_yaml_config(Path("settings") / "models.yaml")
-        detection_config = _load_yaml_config(Path("settings") / "detection_config.yaml")
-        pipeline_config = _load_yaml_config(Path("settings") / "config.yaml")
-
-        # Load and merge DPI configuration
-        conversion_config = pipeline_config.get("conversion", {})
-        # CLI args override config values
-        self.dpi = dpi if dpi is not None else conversion_config.get("default_dpi", 200)
-        self.detection_dpi = detection_dpi if detection_dpi is not None else conversion_config.get("detection_dpi", 150)
-        self.recognition_dpi = (
-            recognition_dpi if recognition_dpi is not None else conversion_config.get("recognition_dpi", 300)
-        )
-        self.use_dual_resolution = use_dual_resolution or conversion_config.get("use_dual_resolution", False)
-
-        logger.info(
-            "DPI configuration: default=%d, detection=%d, recognition=%d, dual_resolution=%s",
-            self.dpi,
-            self.detection_dpi,
-            self.recognition_dpi,
-            self.use_dual_resolution,
-        )
-
-        # Lazy imports for factory functions (avoid loading heavy dependencies at module import)
-        from .backend_validator import (  # noqa: PLC0415
-            resolve_detector_backend,
-            resolve_recognizer_backend,
-            resolve_sorter_backend,
-        )
-        from .layout.detection import create_detector as create_detector_impl  # noqa: PLC0415
-        from .layout.ordering import (  # noqa: PLC0415
-            REQUIRED_COMBINATIONS,
-            create_sorter as create_sorter_impl,
-            validate_combination,
-        )
-        from .recognition import create_recognizer  # noqa: PLC0415
-        from .recognition.api.ratelimit import rate_limiter  # noqa: PLC0415
-
-        # Resolve and validate backends
-        detector_backend, detector_error = resolve_detector_backend(detector, detector_backend)
-        if detector_error:
-            logger.warning("Detector backend validation: %s", detector_error)
-
-        self.recognizer_model = recognizer  # Store recognizer model name
-        recognizer_backend, recognizer_error = resolve_recognizer_backend(recognizer, recognizer_backend)
-        if recognizer_error:
-            raise ValueError(f"Recognizer backend validation failed: {recognizer_error}")
-
-        # Ensure recognizer_backend is not None after validation
-        if recognizer_backend is None:
-            raise ValueError(f"No backend available for recognizer: {recognizer}")
-
-        # Store resolved values
-        self.detector_backend = detector_backend
-        self.recognizer_backend = recognizer_backend
-        self.gemini_tier = gemini_tier
-        self.renderer = renderer.lower()
-
-        # Backward compatibility: store backend and model attributes
-        self.backend = recognizer_backend  # For backward compatibility
-        self.model = recognizer  # For backward compatibility
-
-        # Validate renderer
-        if self.renderer not in ["markdown", "plaintext"]:
-            raise ValueError(f"Invalid renderer: {renderer}. Must be 'markdown' or 'plaintext'.")
-
-        # Default detector
-        detector_default = "doclayout-yolo"
-        detector_is_default = detector == detector_default
-
-        # Bidirectional auto-selection for tightly coupled detector/sorter pairs
-        # Case 1: Sorter is specified and requires a specific detector
-        if sorter is not None and sorter in REQUIRED_COMBINATIONS:
-            required_detector = REQUIRED_COMBINATIONS[sorter]
-            if not detector_is_default and detector != required_detector:
-                # User explicitly specified incompatible detector
-                raise ValueError(
-                    f"Sorter '{sorter}' requires detector '{required_detector}' (tightly coupled), "
-                    f"but detector '{detector}' was specified. "
-                    f"Either omit --detector or use --detector {required_detector}."
-                )
-            if detector_is_default:
-                # Auto-select required detector
-                detector = required_detector
-                logger.info("Auto-selected detector='%s' for '%s' sorter (tightly coupled)", detector, sorter)
-
-        # Case 2: Sorter is not specified, auto-select based on detector
-        if sorter is None:
-            # Special case: tightly coupled detectors require their own sorter
-            if detector == "paddleocr-doclayout-v2":
-                sorter = "paddleocr-doclayout-v2"
-                logger.info("Auto-selected sorter='paddleocr-doclayout-v2' for paddleocr-doclayout-v2 detector")
-            elif detector == "mineru-vlm":
-                sorter = "mineru-vlm"
-                logger.info("Auto-selected sorter='mineru-vlm' for mineru-vlm detector")
-            else:
-                sorter = "mineru-xycut"
-                logger.info("Using default sorter='mineru-xycut' (fast and accurate)")
-
-        # Resolve and validate sorter backend
-        sorter_backend, sorter_error = resolve_sorter_backend(sorter, sorter_backend)
-        if sorter_error:
-            logger.warning("Sorter backend validation: %s", sorter_error)
-
-        # Store detector/sorter choices
-        self.detector_name = detector
-        self.sorter_name = sorter
-        self.sorter_backend = sorter_backend
-
-        # Validate combination
-        is_valid, message = validate_combination(detector, sorter)
-        if not is_valid:
-            raise ValueError(f"Invalid detector/sorter combination: {message}")
-
-        logger.info("Pipeline combination: %s", message)
-
-        # Check PyMuPDF availability for pymupdf sorter
-        if sorter == "pymupdf" and fitz is None:
-            logger.warning("PyMuPDF is not installed. Falling back to sorter='mineru-xycut'")
-            sorter = "mineru-xycut"
-            self.sorter_name = "mineru-xycut"
-
-        # Initialize rate limiter (only for Gemini recognizer)
-        if self.recognizer_backend == "gemini":
-            rate_limiter.set_tier_and_model(gemini_tier, recognizer)
-
-        # Convert paths to Path objects
-        self.cache_dir = Path(cache_dir)
-        self.output_dir = Path(output_dir)
-        self.temp_dir = Path(temp_dir)
-
-        # Create directories
-        self._setup_directories()
-
-        # Initialize components using new factory system
-        # Note: Converter is now function-based, no instance needed
-
-        # Resolve confidence_threshold from config if not explicitly provided
-        if confidence_threshold is None:
-            # Try to get from detection_config, fall back to constant
-            detectors_config = detection_config.get("detectors", {})
-            detector_specific_config = detectors_config.get(detector, {})
-            confidence_threshold = detector_specific_config.get("confidence_threshold", DEFAULT_CONFIDENCE_THRESHOLD)
-            logger.debug("Using confidence_threshold=%.2f from config for detector=%s", confidence_threshold, detector)
-
-        # Helper function to map backend using backend_mapping from config
-        def map_backend(stage: str, model_name: str, backend: str | None) -> dict[str, Any]:
-            """Map user-friendly backend to actual implementation parameter."""
-            if backend is None:
-                return {}
-
-            stage_config = models_config.get(f"{stage}s", {}).get(model_name, {})
-            backend_mapping = stage_config.get("backend_mapping", {})
-            backend_param_name = stage_config.get("backend_param_name", "backend")
-
-            if backend_mapping and backend in backend_mapping:
-                mapped_value = backend_mapping[backend]
-                return {backend_param_name: mapped_value}
-            elif backend_param_name:
-                return {backend_param_name: backend}
-            return {}
-
-        # Create detector
-        detector_kwargs = {}
-        if detector == "doclayout-yolo":
-            detector_kwargs = {
-                "model_path": detector_model_path,
-                "confidence_threshold": confidence_threshold,
-                "auto_batch_size": auto_batch_size,
-                "batch_size": batch_size,
-                "target_memory_fraction": target_memory_fraction,
-            }
-        elif detector == "mineru-vlm":
-            # Use detector as model name (e.g., "opendatalab/PDF-Extract-Kit-1.0")
-            # Or get default model from models_config
-            detector_config = models_config.get("detectors", {}).get("mineru-vlm", {})
-            default_model = detector_config.get("default_model", "opendatalab/MinerU2.5-2509-1.2B")
-            final_model = detector if detector.startswith("opendatalab/") else default_model
-
-            # Map backend (hf -> transformers, vllm -> vllm-engine)
-            backend_kwargs = map_backend("detector", "mineru-vlm", detector_backend)
-            logger.debug(
-                "MinerU VLM detector: detector=%s, final_model=%s, backend_kwargs=%s",
-                detector,
-                final_model,
-                backend_kwargs,
-            )
-
-            detector_kwargs = {
-                "model": final_model,
-                **backend_kwargs,
-                "detection_only": (sorter != "mineru-vlm"),  # Full pipeline if using mineru-vlm sorter
-            }
-        elif detector == "paddleocr-doclayout-v2":
-            detector_kwargs = {}  # No backend parameter
-        elif detector == "mineru-doclayout-yolo":
-            detector_kwargs = {}  # No backend parameter
-
-        # Create detector
-        self.detector: Detector | None = (
-            create_detector_impl(detector, **detector_kwargs) if detector != "none" else None
-        )
-
-        # Create sorter
-        sorter_kwargs = {}
-        if sorter == "olmocr-vlm":
-            # Use sorter as model name if it looks like a HF path
-            sorter_config = models_config.get("sorters", {}).get("olmocr-vlm", {})
-            default_model = sorter_config.get("default_model", "allenai/olmOCR-7B-0825-FP8")
-            final_model = sorter if sorter.startswith("allenai/") else default_model
-
-            # Map backend (hf -> use_vllm=False, vllm -> use_vllm=True)
-            backend_kwargs = map_backend("sorter", "olmocr-vlm", sorter_backend)
-            logger.debug(
-                "olmOCR VLM sorter: sorter=%s, final_model=%s, backend_kwargs=%s", sorter, final_model, backend_kwargs
-            )
-
-            sorter_kwargs = {
-                "model": final_model,
-                **backend_kwargs,
-                "use_anchoring": True,
-            }
-        elif sorter == "mineru-vlm":
-            sorter_kwargs = {}  # Uses detector's backend, no separate parameters
-        elif sorter == "mineru-layoutreader":
-            sorter_kwargs = {}  # No backend parameter, uses device
+        # Handle configuration
+        if config is not None:
+            # Use provided config
+            self.config = config
         else:
-            # For pymupdf, mineru-xycut, paddleocr-doclayout-v2, etc. (no backend needed)
-            sorter_kwargs = {}
-
-        self.sorter: Sorter | None = create_sorter_impl(sorter, **sorter_kwargs) if sorter else None
-
-        # Recognizer (using factory pattern)
-        recognizer_kwargs: dict[str, Any] = {}
-        if recognizer_backend in ["pytorch", "vllm", "sglang"] or recognizer.startswith("PaddlePaddle/"):
-            # PaddleOCR-VL recognizer
-            # Map backend (pytorch -> native, vllm -> vllm-server, sglang -> sglang-server)
-            backend_kwargs = map_backend("recognizer", "paddleocr-vl", recognizer_backend)
-            logger.debug("PaddleOCR-VL recognizer: recognizer=%s, backend_kwargs=%s", recognizer, backend_kwargs)
-
-            recognizer_kwargs.update(
-                {
-                    "device": None,  # Auto-detect
-                    **backend_kwargs,
-                    "use_layout_detection": False,  # We handle layout detection separately
-                    "model": recognizer if recognizer.startswith("PaddlePaddle/") else None,
-                }
-            )
-            recognizer_backend = "paddleocr-vl"  # Override for factory
-        elif recognizer_backend in ["openai", "gemini"]:
-            recognizer_kwargs.update(
-                {
-                    "cache_dir": self.cache_dir,
-                    "use_cache": use_cache,
-                    "model": recognizer,
-                    "gemini_tier": gemini_tier,
-                    "use_async": use_async,
-                }
-            )
-        else:
-            # Default to API-based recognizers
-            recognizer_kwargs.update(
-                {
-                    "cache_dir": self.cache_dir,
-                    "use_cache": use_cache,
-                    "model": recognizer,
-                    "gemini_tier": gemini_tier,
-                    "use_async": use_async,
-                }
+            # Create config from kwargs (legacy mode)
+            # Check if any non-default values were passed
+            has_custom_args = self._has_custom_arguments(
+                confidence_threshold=confidence_threshold,
+                use_cache=use_cache,
+                cache_dir=cache_dir,
+                output_dir=output_dir,
+                temp_dir=temp_dir,
+                detector=detector,
+                detector_backend=detector_backend,
+                detector_model_path=detector_model_path,
+                auto_batch_size=auto_batch_size,
+                batch_size=batch_size,
+                target_memory_fraction=target_memory_fraction,
+                sorter=sorter,
+                sorter_backend=sorter_backend,
+                sorter_model_path=sorter_model_path,
+                recognizer=recognizer,
+                recognizer_backend=recognizer_backend,
+                gemini_tier=gemini_tier,
+                renderer=renderer,
+                use_async=use_async,
+                dpi=dpi,
+                detection_dpi=detection_dpi,
+                recognition_dpi=recognition_dpi,
+                use_dual_resolution=use_dual_resolution,
             )
 
-        self.recognizer: Recognizer = create_recognizer(
-            self.recognizer_model, backend=recognizer_backend, **recognizer_kwargs
+            if has_custom_args:
+                warnings.warn(
+                    "Passing kwargs directly to Pipeline() is deprecated. "
+                    "Use PipelineConfig instead:\n"
+                    "  config = PipelineConfig(...)\n"
+                    "  pipeline = Pipeline(config=config)",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+
+            self.config = PipelineConfig(
+                confidence_threshold=confidence_threshold,
+                use_cache=use_cache,
+                cache_dir=Path(cache_dir),
+                output_dir=Path(output_dir),
+                temp_dir=Path(temp_dir),
+                detector=detector,
+                detector_backend=detector_backend,
+                detector_model_path=detector_model_path,
+                auto_batch_size=auto_batch_size,
+                batch_size=batch_size,
+                target_memory_fraction=target_memory_fraction,
+                sorter=sorter,
+                sorter_backend=sorter_backend,
+                sorter_model_path=sorter_model_path,
+                recognizer=recognizer,
+                recognizer_backend=recognizer_backend,
+                gemini_tier=gemini_tier,
+                renderer=renderer,
+                use_async=use_async,
+                dpi=dpi,
+                detection_dpi=detection_dpi,
+                recognition_dpi=recognition_dpi,
+                use_dual_resolution=use_dual_resolution,
+            )
+
+        # Validate configuration
+        self.config.validate()
+
+        # Create component factory
+        self.factory = ComponentFactory(self.config)
+
+        # Setup directories
+        self.factory.setup_directories()
+
+        # Initialize rate limiter if needed
+        self.factory.initialize_rate_limiter()
+
+        # Create components using factory
+        self.detector: Detector | None = self.factory.create_detector()
+        self.sorter: Sorter | None = self.factory.create_sorter()
+        self.recognizer: Recognizer = self.factory.create_recognizer()
+
+        # Initialize Ray pools (lazy - only created when backend requires)
+        self.ray_detector_pool = self.factory.create_ray_detector_pool(
+            self._get_detector_kwargs() if self.config.detector == "doclayout-yolo" else None
         )
+        self.ray_recognizer_pool = self.factory.create_ray_recognizer_pool()
 
-        # Initialize Ray pools for multi-GPU parallelization (backend-based)
-        self.ray_detector_pool = None
-        self.ray_recognizer_pool = None
-
-        # Initialize Ray detector pool if backend is pt-ray or hf-ray
-        if detector_backend in ["pt-ray", "hf-ray"]:
-            from pipeline.distributed import RayDetectorPool, is_ray_available  # noqa: PLC0415
-
-            if not is_ray_available():
-                logger.warning(
-                    "Ray is not available. Falling back to single-GPU mode. Install Ray with: pip install ray"
-                )
-            else:
-                try:
-                    self.ray_detector_pool = RayDetectorPool(
-                        detector_name=detector,
-                        num_actors=None,  # Auto-detect from GPUs
-                        num_gpus_per_actor=1.0,
-                        **detector_kwargs,
-                    )
-                    logger.info(
-                        "Ray detector pool initialized: %d actors",
-                        self.ray_detector_pool.num_actors,
-                    )
-                except Exception as e:
-                    logger.warning("Failed to initialize Ray detector pool: %s. Falling back to single-GPU.", e)
-
-        # Initialize Ray recognizer pool if backend is pt-ray or hf-ray
-        if recognizer_backend in ["pt-ray", "hf-ray"]:
-            from pipeline.distributed import RayRecognizerPool, is_ray_available  # noqa: PLC0415
-
-            if not is_ray_available():
-                logger.warning(
-                    "Ray is not available. Falling back to single-GPU mode. Install Ray with: pip install ray"
-                )
-            else:
-                try:
-                    self.ray_recognizer_pool = RayRecognizerPool(
-                        recognizer_name=recognizer,
-                        num_actors=None,  # Auto-detect from GPUs
-                        num_gpus_per_actor=1.0,
-                        backend=recognizer_backend,
-                        **recognizer_kwargs,
-                    )
-                    logger.info(
-                        "Ray recognizer pool initialized: %d actors",
-                        self.ray_recognizer_pool.num_actors,
-                    )
-                except Exception as e:
-                    logger.warning("Failed to initialize Ray recognizer pool: %s. Using single-GPU.", e)
-
+        # Log pipeline configuration
         logger.info(
             "Pipeline initialized: detector=%s (backend=%s), sorter=%s (backend=%s), recognizer=%s (backend=%s)",
-            detector,
-            detector_backend or "auto",
-            sorter,
-            sorter_backend or "auto",
-            recognizer,
-            recognizer_backend,
+            self.config.detector,
+            self.config.resolved_detector_backend or "auto",
+            self.config.resolved_sorter,
+            self.config.resolved_sorter_backend or "auto",
+            self.config.recognizer,
+            self.config.resolved_recognizer_backend,
         )
 
         # Initialize lightweight stages (InputStage and OutputStage)
-        # Heavy stages will be created on-demand via factory methods
         from pipeline.stages import InputStage, OutputStage
 
-        # InputStage and OutputStage are always needed (no heavy models)
         self.input_stage = InputStage(
-            temp_dir=self.temp_dir,
-            dpi=self.dpi,
-            detection_dpi=self.detection_dpi,
-            recognition_dpi=self.recognition_dpi,
-            use_dual_resolution=self.use_dual_resolution,
+            temp_dir=self.config.temp_dir,
+            dpi=self.config.dpi or 200,
+            detection_dpi=self.config.detection_dpi or 150,
+            recognition_dpi=self.config.recognition_dpi or 300,
+            use_dual_resolution=self.config.use_dual_resolution,
         )
-        self.output_stage = OutputStage(temp_dir=self.temp_dir)
+        self.output_stage = OutputStage(temp_dir=self.config.temp_dir)
 
         # Heavy stages will be created on-demand (lazy loading)
-        # This avoids loading all models at initialization
         self.detection_stage: DetectionStage | None = None
         self.ordering_stage: OrderingStage | None = None
         self.recognition_stage: RecognitionStage | None = None
@@ -496,10 +255,136 @@ class Pipeline:
         self.rendering_stage: RenderingStage | None = None
         self.page_correction_stage: PageCorrectionStage | None = None
 
-    def _setup_directories(self) -> None:
-        """Create necessary directories."""
-        for directory in [self.cache_dir, self.output_dir, self.temp_dir]:
-            directory.mkdir(parents=True, exist_ok=True)
+    def _has_custom_arguments(self, **kwargs: Any) -> bool:
+        """Check if any non-default arguments were passed."""
+        defaults = {
+            "confidence_threshold": None,
+            "use_cache": True,
+            "cache_dir": ".cache",
+            "output_dir": "output",
+            "temp_dir": ".tmp",
+            "detector": "paddleocr-doclayout-v2",
+            "detector_backend": None,
+            "detector_model_path": None,
+            "auto_batch_size": False,
+            "batch_size": None,
+            "target_memory_fraction": 0.85,
+            "sorter": None,
+            "sorter_backend": None,
+            "sorter_model_path": None,
+            "recognizer": "paddleocr-vl",
+            "recognizer_backend": None,
+            "gemini_tier": "free",
+            "renderer": "markdown",
+            "use_async": False,
+            "dpi": None,
+            "detection_dpi": None,
+            "recognition_dpi": None,
+            "use_dual_resolution": False,
+        }
+        for key, value in kwargs.items():
+            if key in defaults and value != defaults[key]:
+                return True
+        return False
+
+    def _get_detector_kwargs(self) -> dict[str, Any]:
+        """Get detector kwargs for Ray pool initialization."""
+        return {
+            "model_path": self.config.detector_model_path,
+            "confidence_threshold": self.config.confidence_threshold,
+            "auto_batch_size": self.config.auto_batch_size,
+            "batch_size": self.config.batch_size,
+            "target_memory_fraction": self.config.target_memory_fraction,
+        }
+
+    # ==================== Backward Compatibility Properties ====================
+
+    @property
+    def detector_name(self) -> str:
+        """Get detector name (backward compatibility)."""
+        return self.config.detector
+
+    @property
+    def sorter_name(self) -> str:
+        """Get sorter name (backward compatibility)."""
+        return self.config.resolved_sorter
+
+    @property
+    def detector_backend(self) -> str | None:
+        """Get detector backend (backward compatibility)."""
+        return self.config.resolved_detector_backend
+
+    @property
+    def sorter_backend(self) -> str | None:
+        """Get sorter backend (backward compatibility)."""
+        return self.config.resolved_sorter_backend
+
+    @property
+    def recognizer_backend(self) -> str | None:
+        """Get recognizer backend (backward compatibility)."""
+        return self.config.resolved_recognizer_backend
+
+    @property
+    def recognizer_model(self) -> str:
+        """Get recognizer model name (backward compatibility)."""
+        return self.config.recognizer
+
+    @property
+    def backend(self) -> str:
+        """Get backend (backward compatibility)."""
+        return self.config.resolved_recognizer_backend
+
+    @property
+    def model(self) -> str:
+        """Get model name (backward compatibility)."""
+        return self.config.recognizer
+
+    @property
+    def gemini_tier(self) -> str:
+        """Get Gemini tier (backward compatibility)."""
+        return self.config.gemini_tier
+
+    @property
+    def renderer(self) -> str:
+        """Get renderer (backward compatibility)."""
+        return self.config.renderer
+
+    @property
+    def dpi(self) -> int:
+        """Get DPI (backward compatibility)."""
+        return self.config.dpi or 200
+
+    @property
+    def detection_dpi(self) -> int:
+        """Get detection DPI (backward compatibility)."""
+        return self.config.detection_dpi or 150
+
+    @property
+    def recognition_dpi(self) -> int:
+        """Get recognition DPI (backward compatibility)."""
+        return self.config.recognition_dpi or 300
+
+    @property
+    def use_dual_resolution(self) -> bool:
+        """Get dual resolution flag (backward compatibility)."""
+        return self.config.use_dual_resolution
+
+    @property
+    def cache_dir(self) -> Path:
+        """Get cache directory (backward compatibility)."""
+        return self.config.cache_dir
+
+    @property
+    def output_dir(self) -> Path:
+        """Get output directory (backward compatibility)."""
+        return self.config.output_dir
+
+    @property
+    def temp_dir(self) -> Path:
+        """Get temp directory (backward compatibility)."""
+        return self.config.temp_dir
+
+    # ==================== Stage Factory Methods ====================
 
     def _create_detection_stage(self) -> DetectionStage:
         """Create detection stage on-demand."""
@@ -557,6 +442,8 @@ class Pipeline:
                 setattr(self, stage_attr, None)
                 gc.collect()
                 logger.info("Unloaded %s stage", stage_name)
+
+    # ==================== Processing Methods ====================
 
     def _get_pdf_output_dir(self, pdf_path: Path) -> Path:
         """Return the output directory for a given PDF as <output>/<file_stem>."""
