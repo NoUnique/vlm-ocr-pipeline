@@ -69,8 +69,11 @@ class TestOrderingStageSort:
         # Execute
         result = stage.sort(input_blocks, image)
 
-        # Verify
-        mock_sorter.sort.assert_called_once_with(input_blocks, image)
+        # Verify - sorter.sort is called with input_blocks, image, and any kwargs from context
+        mock_sorter.sort.assert_called_once()
+        call_args = mock_sorter.sort.call_args
+        assert list(call_args[0][0]) == input_blocks  # First arg is blocks
+        np.testing.assert_array_equal(call_args[0][1], image)  # Second arg is image
         assert result == sorted_blocks
         assert result[0].order == 0
         assert result[1].order == 1

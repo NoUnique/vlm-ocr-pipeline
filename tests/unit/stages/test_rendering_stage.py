@@ -69,13 +69,18 @@ class TestRenderingStageRender:
 
     def test_render_unsupported_renderer(self):
         """Test rendering with unsupported renderer."""
+        from pipeline.stages.base import StageError
+
         # Setup
         blocks = []
         stage = RenderingStage(renderer="html")
 
-        # Execute & Verify
-        with pytest.raises(ValueError, match="Unsupported renderer: html"):
+        # Execute & Verify - StageError wraps the ValueError
+        with pytest.raises(StageError) as exc_info:
             stage.render(blocks)
+
+        assert "Unsupported renderer: html" in str(exc_info.value)
+        assert exc_info.value.stage_name == "rendering"
 
     @patch("pipeline.stages.rendering_stage.blocks_to_markdown")
     def test_render_empty_blocks(self, mock_blocks_to_markdown: Mock):

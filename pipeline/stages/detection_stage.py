@@ -2,18 +2,27 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from pipeline.types import Block, ColumnLayout, Detector
 
+from .base import BaseStage
+
 if TYPE_CHECKING:
     from pipeline.distributed import RayDetectorPool
 
 
-class DetectionStage:
-    """Stage 2: Detection - Layout block detection."""
+class DetectionStage(BaseStage[np.ndarray, list[Block]]):
+    """Stage 2: Detection - Layout block detection.
+
+    This stage detects layout blocks (text, tables, figures, etc.) in page images
+    using a configured detector. Supports both local detection and Ray-based
+    distributed detection.
+    """
+
+    name = "detection"
 
     def __init__(self, detector: Detector, ray_detector_pool: RayDetectorPool | None = None):
         """Initialize DetectionStage.
@@ -25,8 +34,27 @@ class DetectionStage:
         self.detector = detector
         self.ray_detector_pool = ray_detector_pool
 
+    def _process_impl(self, input_data: np.ndarray, **context: Any) -> list[Block]:
+        """Detect layout blocks in image.
+
+        Args:
+            input_data: Page image as numpy array
+            **context: Additional context (unused)
+
+        Returns:
+            List of detected blocks with bbox, type, confidence
+        """
+        # Use Ray pool if available, otherwise use regular detector
+        if self.ray_detector_pool is not None:
+            blocks = self.ray_detector_pool.detect(input_data)
+        else:
+            blocks = self.detector.detect(input_data)
+        return blocks
+
     def detect(self, image: np.ndarray) -> list[Block]:
         """Detect layout blocks in image.
+
+        Legacy method for backward compatibility.
 
         Args:
             image: Page image as numpy array
@@ -34,12 +62,7 @@ class DetectionStage:
         Returns:
             List of detected blocks with bbox, type, confidence
         """
-        # Use Ray pool if available, otherwise use regular detector
-        if self.ray_detector_pool is not None:
-            blocks = self.ray_detector_pool.detect(image)
-        else:
-            blocks = self.detector.detect(image)
-        return blocks
+        return self.process(image)
 
     def extract_column_layout(self, blocks: list[Block]) -> ColumnLayout | None:
         """Extract column layout information from sorted blocks.

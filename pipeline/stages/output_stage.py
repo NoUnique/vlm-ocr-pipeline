@@ -18,7 +18,13 @@ logger = logging.getLogger(__name__)
 
 
 class OutputStage:
-    """Stage 8: Output - Result saving and summary generation."""
+    """Stage 8: Output - Result saving and summary generation.
+
+    This stage handles saving processing results, generating summaries,
+    and organizing output files.
+    """
+
+    name = "output"
 
     def __init__(self, temp_dir: Path):
         """Initialize OutputStage.
