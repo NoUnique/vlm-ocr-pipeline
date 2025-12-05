@@ -1354,7 +1354,24 @@ class Detector(Protocol):
 
     All detectors must implement this interface and return blocks
     in the unified Block format with bbox field.
+
+    Attributes:
+        name: Detector identifier (e.g., "doclayout-yolo", "paddleocr-doclayout-v2")
+        source: Source identifier for blocks (used in Block.source field)
+
+    Methods:
+        detect: Detect blocks in a single image
+        detect_batch: Detect blocks in multiple images (optional, default: sequential)
+
+    Example:
+        >>> detector = DocLayoutYOLODetector()
+        >>> detector.name
+        'doclayout-yolo'
+        >>> blocks = detector.detect(image)
     """
+
+    name: str
+    source: str
 
     def detect(self, image: np.ndarray) -> list[Block]:
         """Detect blocks in image.
@@ -1375,6 +1392,26 @@ class Detector(Protocol):
         """
         ...
 
+    def detect_batch(self, images: list[np.ndarray]) -> list[list[Block]]:
+        """Detect blocks in multiple images.
+
+        Default implementation processes images sequentially.
+        Subclasses may override for true batch/parallel processing.
+
+        Args:
+            images: List of input images as numpy arrays (H, W, C)
+
+        Returns:
+            List of block lists, one per image
+
+        Example:
+            >>> detector = DocLayoutYOLODetector()
+            >>> results = detector.detect_batch([image1, image2])
+            >>> len(results)
+            2
+        """
+        ...
+
 
 @runtime_checkable
 class Sorter(Protocol):
@@ -1382,7 +1419,21 @@ class Sorter(Protocol):
 
     All sorters must implement this interface and add ordering information
     to blocks (order field) while maintaining the unified Block format.
+
+    Attributes:
+        name: Sorter identifier (e.g., "pymupdf", "mineru-xycut")
+
+    Methods:
+        sort: Sort blocks by reading order
+
+    Example:
+        >>> sorter = PyMuPDFSorter()
+        >>> sorter.name
+        'pymupdf'
+        >>> sorted_blocks = sorter.sort(blocks, image)
     """
+
+    name: str
 
     def sort(self, blocks: list[Block], image: np.ndarray, **kwargs: Any) -> list[Block]:
         """Sort blocks by reading order.
@@ -1411,31 +1462,43 @@ class Recognizer(Protocol):
     All recognizers must implement this interface to extract and correct
     text from blocks using various OCR or VLM backends.
 
+    Attributes:
+        name: Recognizer identifier (e.g., "gemini", "openai", "paddleocr-vl")
+        supports_correction: Whether the recognizer supports text correction
+
     Methods:
         process_blocks: Extract text from blocks in an image
         correct_text: Correct raw text using VLM (optional for some backends)
+        process_blocks_batch: Process multiple sets of blocks (optional)
 
     Example:
-        >>> recognizer = TextRecognizer(backend="gemini")
+        >>> recognizer = GeminiClient(model="gemini-2.5-flash")
+        >>> recognizer.name
+        'gemini'
+        >>> recognizer.supports_correction
+        True
         >>> blocks_with_text = recognizer.process_blocks(image, blocks)
-        >>> corrected = recognizer.correct_text("sampel txt")
     """
 
-    def process_blocks(self, image: np.ndarray, blocks: Sequence[Block]) -> list[Block]:
+    name: str
+    supports_correction: bool
+
+    def process_blocks(self, image: np.ndarray | None, blocks: Sequence[Block]) -> list[Block]:
         """Process blocks to extract text.
 
         This method processes each block in the input image to extract text content.
         The returned blocks should have their `text` field populated.
 
         Args:
-            image: Full page image as numpy array (H, W, C) in RGB format
+            image: Full page image as numpy array (H, W, C) in RGB format.
+                   Can be None for recognizers that don't need the image.
             blocks: Detected blocks with bbox field populated
 
         Returns:
             List of blocks with text field populated
 
         Example:
-            >>> recognizer = TextRecognizer(backend="gemini")
+            >>> recognizer = GeminiClient(model="gemini-2.5-flash")
             >>> blocks_with_text = recognizer.process_blocks(image, blocks)
             >>> blocks_with_text[0].text
             'Sample text content'
@@ -1447,25 +1510,52 @@ class Recognizer(Protocol):
 
         This method takes raw extracted text and applies correction using a VLM.
         Some recognizers may not support correction (e.g., PaddleOCR-VL).
+        Check `supports_correction` attribute before calling.
 
         Args:
             text: Raw extracted text to correct
 
         Returns:
-            Corrected text string, or dict with correction metadata or error info.
+            Corrected text string, or dict with correction metadata:
+            - {"corrected_text": str, "correction_ratio": float}
             If correction is not supported, returns the original text unchanged.
 
         Example:
-            >>> recognizer = TextRecognizer(backend="gemini")
-            >>> corrected = recognizer.correct_text("sampel txt")
-            >>> corrected
+            >>> recognizer = GeminiClient(model="gemini-2.5-flash")
+            >>> if recognizer.supports_correction:
+            ...     corrected = recognizer.correct_text("sampel txt")
+            ...     print(corrected)
             'sample text'
 
             >>> # For recognizers without correction support
             >>> recognizer = PaddleOCRVLRecognizer()
-            >>> result = recognizer.correct_text("some text")
-            >>> result  # Returns original text
-            'some text'
+            >>> recognizer.supports_correction
+            False
+        """
+        ...
+
+    def process_blocks_batch(
+        self,
+        images: Sequence[np.ndarray | None],
+        blocks_list: Sequence[Sequence[Block]],
+    ) -> list[list[Block]]:
+        """Process multiple sets of blocks in a batch.
+
+        Default implementation processes sequentially.
+        Subclasses may override for true batch/parallel processing.
+
+        Args:
+            images: Sequence of input images
+            blocks_list: Sequence of block lists, one per image
+
+        Returns:
+            List of processed block lists
+
+        Example:
+            >>> results = recognizer.process_blocks_batch(
+            ...     [image1, image2],
+            ...     [blocks1, blocks2]
+            ... )
         """
         ...
 
@@ -1498,6 +1588,104 @@ class Renderer(Protocol):
             Sample content...
         """
         ...
+
+
+# ==================== Pipeline Result Types ====================
+
+
+@dataclass
+class StageTimingInfo:
+    """Timing information for a pipeline stage.
+
+    Attributes:
+        stage_name: Name of the stage
+        processing_time_ms: Processing time in milliseconds
+        items_processed: Number of items processed (e.g., blocks, pages)
+    """
+
+    stage_name: str
+    processing_time_ms: float
+    items_processed: int = 0
+
+    @property
+    def processing_time_sec(self) -> float:
+        """Get processing time in seconds."""
+        return self.processing_time_ms / 1000.0
+
+
+@dataclass
+class PipelineResult:
+    """Complete pipeline processing result.
+
+    This dataclass captures the full result of processing a document
+    through the OCR pipeline, including timing and metadata.
+
+    Attributes:
+        document: Processed Document object with all pages
+        stage_timings: Timing information for each stage
+        total_time_ms: Total processing time in milliseconds
+        success: Whether processing completed successfully
+        error: Error message if processing failed
+
+    Example:
+        >>> result = pipeline.process_pdf("document.pdf")
+        >>> result.success
+        True
+        >>> result.total_time_sec
+        12.5
+        >>> result.get_stage_timings()
+        {'detection': 2000.0, 'ordering': 500.0, 'recognition': 8000.0, ...}
+    """
+
+    document: Document | None
+    stage_timings: list[StageTimingInfo]
+    total_time_ms: float
+    success: bool = True
+    error: str | None = None
+
+    @property
+    def total_time_sec(self) -> float:
+        """Get total processing time in seconds."""
+        return self.total_time_ms / 1000.0
+
+    def get_stage_timings(self) -> dict[str, float]:
+        """Get timing for each stage as a dictionary.
+
+        Returns:
+            Dictionary mapping stage names to processing times in ms
+        """
+        return {timing.stage_name: timing.processing_time_ms for timing in self.stage_timings}
+
+    def get_slowest_stage(self) -> StageTimingInfo | None:
+        """Get the slowest stage.
+
+        Returns:
+            StageTimingInfo for the slowest stage, or None if no stages
+        """
+        if not self.stage_timings:
+            return None
+        return max(self.stage_timings, key=lambda t: t.processing_time_ms)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to JSON-serializable dict.
+
+        Returns:
+            Dictionary with all result information
+        """
+        result: dict[str, Any] = {
+            "success": self.success,
+            "total_time_ms": self.total_time_ms,
+            "total_time_sec": self.total_time_sec,
+            "stage_timings": {t.stage_name: t.processing_time_ms for t in self.stage_timings},
+        }
+
+        if self.document is not None:
+            result["document"] = self.document.to_dict()
+
+        if self.error is not None:
+            result["error"] = self.error
+
+        return result
 
 
 # Type alias for renderer functions (alternative to Protocol)
