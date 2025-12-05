@@ -1,4 +1,11 @@
-"""Text recognition module for OCR and content extraction."""
+"""Text recognition module for OCR and content extraction.
+
+Components:
+- BaseRecognizer: Abstract base class for all recognizers
+- RecognizerRegistry: Registry for recognizer management
+- TextRecognizer: VLM-based text recognizer (OpenAI/Gemini)
+- create_recognizer: Factory function for recognizer creation
+"""
 
 from __future__ import annotations
 
@@ -16,7 +23,9 @@ from .api.gemini import GeminiClient
 from .api.gemini_async import AsyncGeminiClient
 from .api.openai import OpenAIClient
 from .api.openai_async import AsyncOpenAIClient
+from .base import BaseRecognizer
 from .cache import RecognitionCache
+from .registry import RecognizerRegistry, recognizer_registry
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +48,16 @@ except ImportError:
     _HAS_DEEPSEEK_OCR = False
 
 __all__ = [
+    # Base class
+    "BaseRecognizer",
+    # Registry
+    "RecognizerRegistry",
+    "recognizer_registry",
+    # Recognizer classes
     "TextRecognizer",
     "PaddleOCRVLRecognizer",
     "DeepSeekOCRRecognizer",
+    # Factory functions
     "create_recognizer",
     "list_available_recognizers",
 ]
