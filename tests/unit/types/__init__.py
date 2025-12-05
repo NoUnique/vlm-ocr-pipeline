@@ -1,2 +1,1 @@
-"""Types unit tests."""
-
+"""Unit tests for types module."""

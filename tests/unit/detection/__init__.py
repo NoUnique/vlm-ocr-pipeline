@@ -1,2 +1,0 @@
-"""Detection unit tests."""
-
