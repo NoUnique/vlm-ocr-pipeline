@@ -137,8 +137,11 @@ class TestComponentCreation:
         # Note: This tests the factory's handling of detector="none"
 
     @pytest.mark.slow
-    def test_create_recognizer_paddleocr_vl(self):
-        """Test creating PaddleOCR-VL recognizer."""
+    def test_create_recognizer_paddleocr_vl(self, gpu_config):
+        """Test creating PaddleOCR-VL recognizer.
+
+        Uses gpu_config fixture to ensure torch is loaded first.
+        """
         config = PipelineConfig(
             detector="paddleocr-doclayout-v2",
             recognizer="paddleocr-vl",
@@ -152,8 +155,12 @@ class TestComponentCreation:
         assert hasattr(recognizer, "process_blocks")
         assert hasattr(recognizer, "correct_text")
 
-    def test_create_recognizer_gemini(self):
-        """Test creating Gemini recognizer (doesn't load model)."""
+    def test_create_recognizer_gemini(self, gpu_config):
+        """Test creating Gemini recognizer.
+
+        Uses gpu_config fixture to ensure torch is loaded first
+        (recognizer creation may check GPU environment).
+        """
         config = PipelineConfig(
             detector="paddleocr-doclayout-v2",
             recognizer="gemini-2.5-flash",

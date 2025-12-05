@@ -331,6 +331,88 @@ def sample_fixture_pdf(fixtures_dir: Path) -> Path | None:
     return None
 
 
+# ==================== Async Configuration ====================
+
+
+@pytest.fixture
+def anyio_backend() -> str:
+    """Force anyio to use asyncio backend only (trio not installed)."""
+    return "asyncio"
+
+
+# ==================== Session-level Model Fixtures ====================
+# These fixtures load heavy models only once per test session
+# to avoid TORCH_LIBRARY registration conflicts
+
+
+@pytest.fixture(scope="session")
+def doclayout_yolo_detector():
+    """Create DocLayout-YOLO detector once per test session.
+
+    This prevents TORCH_LIBRARY re-registration errors when running
+    multiple tests that use the detector.
+
+    Returns:
+        DocLayoutYOLODetector instance or None if unavailable
+    """
+    try:
+        from pipeline.layout.detection.doclayout_yolo import DocLayoutYOLODetector
+
+        return DocLayoutYOLODetector(confidence_threshold=0.5)
+    except Exception as e:
+        pytest.skip(f"DocLayoutYOLODetector not available: {e}")
+        return None
+
+
+@pytest.fixture(scope="session")
+def mineru_doclayout_yolo_detector():
+    """Create Mineru DocLayout-YOLO detector once per test session.
+
+    Returns:
+        MineruDocLayoutYOLODetector instance or None if unavailable
+    """
+    try:
+        from pipeline.layout.detection.doclayout_yolo import MineruDocLayoutYOLODetector
+
+        return MineruDocLayoutYOLODetector(confidence_threshold=0.5)
+    except Exception as e:
+        pytest.skip(f"MineruDocLayoutYOLODetector not available: {e}")
+        return None
+
+
+@pytest.fixture(scope="session")
+def gpu_config():
+    """Get GPU config once per test session.
+
+    This prevents TORCH_LIBRARY re-registration errors.
+    """
+    from pipeline.gpu_environment import get_gpu_config
+
+    return get_gpu_config()
+
+
+@pytest.fixture(scope="session")
+def openai_recognizer(gpu_config):
+    """Create OpenAI recognizer once per test session.
+
+    Depends on gpu_config to ensure torch is loaded first.
+    """
+    from pipeline.recognition import create_recognizer
+
+    return create_recognizer("openai")
+
+
+@pytest.fixture(scope="session")
+def gemini_recognizer(gpu_config):
+    """Create Gemini recognizer once per test session.
+
+    Depends on gpu_config to ensure torch is loaded first.
+    """
+    from pipeline.recognition import create_recognizer
+
+    return create_recognizer("gemini")
+
+
 # ==================== Helper Functions ====================
 
 

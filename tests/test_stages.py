@@ -591,9 +591,13 @@ class TestOutputStage:
         # Execute
         stage.save_page_output(page_output_dir, page_num, page)
 
-        # Verify
-        output_file = page_output_dir / f"page_{page_num}.json"
-        assert output_file.exists()
+        # Verify JSON is saved to json/ subdirectory
+        json_file = page_output_dir / "json" / f"page_{page_num}.json"
+        assert json_file.exists()
+
+        # Verify Markdown is saved to main directory
+        md_file = page_output_dir / f"page_{page_num}.md"
+        assert md_file.exists()
 
     def test_determine_summary_filename(self, tmp_path: Path):
         """Test determining summary filename."""

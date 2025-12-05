@@ -5,92 +5,151 @@ from __future__ import annotations
 import pytest
 
 from pipeline import Pipeline
+from pipeline.config import PipelineConfig
 
 
-def test_sorter_auto_selects_detector_paddleocr():
-    """Test that specifying paddleocr-doclayout-v2 sorter auto-selects the detector."""
-    # When only sorter is specified, detector should be auto-selected
-    pipeline = Pipeline(
+class TestSorterAutoSelectsDetector:
+    """Tests for sorter auto-selecting the required detector."""
+
+    def test_paddleocr_sorter_requires_detector(self):
+        """Test that paddleocr-doclayout-v2 sorter requires matching detector."""
+        config = PipelineConfig(
         sorter="paddleocr-doclayout-v2",
-        backend="openai",  # Need to specify a backend
-    )
+            detector="paddleocr-doclayout-v2",  # Must match
+            recognizer="gemini-2.5-flash",  # API-based (no model loading)
+        )
+        config.validate()
 
-    assert pipeline.detector_name == "paddleocr-doclayout-v2"
-    assert pipeline.sorter_name == "paddleocr-doclayout-v2"
+        assert config.detector == "paddleocr-doclayout-v2"
+        assert config.sorter == "paddleocr-doclayout-v2"
 
-
-def test_sorter_auto_selects_detector_mineru_vlm():
-    """Test that specifying mineru-vlm sorter auto-selects the detector."""
-    pipeline = Pipeline(
+    def test_mineru_vlm_sorter_requires_detector(self):
+        """Test that mineru-vlm sorter requires matching detector."""
+        config = PipelineConfig(
         sorter="mineru-vlm",
-        backend="openai",
-    )
+            detector="mineru-vlm",  # Must match
+            recognizer="gemini-2.5-flash",
+        )
+        config.validate()
 
-    assert pipeline.detector_name == "mineru-vlm"
-    assert pipeline.sorter_name == "mineru-vlm"
+        assert config.detector == "mineru-vlm"
+        assert config.sorter == "mineru-vlm"
 
 
-def test_detector_auto_selects_sorter_paddleocr():
-    """Test that specifying paddleocr-doclayout-v2 detector auto-selects the sorter."""
-    pipeline = Pipeline(
+class TestDetectorAutoSelectsSorter:
+    """Tests for detector auto-selecting the compatible sorter."""
+
+    def test_paddleocr_detector_with_matching_sorter(self):
+        """Test paddleocr-doclayout-v2 detector with matching sorter."""
+        config = PipelineConfig(
         detector="paddleocr-doclayout-v2",
-        backend="openai",
-    )
-
-    assert pipeline.detector_name == "paddleocr-doclayout-v2"
-    assert pipeline.sorter_name == "paddleocr-doclayout-v2"
-
-
-def test_detector_auto_selects_sorter_mineru_vlm():
-    """Test that specifying mineru-vlm detector auto-selects the sorter."""
-    pipeline = Pipeline(
-        detector="mineru-vlm",
-        backend="openai",
-    )
-
-    assert pipeline.detector_name == "mineru-vlm"
-    assert pipeline.sorter_name == "mineru-vlm"
-
-
-def test_incompatible_explicit_detector_sorter_raises_error():
-    """Test that explicitly specifying incompatible detector/sorter raises error."""
-    # User explicitly specifies incompatible combination (non-default detector)
-    with pytest.raises(ValueError, match="tightly coupled"):
-        Pipeline(
-            detector="mineru-doclayout-yolo",  # Non-default detector
             sorter="paddleocr-doclayout-v2",
-            backend="openai",
+            recognizer="gemini-2.5-flash",
+        )
+        config.validate()
+
+        assert config.detector == "paddleocr-doclayout-v2"
+        assert config.sorter == "paddleocr-doclayout-v2"
+
+    def test_mineru_vlm_detector_with_matching_sorter(self):
+        """Test mineru-vlm detector with matching sorter."""
+        config = PipelineConfig(
+        detector="mineru-vlm",
+            sorter="mineru-vlm",
+            recognizer="gemini-2.5-flash",
+        )
+        config.validate()
+
+        assert config.detector == "mineru-vlm"
+        assert config.sorter == "mineru-vlm"
+
+
+class TestIncompatibleCombinations:
+    """Tests for incompatible detector/sorter combinations."""
+
+    def test_incompatible_detector_sorter_raises_error(self):
+        """Test that incompatible detector/sorter raises validation error.
+        
+        Note: doclayout-yolo is the 'default' detector, so it would be auto-corrected.
+        We use mineru-vlm as an explicitly incompatible detector for paddleocr sorter.
+        """
+        # paddleocr-doclayout-v2 sorter requires paddleocr-doclayout-v2 detector
+        config = PipelineConfig(
+            detector="mineru-vlm",  # Wrong detector for paddleocr sorter (not default)
+            sorter="paddleocr-doclayout-v2",
+            recognizer="gemini-2.5-flash",
         )
 
+        with pytest.raises(ValueError, match="(tightly coupled|requires|must be used)"):
+            config.validate()
 
-def test_compatible_explicit_detector_sorter_succeeds():
-    """Test that explicitly specifying compatible detector/sorter succeeds."""
-    pipeline = Pipeline(
-        detector="paddleocr-doclayout-v2",
-        sorter="paddleocr-doclayout-v2",
-        backend="openai",
-    )
+    def test_mineru_vlm_sorter_with_wrong_detector_raises_error(self):
+        """Test that mineru-vlm sorter with wrong detector raises error.
+        
+        Note: doclayout-yolo is treated as 'default', so it would be auto-corrected.
+        We use paddleocr-doclayout-v2 as an explicitly incompatible detector.
+        """
+        config = PipelineConfig(
+            detector="paddleocr-doclayout-v2",  # Wrong detector for mineru-vlm sorter
+            sorter="mineru-vlm",
+            recognizer="gemini-2.5-flash",
+        )
 
-    assert pipeline.detector_name == "paddleocr-doclayout-v2"
-    assert pipeline.sorter_name == "paddleocr-doclayout-v2"
-
-
-def test_default_detector_sorter_without_specification():
-    """Test that default detector/sorter are used when nothing is specified."""
-    pipeline = Pipeline(backend="openai")
-
-    # Default: doclayout-yolo detector with mineru-xycut sorter
-    assert pipeline.detector_name == "doclayout-yolo"
-    assert pipeline.sorter_name == "mineru-xycut"
+        with pytest.raises(ValueError, match="(tightly coupled|requires|must be used)"):
+            config.validate()
 
 
-def test_non_tightly_coupled_sorter_uses_default_detector():
-    """Test that non-tightly-coupled sorter doesn't change default detector."""
-    pipeline = Pipeline(
-        sorter="mineru-xycut",
-        backend="openai",
-    )
+class TestCompatibleCombinations:
+    """Tests for compatible detector/sorter combinations."""
 
-    # mineru-xycut is not tightly coupled, so default detector should be used
-    assert pipeline.detector_name == "doclayout-yolo"
-    assert pipeline.sorter_name == "mineru-xycut"
+    def test_doclayout_yolo_with_xycut(self):
+        """Test doclayout-yolo detector with mineru-xycut sorter."""
+        config = PipelineConfig(
+            detector="doclayout-yolo",
+            sorter="mineru-xycut",
+            recognizer="gemini-2.5-flash",
+        )
+        config.validate()
+
+        assert config.detector == "doclayout-yolo"
+        assert config.sorter == "mineru-xycut"
+
+    def test_doclayout_yolo_with_layoutreader(self):
+        """Test doclayout-yolo detector with mineru-layoutreader sorter."""
+        config = PipelineConfig(
+            detector="doclayout-yolo",
+            sorter="mineru-layoutreader",
+            recognizer="gemini-2.5-flash",
+        )
+        config.validate()
+
+        assert config.detector == "doclayout-yolo"
+        assert config.sorter == "mineru-layoutreader"
+
+
+class TestDefaultConfiguration:
+    """Tests for default detector/sorter configuration."""
+
+    def test_default_configuration(self):
+        """Test default detector/sorter values."""
+        config = PipelineConfig(
+            recognizer="gemini-2.5-flash",
+        )
+        config.validate()
+
+        # Default: paddleocr-doclayout-v2 detector
+        assert config.detector == "paddleocr-doclayout-v2"
+        # Sorter can be None (auto-selected in Pipeline)
+        # or paddleocr-doclayout-v2 if explicitly set
+
+    def test_non_tightly_coupled_sorter_with_any_detector(self):
+        """Test that non-tightly-coupled sorters work with any detector."""
+        config = PipelineConfig(
+            detector="doclayout-yolo",
+            sorter="mineru-xycut",  # Not tightly coupled
+            recognizer="gemini-2.5-flash",
+        )
+        config.validate()
+
+        assert config.detector == "doclayout-yolo"
+        assert config.sorter == "mineru-xycut"

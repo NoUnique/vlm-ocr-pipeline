@@ -240,8 +240,8 @@ class TestOpenPymupdfDocument:
 class TestExtractTextSpansFromPdf:
     """Tests for extract_text_spans_from_pdf function."""
 
-    @patch("pipeline.conversion.input.pdf.fitz")
-    def test_extract_text_spans_success(self, mock_fitz: Mock, tmp_path: Path):
+    @patch("pipeline.conversion.input.pdf.open_pdf_document")
+    def test_extract_text_spans_success(self, mock_open_pdf: Mock, tmp_path: Path):
         """Test successful text span extraction."""
         pdf_path = tmp_path / "test.pdf"
         pdf_path.touch()
@@ -280,7 +280,7 @@ class TestExtractTextSpansFromPdf:
 
         mock_page.get_text.return_value = mock_text_dict
         mock_doc.load_page.return_value = mock_page
-        mock_fitz.open.return_value = mock_doc
+        mock_open_pdf.return_value.__enter__.return_value = mock_doc
 
         spans = extract_text_spans_from_pdf(pdf_path, page_num=1)
 
@@ -294,12 +294,10 @@ class TestExtractTextSpansFromPdf:
         assert spans[1]["size"] == 14.0
         assert spans[1]["font"] == "Times-Bold"
 
-        mock_doc.close.assert_called_once()
-
-    @patch("pipeline.conversion.input.pdf.fitz")
+    @patch("pipeline.conversion.input.pdf.open_pdf_document")
     def test_extract_text_spans_with_image_blocks(
         self,
-        mock_fitz: Mock,
+        mock_open_pdf: Mock,
         tmp_path: Path,
     ):
         """Test that image blocks are skipped."""
@@ -333,15 +331,15 @@ class TestExtractTextSpansFromPdf:
 
         mock_page.get_text.return_value = mock_text_dict
         mock_doc.load_page.return_value = mock_page
-        mock_fitz.open.return_value = mock_doc
+        mock_open_pdf.return_value.__enter__.return_value = mock_doc
 
         spans = extract_text_spans_from_pdf(pdf_path, page_num=1)
 
         assert len(spans) == 1
         assert spans[0]["text"] == "Text content"
 
-    @patch("pipeline.conversion.input.pdf.fitz")
-    def test_extract_text_spans_empty_text(self, mock_fitz: Mock, tmp_path: Path):
+    @patch("pipeline.conversion.input.pdf.open_pdf_document")
+    def test_extract_text_spans_empty_text(self, mock_open_pdf: Mock, tmp_path: Path):
         """Test that empty/whitespace text is skipped."""
         pdf_path = tmp_path / "test.pdf"
         pdf_path.touch()
@@ -384,22 +382,22 @@ class TestExtractTextSpansFromPdf:
 
         mock_page.get_text.return_value = mock_text_dict
         mock_doc.load_page.return_value = mock_page
-        mock_fitz.open.return_value = mock_doc
+        mock_open_pdf.return_value.__enter__.return_value = mock_doc
 
         spans = extract_text_spans_from_pdf(pdf_path, page_num=1)
 
         assert len(spans) == 1
         assert spans[0]["text"] == "Valid text"
 
-    @patch("pipeline.conversion.input.pdf.fitz")
-    def test_extract_text_spans_invalid_page(self, mock_fitz: Mock, tmp_path: Path):
+    @patch("pipeline.conversion.input.pdf.open_pdf_document")
+    def test_extract_text_spans_invalid_page(self, mock_open_pdf: Mock, tmp_path: Path):
         """Test extraction with invalid page number."""
         pdf_path = tmp_path / "test.pdf"
         pdf_path.touch()
 
         mock_doc = MagicMock()
         mock_doc.page_count = 5
-        mock_fitz.open.return_value = mock_doc
+        mock_open_pdf.return_value.__enter__.return_value = mock_doc
 
         # Page number too high
         spans = extract_text_spans_from_pdf(pdf_path, page_num=10)
@@ -408,8 +406,6 @@ class TestExtractTextSpansFromPdf:
         # Page number too low
         spans = extract_text_spans_from_pdf(pdf_path, page_num=0)
         assert spans == []
-
-        mock_doc.close.assert_called()
 
     def test_extract_text_spans_no_fitz(self, tmp_path: Path, monkeypatch):
         """Test when PyMuPDF is not available."""
@@ -422,26 +418,27 @@ class TestExtractTextSpansFromPdf:
 
         assert spans == []
 
-    @patch("pipeline.conversion.input.pdf.fitz")
+    @patch("pipeline.conversion.input.pdf.open_pdf_document")
     def test_extract_text_spans_exception_handling(
         self,
-        mock_fitz: Mock,
+        mock_open_pdf: Mock,
         tmp_path: Path,
     ):
         """Test graceful handling of exceptions."""
         pdf_path = tmp_path / "test.pdf"
         pdf_path.touch()
 
-        mock_fitz.open.side_effect = Exception("Unexpected error")
+        mock_open_pdf.return_value.__enter__.side_effect = Exception("Unexpected error")
 
         spans = extract_text_spans_from_pdf(pdf_path, page_num=1)
 
         assert spans == []
 
     @patch("pipeline.conversion.input.pdf.fitz")
+    @patch("pipeline.conversion.input.pdf.open_pdf_document")
     def test_extract_text_spans_with_default_values(
         self,
-        mock_fitz: Mock,
+        mock_open_pdf: Mock,
         tmp_path: Path,
     ):
         """Test spans with missing font information use defaults."""
@@ -473,7 +470,7 @@ class TestExtractTextSpansFromPdf:
 
         mock_page.get_text.return_value = mock_text_dict
         mock_doc.load_page.return_value = mock_page
-        mock_fitz.open.return_value = mock_doc
+        mock_open_pdf.return_value.__enter__.return_value = mock_doc
 
         spans = extract_text_spans_from_pdf(pdf_path, page_num=1)
 
@@ -481,8 +478,8 @@ class TestExtractTextSpansFromPdf:
         assert spans[0]["size"] == 12.0  # Default
         assert spans[0]["font"] == "Unknown"  # Default
 
-    @patch("pipeline.conversion.input.pdf.fitz")
-    def test_extract_text_spans_unicode(self, mock_fitz: Mock, tmp_path: Path):
+    @patch("pipeline.conversion.input.pdf.open_pdf_document")
+    def test_extract_text_spans_unicode(self, mock_open_pdf: Mock, tmp_path: Path):
         """Test extraction with unicode text."""
         pdf_path = tmp_path / "test.pdf"
         pdf_path.touch()
@@ -519,7 +516,7 @@ class TestExtractTextSpansFromPdf:
 
         mock_page.get_text.return_value = mock_text_dict
         mock_doc.load_page.return_value = mock_page
-        mock_fitz.open.return_value = mock_doc
+        mock_open_pdf.return_value.__enter__.return_value = mock_doc
 
         spans = extract_text_spans_from_pdf(pdf_path, page_num=1)
 
@@ -527,8 +524,8 @@ class TestExtractTextSpansFromPdf:
         assert spans[0]["text"] == "한글 텍스트"
         assert spans[1]["text"] == "日本語"
 
-    @patch("pipeline.conversion.input.pdf.fitz")
-    def test_extract_text_spans_multiple_lines(self, mock_fitz: Mock, tmp_path: Path):
+    @patch("pipeline.conversion.input.pdf.open_pdf_document")
+    def test_extract_text_spans_multiple_lines(self, mock_open_pdf: Mock, tmp_path: Path):
         """Test extraction from multiple lines."""
         pdf_path = tmp_path / "test.pdf"
         pdf_path.touch()
@@ -575,7 +572,7 @@ class TestExtractTextSpansFromPdf:
 
         mock_page.get_text.return_value = mock_text_dict
         mock_doc.load_page.return_value = mock_page
-        mock_fitz.open.return_value = mock_doc
+        mock_open_pdf.return_value.__enter__.return_value = mock_doc
 
         spans = extract_text_spans_from_pdf(pdf_path, page_num=1)
 
