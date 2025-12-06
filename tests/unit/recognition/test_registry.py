@@ -130,15 +130,12 @@ class TestRecognizerRegistryCreate:
     """Tests for recognizer creation."""
 
     def test_create_unknown(self):
-        """Test creating unknown recognizer defaults to gemini."""
+        """Test creating unknown recognizer raises ValueError."""
         registry = RecognizerRegistry()
         
-        # Unknown names default to gemini with the name as model
-        with patch("pipeline.recognition.registry.logger") as mock_logger:
-            # Mock get_class to avoid actual import
-            registry._custom_recognizers["gemini"] = Mock()
-            result = registry.create("unknown-model")
-            mock_logger.warning.assert_called()
+        # Unknown names should raise ValueError (explicit error, no silent fallback)
+        with pytest.raises(ValueError, match="Unknown recognizer: 'unknown-model'"):
+            registry.create("unknown-model")
 
     def test_create_custom(self):
         """Test creating custom recognizer."""

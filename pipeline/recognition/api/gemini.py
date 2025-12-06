@@ -4,25 +4,29 @@ Handles text extraction, special content analysis, and text correction using Gem
 """
 
 import difflib
-import gc
-import io
 import json
 import logging
 import os
 from pathlib import Path
 from typing import Any, cast
 
-import cv2
 import numpy as np
 import yaml
 from google import genai
 from google.api_core import exceptions as google_exceptions
 from google.genai import types
-from PIL import Image
 
 from pipeline.constants import ESTIMATED_IMAGE_TOKENS
 
+from .image_utils import prepare_image_for_api
 from .ratelimit import rate_limiter
+from .types import (
+    CorrectionResult,
+    ExtractionResult,
+    SpecialContentResult,
+    create_correction_error,
+    create_extraction_error,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -124,23 +128,8 @@ class GeminiClient:
             return {"type": region_info["type"], "xywh": region_info["xywh"], "text": "", "confidence": 0.0}
 
         try:
-            # Resize image if too large
-            h, w = region_img.shape[:2]
-            max_dim = 1024
-
-            if max(h, w) > max_dim:
-                scale = max_dim / max(h, w)
-                new_w = int(w * scale)
-                new_h = int(h * scale)
-                region_img_resized = cv2.resize(region_img, (new_w, new_h))
-            else:
-                region_img_resized = region_img
-
-            pil_image = Image.fromarray(cv2.cvtColor(region_img_resized, cv2.COLOR_BGR2RGB))
-
-            img_byte_arr = io.BytesIO()
-            pil_image.save(img_byte_arr, format="JPEG", quality=85, optimize=True)
-            img_bytes = img_byte_arr.getvalue()
+            # Prepare image for API (resize and convert to JPEG)
+            img_bytes = prepare_image_for_api(region_img)
 
             contents = [
                 {
@@ -158,7 +147,7 @@ class GeminiClient:
             ]
 
             # Apply rate limiting
-            estimated_tokens = self.text_extraction_estimated_tokens  # Estimated tokens for image + text
+            estimated_tokens = self.text_extraction_estimated_tokens
             if not rate_limiter.wait_if_needed(estimated_tokens):
                 return {
                     "type": region_info["type"],
@@ -187,9 +176,6 @@ class GeminiClient:
                 contents=cast(types.ContentListUnionDict, contents),
             )
 
-            del pil_image, img_byte_arr, img_bytes, region_img_resized
-            gc.collect()
-
             text = (response.text or "").strip()
 
             result = {
@@ -198,9 +184,6 @@ class GeminiClient:
                 "text": text,
                 "confidence": region_info.get("confidence", 1.0),
             }
-
-            del response
-            gc.collect()
 
             return result
 
@@ -274,23 +257,8 @@ class GeminiClient:
             }
 
         try:
-            # Resize image if too large
-            h, w = region_img.shape[:2]
-            max_dim = 1024
-
-            if max(h, w) > max_dim:
-                scale = max_dim / max(h, w)
-                new_w = int(w * scale)
-                new_h = int(h * scale)
-                region_img_resized = cv2.resize(region_img, (new_w, new_h))
-            else:
-                region_img_resized = region_img
-
-            pil_image = Image.fromarray(cv2.cvtColor(region_img_resized, cv2.COLOR_BGR2RGB))
-
-            img_byte_arr = io.BytesIO()
-            pil_image.save(img_byte_arr, format="JPEG", quality=85, optimize=True)
-            img_bytes = img_byte_arr.getvalue()
+            # Prepare image for API (resize and convert to JPEG)
+            img_bytes = prepare_image_for_api(region_img)
 
             contents = [
                 {
@@ -308,7 +276,7 @@ class GeminiClient:
             ]
 
             # Apply rate limiting
-            estimated_tokens = 2500  # Estimated tokens for special content analysis
+            estimated_tokens = self.special_blocks_estimated_tokens
             if not rate_limiter.wait_if_needed(estimated_tokens):
                 return {
                     "type": region_info["type"],
@@ -337,14 +305,8 @@ class GeminiClient:
                 contents=cast(types.ContentListUnionDict, contents),
             )
 
-            del pil_image, img_byte_arr, img_bytes, region_img_resized
-            gc.collect()
-
             response_text = (response.text or "").strip()
             parsed_result = self._parse_gemini_response(response_text, region_info)
-
-            del response
-            gc.collect()
 
             return parsed_result
 

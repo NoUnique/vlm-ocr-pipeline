@@ -37,12 +37,12 @@ class RecognizerRegistry:
     _BUILTIN_RECOGNIZERS: dict[str, tuple[str, str, dict[str, Any]]] = {
         # API-based recognizers
         "openai": (
-            "pipeline.recognition",
+            "pipeline.recognition.text_recognizer",
             "TextRecognizer",
             {"backend": "openai"},
         ),
         "gemini": (
-            "pipeline.recognition",
+            "pipeline.recognition.text_recognizer",
             "TextRecognizer",
             {"backend": "gemini"},
         ),
@@ -128,15 +128,13 @@ class RecognizerRegistry:
             if pattern in name_lower:
                 return recognizer_name, {"model": name}
 
-        # Default to gemini for unknown names
-        logger.warning(
-            "Unknown recognizer '%s', defaulting to 'gemini' with model='%s'",
-            name,
-            name,
+        # Unknown recognizer - raise error (don't silently fallback)
+        raise ValueError(
+            f"Unknown recognizer: '{name}'. "
+            f"Available: {', '.join(self.list_available())}"
         )
-        return "gemini", {"model": name}
 
-    def get_class(self, name: str) -> tuple[type, dict[str, Any]]:
+    def get_class(self, name: str) -> tuple[type | Callable[..., Recognizer], dict[str, Any]]:
         """Get recognizer class by name (lazy loading).
 
         Args:
@@ -228,11 +226,14 @@ class RecognizerRegistry:
         Returns:
             True if recognizer is available
         """
-        resolved_name, _ = self.resolve_name(name)
-        return (
-            resolved_name in self._BUILTIN_RECOGNIZERS
-            or resolved_name in self._custom_recognizers
-        )
+        try:
+            resolved_name, _ = self.resolve_name(name)
+            return (
+                resolved_name in self._BUILTIN_RECOGNIZERS
+                or resolved_name in self._custom_recognizers
+            )
+        except ValueError:
+            return False
 
     def __contains__(self, name: str) -> bool:
         """Check if recognizer is in registry."""
