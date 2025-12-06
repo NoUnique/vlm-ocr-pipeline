@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import gc
-import json
 import logging
 import warnings
 from pathlib import Path
@@ -32,6 +31,8 @@ except ImportError:
 from .config import PipelineConfig
 from .factory import ComponentFactory
 from .misc import tz_now
+from .pdf_processor import PDFProcessor
+from .result_saver import ResultSaver
 from .types import Block, ColumnLayout, Detector, Document, Page, PyMuPDFPage, Recognizer, Sorter
 
 logger = logging.getLogger(__name__)
@@ -255,6 +256,37 @@ class Pipeline:
         self.rendering_stage: RenderingStage | None = None
         self.page_correction_stage: PageCorrectionStage | None = None
 
+        # Initialize result saver (delegates saving logic)
+        self._result_saver: ResultSaver | None = None
+
+        # Initialize PDF processor (delegates PDF loading logic)
+        self._pdf_processor: PDFProcessor | None = None
+
+    @property
+    def result_saver(self) -> ResultSaver:
+        """Get or create ResultSaver instance (lazy initialization)."""
+        if self._result_saver is None:
+            self._result_saver = ResultSaver(
+                detector_name=self.detector_name,
+                sorter_name=self.sorter_name,
+                backend=self.backend,
+                model=self.model,
+                renderer=self.renderer,
+            )
+        return self._result_saver
+
+    @property
+    def pdf_processor(self) -> PDFProcessor:
+        """Get or create PDFProcessor instance (lazy initialization)."""
+        if self._pdf_processor is None:
+            self._pdf_processor = PDFProcessor(
+                input_stage=self.input_stage,
+                use_dual_resolution=self.use_dual_resolution,
+                detection_dpi=self.detection_dpi,
+                recognition_dpi=self.recognition_dpi,
+            )
+        return self._pdf_processor
+
     def _has_custom_arguments(self, **kwargs: Any) -> bool:
         """Check if any non-default arguments were passed."""
         defaults = {
@@ -452,7 +484,7 @@ class Pipeline:
     def _scale_blocks(self, blocks: list[Block], scale_factor: float) -> list[Block]:
         """Scale block bounding boxes by a factor.
 
-        Used for dual-resolution mode where detection and recognition use different DPIs.
+        Delegates to PDFProcessor for actual scaling logic.
 
         Args:
             blocks: List of blocks with bounding boxes
@@ -461,35 +493,7 @@ class Pipeline:
         Returns:
             List of blocks with scaled bounding boxes
         """
-        from .types import BBox
-
-        scaled_blocks = []
-        for block in blocks:
-            if block.bbox:
-                # Scale bbox coordinates
-                scaled_bbox = BBox(
-                    x0=int(block.bbox.x0 * scale_factor),
-                    y0=int(block.bbox.y0 * scale_factor),
-                    x1=int(block.bbox.x1 * scale_factor),
-                    y1=int(block.bbox.y1 * scale_factor),
-                )
-                # Create new block with scaled bbox
-                scaled_block = Block(
-                    type=block.type,
-                    bbox=scaled_bbox,
-                    text=block.text,
-                    detection_confidence=block.detection_confidence,
-                    order=block.order,
-                    column_index=block.column_index,
-                    corrected_text=block.corrected_text,
-                    correction_ratio=block.correction_ratio,
-                    source=block.source,
-                )
-                scaled_blocks.append(scaled_block)
-            else:
-                # Block without bbox, keep as is
-                scaled_blocks.append(block)
-        return scaled_blocks
+        return self.pdf_processor.scale_blocks_for_recognition(blocks, scale_factor)
 
     def process_image(
         self,
@@ -690,12 +694,13 @@ class Pipeline:
         pymupdf_pages: dict[int, PyMuPDFPage | None] = {}
         if self.sorter_name == "pymupdf":
             pymupdf_doc = pdf_converter.open_pymupdf_document(pdf_path)
-            for page_num in pages_to_process:
-                try:
-                    pymupdf_pages[page_num] = pymupdf_doc.load_page(page_num - 1)
-                except Exception as e:
-                    logger.warning("Failed to load PyMuPDF page %d: %s", page_num, e)
-                    pymupdf_pages[page_num] = None
+            if pymupdf_doc is not None:
+                for page_num in pages_to_process:
+                    try:
+                        pymupdf_pages[page_num] = pymupdf_doc.load_page(page_num - 1)
+                    except Exception as e:
+                        logger.warning("Failed to load PyMuPDF page %d: %s", page_num, e)
+                        pymupdf_pages[page_num] = None
 
         ordering_stage = self._create_ordering_stage()
         sorted_blocks: dict[int, list[Block]] = {}
@@ -919,6 +924,8 @@ class Pipeline:
     ) -> None:
         """Save intermediate results after each stage.
 
+        Delegates to ResultSaver for actual saving logic.
+
         Args:
             pdf_path: Path to PDF file
             pages_to_process: List of page numbers
@@ -928,69 +935,15 @@ class Pipeline:
             rendered_texts: Rendered markdown texts (optional)
             stage: Current stage name
         """
-        # Create json directory
-        json_dir = page_output_dir / "json"
-        json_dir.mkdir(parents=True, exist_ok=True)
-
-        # Save each page's current state
-        for page_num in pages_to_process:
-            blocks = detected_blocks.get(page_num, [])
-
-            # Build auxiliary_info based on available data
-            auxiliary_info: dict[str, Any] = {}
-            if page_images and page_num in page_images:
-                img = page_images[page_num]
-                auxiliary_info["width"] = int(img.shape[1])
-                auxiliary_info["height"] = int(img.shape[0])
-
-            if rendered_texts and page_num in rendered_texts:
-                auxiliary_info["text"] = rendered_texts[page_num]
-
-            # Create Page object with current state
-            page = Page(
-                page_num=page_num,
-                blocks=blocks,
-                auxiliary_info=auxiliary_info if auxiliary_info else None,
-                status="in_progress",
-                processed_at=tz_now().isoformat(),
-            )
-
-            # Save to JSON
-            page_json_file = json_dir / f"page_{page_num}.json"
-            with page_json_file.open("w", encoding="utf-8") as f:
-                json.dump(page.to_dict(), f, ensure_ascii=False, indent=2)
-
-        # Update summary.json with stage progress
-        stage_progress = {
-            "input": "complete",
-            "detection": "complete" if stage in ["detection", "ordering", "recognition", "rendering"] else "pending",
-            "ordering": "complete" if stage in ["ordering", "recognition", "rendering"] else "pending",
-            "recognition": "complete" if stage in ["recognition", "rendering"] else "pending",
-            "correction": "pending",
-            "rendering": "complete" if stage == "rendering" else "pending",
-        }
-
-        summary = {
-            "pdf_name": pdf_path.stem,
-            "pdf_path": str(pdf_path),
-            "num_pages": len(pages_to_process),
-            "processed_pages": len(pages_to_process),
-            "detected_by": self.detector_name,
-            "ordered_by": self.sorter_name if stage in ["ordering", "recognition", "rendering"] else "pending",
-            "recognized_by": f"{self.backend}/{self.model}" if stage in ["recognition", "rendering"] else "pending",
-            "rendered_by": self.renderer if stage == "rendering" else "pending",
-            "output_directory": str(page_output_dir),
-            "processed_at": tz_now().isoformat(),
-            "stage_progress": stage_progress,
-            "status": f"in_progress ({stage})",
-        }
-
-        summary_file = page_output_dir / "summary.json"
-        with summary_file.open("w", encoding="utf-8") as f:
-            json.dump(summary, f, ensure_ascii=False, indent=2)
-
-        logger.info("Saved intermediate results for stage: %s", stage)
-
+        self.result_saver.save_intermediate_results(
+            pdf_path=pdf_path,
+            pages_to_process=pages_to_process,
+            page_output_dir=page_output_dir,
+            detected_blocks=detected_blocks,
+            page_images=page_images,
+            rendered_texts=rendered_texts,
+            stage=stage,
+        )
     def _create_pdf_summary(
         self,
         pdf_path: Path,
@@ -1027,33 +980,17 @@ class Pipeline:
 
     def _build_pages_summary(self, processed_pages: list[Page]) -> tuple[list[dict[str, Any]], dict[str, int]]:
         """Build summary of processed pages.
-
-        Args:
-            processed_pages: List of Page objects
-
-        Returns:
-            Tuple of (pages_summary, status_counts)
+        
+        Delegates to ResultSaver.
         """
-        pages_summary: list[dict[str, Any]] = []
-        status_counts = {"complete": 0, "partial": 0, "incomplete": 0}
-
-        for page in processed_pages:
-            page_no = page.page_num
-            status = page.status if page.status != "completed" else "complete"
-            if status == "failed":
-                status = "partial"
-            status_counts[status] += 1
-            pages_summary.append({"id": page_no, "status": status})
-
-        return pages_summary, status_counts
+        return self.result_saver.build_pages_summary(processed_pages)
 
     def _determine_summary_filename(self, processing_stopped: bool, has_errors: bool) -> str:
-        """Determine summary filename based on processing status."""
-        if processing_stopped:
-            return "summary_incomplete.json"
-        if has_errors:
-            return "summary_partial.json"
-        return "summary.json"
+        """Determine summary filename based on processing status.
+        
+        Delegates to ResultSaver.
+        """
+        return self.result_saver.determine_summary_filename(processing_stopped, has_errors)
 
     def _check_for_rate_limit_errors(self, page_result: dict[str, Any]) -> bool:
         """Check if page result contains rate limit errors."""
@@ -1222,10 +1159,8 @@ class Pipeline:
         return {"columns": columns}
 
     def _save_results(self, result: dict[str, Any], output_path: Path) -> None:
-        """Save processing results to JSON file."""
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        with output_path.open("w", encoding="utf-8") as f:
-            json.dump(result, f, ensure_ascii=False, indent=2)
-
-        logger.info("Results saved to: %s", output_path)
+        """Save processing results to JSON file.
+        
+        Delegates to ResultSaver.
+        """
+        self.result_saver.save_final_results(result, output_path)
