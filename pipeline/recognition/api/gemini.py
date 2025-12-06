@@ -18,6 +18,7 @@ from google.genai import types
 
 from pipeline.constants import ESTIMATED_IMAGE_TOKENS
 
+from .base import BaseVLMClient
 from .image_utils import prepare_image_for_api
 from .ratelimit import rate_limiter
 from .types import (
@@ -32,17 +33,21 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 
-class GeminiClient:
-    """Google Gemini VLM API client for OCR text processing"""
+class GeminiClient(BaseVLMClient):
+    """Google Gemini VLM API client for OCR text processing."""
+
+    PROVIDER_NAME = "gemini"
+    DEFAULT_MODEL = "gemini-2.5-flash"
 
     def __init__(self, gemini_model: str = "gemini-2.5-flash", api_key: str | None = None):
         """
-        Initialize Gemini API client
+        Initialize Gemini API client.
 
         Args:
             gemini_model: Gemini model to use
             api_key: Gemini API key (if not provided, reads from environment)
         """
+        super().__init__(model=gemini_model)
         self.gemini_model = gemini_model
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
 
@@ -91,7 +96,7 @@ class GeminiClient:
         self.text_correction_estimated_tokens = ESTIMATED_IMAGE_TOKENS
 
     def _setup_gemini_api(self) -> genai.Client | None:
-        """Setup Gemini API client"""
+        """Setup Gemini API client."""
         try:
             if not self.api_key:
                 logger.warning("GEMINI_API_KEY environment variable not set")
@@ -107,6 +112,10 @@ class GeminiClient:
             # Fallback for unexpected errors (allowed per ERROR_HANDLING.md section 3.3)
             logger.error("Unexpected error initializing Gemini client: %s", e, exc_info=True)
             return None
+
+    def _setup_client(self) -> genai.Client | None:
+        """Set up and return the API client instance (BaseVLMClient interface)."""
+        return self._setup_gemini_api()
 
     def is_available(self) -> bool:
         """Check if Gemini API client is available"""

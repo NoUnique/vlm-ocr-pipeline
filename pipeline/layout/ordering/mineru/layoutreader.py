@@ -14,7 +14,8 @@ import logging
 import statistics
 from typing import TYPE_CHECKING, Any
 
-from pipeline.types import Block, Sorter
+from pipeline.constants import LAYOUTREADER_SCALE
+from pipeline.types import Block, BlockType, Sorter
 
 if TYPE_CHECKING:
     import numpy as np
@@ -102,7 +103,7 @@ class MinerULayoutReaderSorter(Sorter):
 
     def _estimate_line_height(self, blocks: list[Block]) -> float:
         """Estimate typical line height from text blocks."""
-        text_types = {"plain text", "text", "title"}
+        text_types = {BlockType.PLAIN_TEXT, BlockType.TEXT, BlockType.TITLE}
         heights = []
 
         for block in blocks:
@@ -135,7 +136,7 @@ class MinerULayoutReaderSorter(Sorter):
 
             block_type = block.type
 
-            if block_type in {"plain text", "text", "title"}:
+            if block_type in {BlockType.PLAIN_TEXT, BlockType.TEXT, BlockType.TITLE}:
                 block_height = bbox.height
 
                 if block_height > line_height * 2:
@@ -185,8 +186,8 @@ class MinerULayoutReaderSorter(Sorter):
         """
         import torch
 
-        x_scale = 1000.0 / page_width
-        y_scale = 1000.0 / page_height
+        x_scale = float(LAYOUTREADER_SCALE) / page_width
+        y_scale = float(LAYOUTREADER_SCALE) / page_height
 
         boxes = []
         for line in lines_data:
@@ -197,10 +198,10 @@ class MinerULayoutReaderSorter(Sorter):
             y0 = max(0, min(y0, page_height))
             y1 = max(0, min(y1, page_height))
 
-            x0_scaled = max(0, min(round(x0 * x_scale), 1000))
-            y0_scaled = max(0, min(round(y0 * y_scale), 1000))
-            x1_scaled = max(0, min(round(x1 * x_scale), 1000))
-            y1_scaled = max(0, min(round(y1 * y_scale), 1000))
+            x0_scaled = max(0, min(round(x0 * x_scale), LAYOUTREADER_SCALE))
+            y0_scaled = max(0, min(round(y0 * y_scale), LAYOUTREADER_SCALE))
+            x1_scaled = max(0, min(round(x1 * x_scale), LAYOUTREADER_SCALE))
+            y1_scaled = max(0, min(round(y1 * y_scale), LAYOUTREADER_SCALE))
 
             boxes.append([x0_scaled, y0_scaled, x1_scaled, y1_scaled])
 

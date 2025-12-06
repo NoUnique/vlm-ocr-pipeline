@@ -30,22 +30,27 @@ from pipeline.constants import (
     TEXT_CORRECTION_TEMPERATURE,
 )
 
+from .base import BaseVLMClient
+
 logger = logging.getLogger(__name__)
 
 
-class OpenAIClient:
-    """OpenAI VLM API client for OCR text processing"""
+class OpenAIClient(BaseVLMClient):
+    """OpenAI VLM API client for OCR text processing."""
+
+    PROVIDER_NAME = "openai"
+    DEFAULT_MODEL = "gemini-2.5-flash"
 
     def __init__(self, model: str = "gemini-2.5-flash", api_key: str | None = None, base_url: str | None = None):
         """
-        Initialize OpenAI API client
+        Initialize OpenAI API client.
 
         Args:
             model: Model to use (can be OpenRouter format like 'openai/gpt-4')
             api_key: API key (if not provided, reads from environment)
             base_url: Base URL for API (for OpenRouter or custom endpoints)
         """
-        self.model = model
+        super().__init__(model=model)
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
         self.base_url = base_url or os.environ.get("OPENAI_BASE_URL")
 
@@ -107,7 +112,7 @@ class OpenAIClient:
         self.text_correction_temperature = TEXT_CORRECTION_TEMPERATURE
 
     def _setup_openai_client(self) -> OpenAI | None:
-        """Setup OpenAI API client"""
+        """Setup OpenAI API client."""
         try:
             if not self.api_key:
                 logger.warning("OPENAI_API_KEY or OPENROUTER_API_KEY environment variable not set")
@@ -128,8 +133,12 @@ class OpenAIClient:
             logger.error("Unexpected error initializing OpenAI client: %s", e, exc_info=True)
             return None
 
+    def _setup_client(self) -> OpenAI | None:
+        """Set up and return the API client instance (BaseVLMClient interface)."""
+        return self._setup_openai_client()
+
     def is_available(self) -> bool:
-        """Check if OpenAI API client is available"""
+        """Check if OpenAI API client is available."""
         return self.client is not None
 
     def _encode_image(self, image: np.ndarray) -> str:

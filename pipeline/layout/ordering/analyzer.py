@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from pipeline.types import Block
+from pipeline.types import Block, BlockType
 
 __all__ = ["ReadingOrderAnalyzer", "ColumnOrderingInfo"]
 
@@ -29,7 +29,7 @@ class ReadingOrderAnalyzer:
             return ""
 
         # Filter text-like blocks (excludes table, figure, equation, etc.)
-        text_like_types = {"plain text", "text", "title", "list"}
+        text_like_types = {BlockType.PLAIN_TEXT, BlockType.TEXT, BlockType.TITLE, BlockType.LIST}
         text_blocks = [b for b in processed_blocks if b.type in text_like_types and b.text]
 
         if not text_blocks:
