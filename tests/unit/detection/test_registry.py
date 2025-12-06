@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from pipeline.exceptions import InvalidConfigError
 from pipeline.layout.detection.registry import DetectorRegistry, detector_registry
 
 
@@ -101,10 +102,10 @@ class TestDetectorRegistryCreate:
     """Tests for detector creation."""
 
     def test_create_unknown(self):
-        """Test creating unknown detector raises error."""
+        """Test creating unknown detector raises InvalidConfigError."""
         registry = DetectorRegistry()
         
-        with pytest.raises(ValueError, match="Unknown detector"):
+        with pytest.raises(InvalidConfigError, match="Unknown detector"):
             registry.create("non-existent-detector")
 
     def test_create_custom(self):

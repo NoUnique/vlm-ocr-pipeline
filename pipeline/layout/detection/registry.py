@@ -10,6 +10,8 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from pipeline.exceptions import DependencyError, InvalidConfigError
+
 if TYPE_CHECKING:
     from pipeline.types import Detector
 
@@ -119,15 +121,15 @@ class DetectorRegistry:
                 self._loaded_classes[resolved_name] = detector_class
                 return detector_class
             except ImportError as e:
-                raise ImportError(
+                raise DependencyError(
                     f"Failed to import detector '{resolved_name}': {e}"
                 ) from e
             except AttributeError as e:
-                raise ValueError(
+                raise InvalidConfigError(
                     f"Detector class '{class_name}' not found in '{module_path}': {e}"
                 ) from e
 
-        raise ValueError(
+        raise InvalidConfigError(
             f"Unknown detector: '{name}'. "
             f"Available: {', '.join(self.list_available())}"
         )

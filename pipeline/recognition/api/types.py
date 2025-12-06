@@ -15,8 +15,13 @@ __all__ = [
     "ExtractionError",
     # Text correction
     "CorrectionResult",
+    "TextCorrectionResult",
     # Special content
     "SpecialContentResult",
+    # Helper functions
+    "create_extraction_error",
+    "create_correction_error",
+    "create_special_content_error",
 ]
 
 
@@ -219,6 +224,45 @@ def create_correction_error(
     return CorrectionResult(
         corrected_text=original_text,
         correction_ratio=0.0,
+        error=error_code,
+        error_message=error_message,
+    )
+
+
+def create_special_content_error(
+    region_info: dict[str, Any],
+    error_content: str,
+    error_analysis: str,
+    error_code: str,
+    error_message: str,
+) -> SpecialContentResult:
+    """Create a standardized special content error response.
+
+    Args:
+        region_info: Original region info with type and xywh
+        error_content: Content to show in place of actual content
+        error_analysis: Analysis message for the error
+        error_code: Machine-readable error code
+        error_message: Human-readable error description
+
+    Returns:
+        SpecialContentResult dict with error info
+
+    Example:
+        >>> error = create_special_content_error(
+        ...     {"type": "table", "xywh": [0, 0, 100, 50]},
+        ...     "[RATE_LIMIT_EXCEEDED]",
+        ...     "Rate limit exceeded",
+        ...     "gemini_rate_limit",
+        ...     "API rate limit exceeded"
+        ... )
+    """
+    return SpecialContentResult(
+        type=region_info.get("type", "unknown"),
+        xywh=region_info.get("xywh", [0, 0, 0, 0]),
+        content=error_content,
+        analysis=error_analysis,
+        confidence=0.0,
         error=error_code,
         error_message=error_message,
     )

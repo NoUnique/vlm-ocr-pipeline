@@ -10,6 +10,8 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from pipeline.exceptions import DependencyError, InvalidConfigError
+
 if TYPE_CHECKING:
     from pipeline.types import Recognizer
 
@@ -129,7 +131,7 @@ class RecognizerRegistry:
                 return recognizer_name, {"model": name}
 
         # Unknown recognizer - raise error (don't silently fallback)
-        raise ValueError(
+        raise InvalidConfigError(
             f"Unknown recognizer: '{name}'. "
             f"Available: {', '.join(self.list_available())}"
         )
@@ -168,15 +170,15 @@ class RecognizerRegistry:
                 self._loaded_classes[resolved_name] = recognizer_class
                 return recognizer_class, {**default_kwargs, **extra_kwargs}
             except ImportError as e:
-                raise ImportError(
+                raise DependencyError(
                     f"Failed to import recognizer '{resolved_name}': {e}"
                 ) from e
             except AttributeError as e:
-                raise ValueError(
+                raise InvalidConfigError(
                     f"Recognizer class '{class_name}' not found in '{module_path}': {e}"
                 ) from e
 
-        raise ValueError(
+        raise InvalidConfigError(
             f"Unknown recognizer: '{name}'. "
             f"Available: {', '.join(self.list_available())}"
         )

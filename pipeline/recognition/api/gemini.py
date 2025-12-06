@@ -26,6 +26,7 @@ from .types import (
     SpecialContentResult,
     create_correction_error,
     create_extraction_error,
+    create_special_content_error,
 )
 
 logger = logging.getLogger(__name__)
@@ -149,27 +150,23 @@ class GeminiClient:
             # Apply rate limiting
             estimated_tokens = self.text_extraction_estimated_tokens
             if not rate_limiter.wait_if_needed(estimated_tokens):
-                return {
-                    "type": region_info["type"],
-                    "xywh": region_info["xywh"],
-                    "text": "[DAILY_LIMIT_EXCEEDED]",
-                    "confidence": 0.0,
-                    "error": "rate_limit_daily",
-                    "error_message": "Daily rate limit exceeded",
-                }
+                return create_extraction_error(
+                    region_info,
+                    "[DAILY_LIMIT_EXCEEDED]",
+                    "rate_limit_daily",
+                    "Daily rate limit exceeded",
+                )
 
             logger.info("Requesting Gemini extract_text (model=%s)", self.gemini_model)
             client = self.client
             if client is None:
                 logger.warning("Gemini API client became unavailable")
-                return {
-                    "type": region_info["type"],
-                    "xywh": region_info["xywh"],
-                    "text": "",
-                    "confidence": 0.0,
-                    "error": "client_unavailable",
-                    "error_message": "Gemini client not initialized",
-                }
+                return create_extraction_error(
+                    region_info,
+                    "",
+                    "client_unavailable",
+                    "Gemini client not initialized",
+                )
 
             response = client.models.generate_content(
                 model=self.gemini_model,
@@ -190,47 +187,27 @@ class GeminiClient:
         except google_exceptions.ResourceExhausted as e:
             # 429 Rate limit errors (RESOURCE_EXHAUSTED)
             logger.error("Gemini rate limit exceeded: %s", e)
-            return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
-                "text": "[RATE_LIMIT_EXCEEDED]",
-                "confidence": 0.0,
-                "error": "gemini_rate_limit",
-                "error_message": str(e),
-            }
+            return create_extraction_error(
+                region_info, "[RATE_LIMIT_EXCEEDED]", "gemini_rate_limit", str(e)
+            )
         except google_exceptions.RetryError as e:
             # Retry failures (network issues, timeouts)
             logger.error("Gemini retry error: %s", e)
-            return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
-                "text": "[GEMINI_RETRY_FAILED]",
-                "confidence": 0.0,
-                "error": "gemini_retry_error",
-                "error_message": str(e),
-            }
+            return create_extraction_error(
+                region_info, "[GEMINI_RETRY_FAILED]", "gemini_retry_error", str(e)
+            )
         except google_exceptions.GoogleAPIError as e:
             # Other Google API errors (4xx, 5xx)
             logger.error("Gemini API error: %s", e)
-            return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
-                "text": "[GEMINI_API_ERROR]",
-                "confidence": 0.0,
-                "error": "gemini_api_error",
-                "error_message": str(e),
-            }
+            return create_extraction_error(
+                region_info, "[GEMINI_API_ERROR]", "gemini_api_error", str(e)
+            )
         except Exception as e:
             # Fallback for unexpected errors (allowed per ERROR_HANDLING.md section 3.3)
             logger.error("Unexpected error during Gemini text extraction: %s", e, exc_info=True)
-            return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
-                "text": "[GEMINI_EXTRACTION_FAILED]",
-                "confidence": 0.0,
-                "error": "unexpected_error",
-                "error_message": str(e),
-            }
+            return create_extraction_error(
+                region_info, "[GEMINI_EXTRACTION_FAILED]", "unexpected_error", str(e)
+            )
 
     def process_special_region(  # noqa: PLR0911
         self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str
@@ -313,51 +290,31 @@ class GeminiClient:
         except google_exceptions.ResourceExhausted as e:
             # 429 Rate limit errors (RESOURCE_EXHAUSTED)
             logger.error("Gemini rate limit exceeded: %s", e)
-            return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
-                "content": "[RATE_LIMIT_EXCEEDED]",
-                "analysis": "Rate limit exceeded",
-                "confidence": 0.0,
-                "error": "gemini_rate_limit",
-                "error_message": str(e),
-            }
+            return create_special_content_error(
+                region_info, "[RATE_LIMIT_EXCEEDED]", "Rate limit exceeded",
+                "gemini_rate_limit", str(e),
+            )
         except google_exceptions.RetryError as e:
             # Retry failures (network issues, timeouts)
             logger.error("Gemini retry error: %s", e)
-            return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
-                "content": "[GEMINI_RETRY_FAILED]",
-                "analysis": "Retry failed",
-                "confidence": 0.0,
-                "error": "gemini_retry_error",
-                "error_message": str(e),
-            }
+            return create_special_content_error(
+                region_info, "[GEMINI_RETRY_FAILED]", "Retry failed",
+                "gemini_retry_error", str(e),
+            )
         except google_exceptions.GoogleAPIError as e:
             # Other Google API errors (4xx, 5xx)
             logger.error("Gemini API error: %s", e)
-            return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
-                "content": "[GEMINI_API_ERROR]",
-                "analysis": "Gemini API error",
-                "confidence": 0.0,
-                "error": "gemini_api_error",
-                "error_message": str(e),
-            }
+            return create_special_content_error(
+                region_info, "[GEMINI_API_ERROR]", "Gemini API error",
+                "gemini_api_error", str(e),
+            )
         except Exception as e:
             # Fallback for unexpected errors (allowed per ERROR_HANDLING.md section 3.3)
             logger.error("Unexpected error during Gemini special block processing: %s", e, exc_info=True)
-            return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
-                "content": "[GEMINI_PROCESSING_FAILED]",
-                "analysis": f"Processing failed: {str(e)}",
-                "confidence": 0.0,
-                "error": "unexpected_error",
-                "error_message": str(e),
-            }
+            return create_special_content_error(
+                region_info, "[GEMINI_PROCESSING_FAILED]", f"Processing failed: {e!s}",
+                "unexpected_error", str(e),
+            )
 
     def correct_text(self, text: str, system_prompt: str, user_prompt: str) -> dict[str, Any]:
         """

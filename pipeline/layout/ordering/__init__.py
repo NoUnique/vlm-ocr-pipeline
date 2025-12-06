@@ -12,6 +12,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from pipeline.exceptions import InvalidConfigError
 from pipeline.types import Sorter
 
 from .analyzer import ReadingOrderAnalyzer
@@ -67,7 +68,7 @@ def create_sorter(name: str, **kwargs: Any) -> Sorter:
     """
     if name not in _SORTER_REGISTRY:
         available = ", ".join(_SORTER_REGISTRY.keys())
-        raise ValueError(f"Unknown sorter: {name}. Available: {available}")
+        raise InvalidConfigError(f"Unknown sorter: {name}. Available: {available}")
 
     return _SORTER_REGISTRY[name](**kwargs)
 

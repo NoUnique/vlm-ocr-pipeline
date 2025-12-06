@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from pipeline.exceptions import InvalidConfigError
 from pipeline.recognition.registry import RecognizerRegistry, recognizer_registry
 
 
@@ -130,11 +131,11 @@ class TestRecognizerRegistryCreate:
     """Tests for recognizer creation."""
 
     def test_create_unknown(self):
-        """Test creating unknown recognizer raises ValueError."""
+        """Test creating unknown recognizer raises InvalidConfigError."""
         registry = RecognizerRegistry()
         
-        # Unknown names should raise ValueError (explicit error, no silent fallback)
-        with pytest.raises(ValueError, match="Unknown recognizer: 'unknown-model'"):
+        # Unknown names should raise InvalidConfigError (explicit error, no silent fallback)
+        with pytest.raises(InvalidConfigError, match="Unknown recognizer: 'unknown-model'"):
             registry.create("unknown-model")
 
     def test_create_custom(self):

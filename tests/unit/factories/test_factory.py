@@ -11,6 +11,8 @@ from unittest.mock import patch
 
 import pytest
 
+from pipeline.exceptions import InvalidConfigError
+
 
 def test_list_available_detectors():
     """Test list_available_detectors function."""
@@ -39,7 +41,7 @@ def test_create_detector_unknown():
     """Test create_detector raises error for unknown detector."""
     from pipeline.layout.detection import create_detector
 
-    with pytest.raises(ValueError, match="Unknown detector"):
+    with pytest.raises(InvalidConfigError, match="Unknown detector"):
         create_detector("unknown-detector")
 
 
@@ -77,7 +79,7 @@ def test_create_sorter_unknown():
     """Test create_sorter raises error for unknown sorter."""
     from pipeline.layout.ordering import create_sorter
 
-    with pytest.raises(ValueError, match="Unknown sorter"):
+    with pytest.raises(InvalidConfigError, match="Unknown sorter"):
         create_sorter("unknown-sorter")
 
 
@@ -154,5 +156,5 @@ def test_create_recognizer_unknown():
     """Test create_recognizer raises error for unknown recognizer."""
     from pipeline.recognition import create_recognizer
 
-    with pytest.raises(ValueError, match="Unknown recognizer"):
+    with pytest.raises(InvalidConfigError, match="Unknown recognizer"):
         create_recognizer("unknown-recognizer")
