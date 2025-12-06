@@ -16,6 +16,10 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
+# Register anyio pytest plugin for async test support
+# This enables @pytest.mark.anyio decorator and anyio_backends config option
+pytest_plugins = ("anyio",)
+
 # Ensure project root is importable when running tests via uv or python -m pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
