@@ -74,7 +74,6 @@ class BaseDetector(ABC):
         Returns:
             List of detected Block objects
         """
-        pass
 
     def detect(self, image: np.ndarray) -> list[Block]:
         """Detect layout blocks in image.
@@ -166,14 +165,14 @@ class BaseDetector(ABC):
             bbox = block.bbox
             if bbox.x0 < 0 or bbox.y0 < 0:
                 logger.debug("Clipping negative bbox coordinates")
-                block = replace(
+                block = replace(  # noqa: PLW2901 - intentional immutable update
                     block, bbox=BBox(max(0, bbox.x0), max(0, bbox.y0), bbox.x1, bbox.y1)
                 )
                 bbox = block.bbox  # Update bbox reference
 
             if bbox.x1 > w or bbox.y1 > h:
                 logger.debug("Clipping bbox exceeding image bounds")
-                block = replace(
+                block = replace(  # noqa: PLW2901 - intentional immutable update
                     block, bbox=BBox(bbox.x0, bbox.y0, min(w, bbox.x1), min(h, bbox.y1))
                 )
 

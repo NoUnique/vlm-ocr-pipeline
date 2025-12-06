@@ -614,50 +614,23 @@ class Pipeline:
 
         return document
 
-    def _process_pdf_pages(
+    def _load_page_images(
         self,
         pdf_path: Path,
         pages_to_process: list[int],
-        total_pages: int,
-        page_output_dir: Path,
-    ) -> tuple[list[Page], bool]:
-        """Process PDF pages using staged batch processing.
-
-        This method processes all pages through each stage sequentially:
-        1. Load all page images
-        2. Detect all pages (batch) → unload detector
-        3. Sort all pages → unload sorter
-        4. Recognize all pages (batch) → unload recognizer
-        5. Render and save all pages
-
-        Args:
-            pdf_path: Path to PDF file
-            pages_to_process: List of page numbers to process
-            total_pages: Total number of pages in PDF
-            page_output_dir: Directory to save page outputs
+    ) -> tuple[dict[int, np.ndarray], dict[int, np.ndarray], dict[int, dict[str, Any]]]:
+        """Stage 1: Load all page images and auxiliary info.
 
         Returns:
-            Tuple of (list of Page objects, processing_stopped flag)
+            Tuple of (page_images, recognition_images, auxiliary_infos)
         """
-        processing_stopped = False
-        processed_pages: list[Page] = []
-
-        from .conversion.input import pdf as pdf_converter
-
-        # Stage 1: Load all page images and auxiliary info
         logger.info("[Stage 1/7] Loading %d page images...", len(pages_to_process))
+
         page_images: dict[int, np.ndarray] = {}
         recognition_images: dict[int, np.ndarray] = {}
         auxiliary_infos: dict[int, dict[str, Any]] = {}
-        pymupdf_pages: dict[int, PyMuPDFPage | None] = {}
-
-        # Open PyMuPDF document if needed
-        pymupdf_doc = None
-        if self.sorter_name == "pymupdf":
-            pymupdf_doc = pdf_converter.open_pymupdf_document(pdf_path)
 
         for page_num in pages_to_process:
-            # Load images
             if self.use_dual_resolution:
                 page_images[page_num] = self.input_stage.load_pdf_page(pdf_path, page_num, dpi=self.detection_dpi)
                 recognition_images[page_num] = self.input_stage.load_pdf_page(
@@ -668,24 +641,25 @@ class Pipeline:
                 page_images[page_num] = page_img
                 recognition_images[page_num] = page_img
 
-            # Extract auxiliary info
             aux_info = self.input_stage.extract_auxiliary_info(pdf_path, page_num)
             auxiliary_infos[page_num] = aux_info if aux_info is not None else {}
 
-            # Load PyMuPDF page if needed
-            if pymupdf_doc is not None:
-                try:
-                    pymupdf_pages[page_num] = pymupdf_doc.load_page(page_num - 1)
-                except Exception as e:
-                    logger.warning("Failed to load PyMuPDF page %d: %s", page_num, e)
-                    pymupdf_pages[page_num] = None
-
         logger.info("[Stage 1/7] Loaded %d pages", len(page_images))
+        return page_images, recognition_images, auxiliary_infos
 
-        # Stage 2: Detection - batch process all pages
+    def _run_detection_stage(
+        self,
+        pdf_path: Path,
+        pages_to_process: list[int],
+        page_images: dict[int, np.ndarray],
+        page_output_dir: Path,
+    ) -> dict[int, list[Block]]:
+        """Stage 2: Detect layout blocks for all pages."""
         logger.info("[Stage 2/7] Detecting layout blocks for %d pages...", len(page_images))
+
         detection_stage = self._create_detection_stage()
         detected_blocks: dict[int, list[Block]] = {}
+
         for page_num in pages_to_process:
             detected_blocks[page_num] = detection_stage.detect(page_images[page_num])
 
@@ -693,15 +667,39 @@ class Pipeline:
         del detection_stage
         gc.collect()
 
-        # Save intermediate results after detection
         self._save_intermediate_results(
             pdf_path, pages_to_process, page_output_dir, detected_blocks=detected_blocks, stage="detection"
         )
+        return detected_blocks
 
-        # Stage 3: Ordering - sort all pages
+    def _run_ordering_stage(
+        self,
+        pdf_path: Path,
+        pages_to_process: list[int],
+        detected_blocks: dict[int, list[Block]],
+        page_images: dict[int, np.ndarray],
+        page_output_dir: Path,
+    ) -> dict[int, list[Block]]:
+        """Stage 3: Sort blocks for all pages."""
+        from .conversion.input import pdf as pdf_converter
+
         logger.info("[Stage 3/7] Sorting blocks for %d pages...", len(detected_blocks))
+
+        # Open PyMuPDF document if needed
+        pymupdf_doc = None
+        pymupdf_pages: dict[int, PyMuPDFPage | None] = {}
+        if self.sorter_name == "pymupdf":
+            pymupdf_doc = pdf_converter.open_pymupdf_document(pdf_path)
+            for page_num in pages_to_process:
+                try:
+                    pymupdf_pages[page_num] = pymupdf_doc.load_page(page_num - 1)
+                except Exception as e:
+                    logger.warning("Failed to load PyMuPDF page %d: %s", page_num, e)
+                    pymupdf_pages[page_num] = None
+
         ordering_stage = self._create_ordering_stage()
         sorted_blocks: dict[int, list[Block]] = {}
+
         for page_num in pages_to_process:
             sorted_blocks[page_num] = ordering_stage.sort(
                 detected_blocks[page_num],
@@ -709,7 +707,6 @@ class Pipeline:
                 pymupdf_page=pymupdf_pages.get(page_num),
             )
 
-        # Close PyMuPDF document
         if pymupdf_doc is not None:
             pymupdf_doc.close()
 
@@ -717,7 +714,6 @@ class Pipeline:
         del ordering_stage
         gc.collect()
 
-        # Save intermediate results after ordering
         self._save_intermediate_results(
             pdf_path, pages_to_process, page_output_dir, detected_blocks=sorted_blocks, stage="ordering"
         )
@@ -729,13 +725,25 @@ class Pipeline:
             for page_num in pages_to_process:
                 sorted_blocks[page_num] = self._scale_blocks(sorted_blocks[page_num], scale_factor)
 
-        # Stage 4: Recognition - batch process all pages
+        return sorted_blocks
+
+    def _run_recognition_stage(
+        self,
+        pdf_path: Path,
+        pages_to_process: list[int],
+        sorted_blocks: dict[int, list[Block]],
+        recognition_images: dict[int, np.ndarray],
+        page_images: dict[int, np.ndarray],
+        page_output_dir: Path,
+    ) -> dict[int, list[Block]]:
+        """Stage 4: Recognize text for all pages."""
         logger.info("[Stage 4/7] Recognizing text for %d pages...", len(sorted_blocks))
+
         recognition_stage = self._create_recognition_stage()
         recognized_blocks: dict[int, list[Block]] = {}
+
         for page_num in pages_to_process:
             if self.sorter_name == "olmocr-vlm":
-                # olmocr-vlm already includes text
                 recognized_blocks[page_num] = sorted_blocks[page_num]
             else:
                 recognized_blocks[page_num] = recognition_stage.recognize_blocks(
@@ -746,17 +754,23 @@ class Pipeline:
         del recognition_stage
         gc.collect()
 
-        # Save intermediate results after recognition
         self._save_intermediate_results(
-            pdf_path,
-            pages_to_process,
-            page_output_dir,
-            detected_blocks=recognized_blocks,
-            page_images=page_images,
-            stage="recognition",
+            pdf_path, pages_to_process, page_output_dir,
+            detected_blocks=recognized_blocks, page_images=page_images, stage="recognition",
         )
+        return recognized_blocks
 
-        # Stage 5: Block Correction (currently disabled)
+    def _run_correction_and_rendering_stages(
+        self,
+        pdf_path: Path,
+        pages_to_process: list[int],
+        recognized_blocks: dict[int, list[Block]],
+        auxiliary_infos: dict[int, dict[str, Any]],
+        page_images: dict[int, np.ndarray],
+        page_output_dir: Path,
+    ) -> tuple[dict[int, list[Block]], dict[int, str]]:
+        """Stages 5-6: Block correction and rendering."""
+        # Stage 5: Block Correction
         logger.info("[Stage 5/7] Block correction (skipped)")
         block_correction_stage = self._create_block_correction_stage()
         corrected_blocks: dict[int, list[Block]] = {}
@@ -765,7 +779,7 @@ class Pipeline:
         del block_correction_stage
         gc.collect()
 
-        # Stage 6: Rendering - render all pages
+        # Stage 6: Rendering
         logger.info("[Stage 6/7] Rendering %d pages...", len(corrected_blocks))
         rendering_stage = self._create_rendering_stage()
         rendered_texts: dict[int, str] = {}
@@ -776,22 +790,33 @@ class Pipeline:
         del rendering_stage
         gc.collect()
 
-        # Save intermediate results after rendering
         self._save_intermediate_results(
-            pdf_path,
-            pages_to_process,
-            page_output_dir,
-            detected_blocks=corrected_blocks,
-            page_images=page_images,
-            rendered_texts=rendered_texts,
-            stage="rendering",
+            pdf_path, pages_to_process, page_output_dir,
+            detected_blocks=corrected_blocks, page_images=page_images,
+            rendered_texts=rendered_texts, stage="rendering",
         )
+        return corrected_blocks, rendered_texts
 
-        # Stage 7: Page Correction & Output
+    def _run_output_stage(
+        self,
+        pdf_path: Path,
+        pages_to_process: list[int],
+        sorted_blocks: dict[int, list[Block]],
+        corrected_blocks: dict[int, list[Block]],
+        rendered_texts: dict[int, str],
+        page_images: dict[int, np.ndarray],
+        auxiliary_infos: dict[int, dict[str, Any]],
+        page_output_dir: Path,
+    ) -> tuple[list[Page], bool]:
+        """Stage 7: Page correction and output."""
         logger.info("[Stage 7/7] Correcting and saving %d pages...", len(rendered_texts))
+
+        processed_pages: list[Page] = []
+        processing_stopped = False
+
         page_correction_stage = self._create_page_correction_stage()
+
         for page_num in pages_to_process:
-            # Page correction
             corrected_text, correction_ratio, stop_due_to_correction = page_correction_stage.correct_page(
                 rendered_texts[page_num], page_num
             )
@@ -800,8 +825,6 @@ class Pipeline:
                 processing_stopped = True
                 break
 
-            # Build Page result
-            # Note: column_layout extraction doesn't require heavy model, use helper method
             column_layout = self._extract_column_layout(sorted_blocks[page_num])
             page_result = self.output_stage.build_page_result(
                 pdf_path=pdf_path,
@@ -816,13 +839,67 @@ class Pipeline:
                 auxiliary_info=auxiliary_infos[page_num],
             )
 
-            # Save output
             self.output_stage.save_page_output(page_output_dir, page_num, page_result)
             processed_pages.append(page_result)
 
         logger.info("[Stage 7/7] Processing complete")
         del page_correction_stage
         gc.collect()
+
+        return processed_pages, processing_stopped
+
+    def _process_pdf_pages(
+        self,
+        pdf_path: Path,
+        pages_to_process: list[int],
+        total_pages: int,
+        page_output_dir: Path,
+    ) -> tuple[list[Page], bool]:
+        """Process PDF pages using staged batch processing.
+
+        This method processes all pages through each stage sequentially:
+        1. Load all page images
+        2. Detect all pages (batch) → unload detector
+        3. Sort all pages → unload sorter
+        4. Recognize all pages (batch) → unload recognizer
+        5. Correct and render all pages
+        6. Save outputs
+
+        Args:
+            pdf_path: Path to PDF file
+            pages_to_process: List of page numbers to process
+            total_pages: Total number of pages in PDF
+            page_output_dir: Directory to save page outputs
+
+        Returns:
+            Tuple of (list of Page objects, processing_stopped flag)
+        """
+        # Stage 1: Load images
+        page_images, recognition_images, auxiliary_infos = self._load_page_images(pdf_path, pages_to_process)
+
+        # Stage 2: Detection
+        detected_blocks = self._run_detection_stage(pdf_path, pages_to_process, page_images, page_output_dir)
+
+        # Stage 3: Ordering
+        sorted_blocks = self._run_ordering_stage(
+            pdf_path, pages_to_process, detected_blocks, page_images, page_output_dir
+        )
+
+        # Stage 4: Recognition
+        recognized_blocks = self._run_recognition_stage(
+            pdf_path, pages_to_process, sorted_blocks, recognition_images, page_images, page_output_dir
+        )
+
+        # Stages 5-6: Correction and Rendering
+        corrected_blocks, rendered_texts = self._run_correction_and_rendering_stages(
+            pdf_path, pages_to_process, recognized_blocks, auxiliary_infos, page_images, page_output_dir
+        )
+
+        # Stage 7: Output
+        processed_pages, processing_stopped = self._run_output_stage(
+            pdf_path, pages_to_process, sorted_blocks, corrected_blocks,
+            rendered_texts, page_images, auxiliary_infos, page_output_dir
+        )
 
         # Cleanup
         del page_images, recognition_images, detected_blocks, sorted_blocks, recognized_blocks, corrected_blocks

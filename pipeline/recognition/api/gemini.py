@@ -22,10 +22,6 @@ from .base import BaseVLMClient
 from .image_utils import prepare_image_for_api
 from .ratelimit import rate_limiter
 from .types import (
-    CorrectionResult,
-    ExtractionResult,
-    SpecialContentResult,
-    create_correction_error,
     create_extraction_error,
     create_special_content_error,
 )

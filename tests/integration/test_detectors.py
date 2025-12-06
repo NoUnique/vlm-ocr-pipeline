@@ -7,7 +7,6 @@ import pytest
 
 from pipeline.types import BBox
 
-
 # Note: Uses session-scoped 'doclayout_yolo_detector' fixture from conftest.py
 # to avoid TORCH_LIBRARY registration conflicts across test files
 
@@ -108,19 +107,8 @@ class TestDocLayoutYOLODetector:
 
         blocks = doclayout_yolo_detector.detect(image)
 
-        # Common block types from DocLayout-YOLO
-        valid_types = {
-            "text",
-            "title",
-            "list",
-            "table",
-            "figure",
-            "caption",
-            "formula",
-            "footnote",
-            "header",
-            "footer",
-        }
+        # Note: Block types vary by model, so we only check for non-empty strings
+        # Common types include: text, title, list, table, figure, caption, etc.
 
         for block in blocks:
             # Type should be non-empty string

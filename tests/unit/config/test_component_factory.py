@@ -10,7 +10,6 @@ Tests cover:
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import Mock, patch
 
 import pytest
 
@@ -131,7 +130,6 @@ class TestComponentCreation:
 
         # This is a bit hacky, but tests the None path
         # In real usage, "none" would be validated
-        from pipeline.layout.detection import create_detector
 
         # Should return None for "none" detector
         # Note: This tests the factory's handling of detector="none"

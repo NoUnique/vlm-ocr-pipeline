@@ -13,7 +13,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from pipeline.stages.output_stage import OutputStage
 from pipeline.types import BBox, Block, Page

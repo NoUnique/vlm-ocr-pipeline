@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 
 class TestConstantsImport:
     """Tests for constants module import."""
@@ -25,12 +23,12 @@ class TestConstantsImport:
     def test_api_token_constants(self):
         """Test API token constants are defined."""
         from pipeline.constants import (
+            DEFAULT_ESTIMATED_TOKENS,
             DEFAULT_MAX_TOKENS,
-            SPECIAL_BLOCK_MAX_TOKENS,
-            TEXT_CORRECTION_MAX_TOKENS,
             DEFAULT_TEMPERATURE,
             ESTIMATED_IMAGE_TOKENS,
-            DEFAULT_ESTIMATED_TOKENS,
+            SPECIAL_BLOCK_MAX_TOKENS,
+            TEXT_CORRECTION_MAX_TOKENS,
         )
         
         assert DEFAULT_MAX_TOKENS > 0
@@ -52,7 +50,7 @@ class TestConstantsImport:
 
     def test_global_settings(self):
         """Test global settings are defined."""
-        from pipeline.constants import MIN_BOX_SIZE, MAX_IMAGE_DIMENSION
+        from pipeline.constants import MAX_IMAGE_DIMENSION, MIN_BOX_SIZE
         
         assert MIN_BOX_SIZE > 0
         assert MAX_IMAGE_DIMENSION > 0

@@ -192,6 +192,76 @@ class PipelineConfig:
 
         return cls(**kwargs)
 
+    @staticmethod
+    def _get_arg(args: argparse.Namespace, name: str, default: Any = None) -> Any:
+        """Safely get argument value from namespace.
+
+        Args:
+            args: Argument namespace
+            name: Argument name
+            default: Default value if not present
+
+        Returns:
+            Argument value or default
+        """
+        return getattr(args, name, default) if hasattr(args, name) else default
+
+    @classmethod
+    def _extract_cli_kwargs(cls, args: argparse.Namespace) -> dict[str, Any]:
+        """Extract configuration kwargs from CLI arguments.
+
+        Args:
+            args: Parsed CLI arguments
+
+        Returns:
+            Dictionary of config kwargs
+        """
+        # Define CLI argument to config field mappings
+        # Format: (cli_name, config_name, transform_func)
+        mappings: list[tuple[str, str, Any]] = [
+            # Detection
+            ("detector", "detector", None),
+            ("detector_backend", "detector_backend", None),
+            ("detector_model_path", "detector_model_path", None),
+            ("confidence", "confidence_threshold", None),
+            # Batch processing
+            ("auto_batch_size", "auto_batch_size", None),
+            ("batch_size", "batch_size", None),
+            ("target_memory_fraction", "target_memory_fraction", None),
+            # Ordering
+            ("sorter", "sorter", None),
+            ("sorter_backend", "sorter_backend", None),
+            ("sorter_model_path", "sorter_model_path", None),
+            # Recognition
+            ("recognizer", "recognizer", None),
+            ("recognizer_backend", "recognizer_backend", None),
+            ("gemini_tier", "gemini_tier", None),
+            # Output
+            ("output", "output_dir", Path),
+            ("renderer", "renderer", None),
+            # Paths
+            ("cache_dir", "cache_dir", Path),
+            ("temp_dir", "temp_dir", Path),
+            # DPI
+            ("dpi", "dpi", None),
+            ("detection_dpi", "detection_dpi", None),
+            ("recognition_dpi", "recognition_dpi", None),
+            ("use_dual_resolution", "use_dual_resolution", None),
+        ]
+
+        kwargs: dict[str, Any] = {}
+
+        for cli_name, config_name, transform in mappings:
+            value = cls._get_arg(args, cli_name)
+            if value is not None:
+                kwargs[config_name] = transform(value) if transform else value
+
+        # Special handling for boolean flags
+        if cls._get_arg(args, "no_cache"):
+            kwargs["use_cache"] = False
+
+        return kwargs
+
     @classmethod
     def from_cli(cls, args: argparse.Namespace) -> PipelineConfig:
         """Create configuration from CLI arguments.
@@ -208,67 +278,7 @@ class PipelineConfig:
             >>> args = parser.parse_args()
             >>> config = PipelineConfig.from_cli(args)
         """
-        # Map CLI args to config fields (only include non-None values)
-        kwargs: dict[str, Any] = {}
-
-        # Detection
-        if hasattr(args, "detector") and args.detector is not None:
-            kwargs["detector"] = args.detector
-        if hasattr(args, "detector_backend") and args.detector_backend is not None:
-            kwargs["detector_backend"] = args.detector_backend
-        if hasattr(args, "detector_model_path") and args.detector_model_path is not None:
-            kwargs["detector_model_path"] = args.detector_model_path
-        if hasattr(args, "confidence") and args.confidence is not None:
-            kwargs["confidence_threshold"] = args.confidence
-
-        # Batch processing
-        if hasattr(args, "auto_batch_size") and args.auto_batch_size:
-            kwargs["auto_batch_size"] = args.auto_batch_size
-        if hasattr(args, "batch_size") and args.batch_size is not None:
-            kwargs["batch_size"] = args.batch_size
-        if hasattr(args, "target_memory_fraction") and args.target_memory_fraction is not None:
-            kwargs["target_memory_fraction"] = args.target_memory_fraction
-
-        # Ordering
-        if hasattr(args, "sorter") and args.sorter is not None:
-            kwargs["sorter"] = args.sorter
-        if hasattr(args, "sorter_backend") and args.sorter_backend is not None:
-            kwargs["sorter_backend"] = args.sorter_backend
-        if hasattr(args, "sorter_model_path") and args.sorter_model_path is not None:
-            kwargs["sorter_model_path"] = args.sorter_model_path
-
-        # Recognition
-        if hasattr(args, "recognizer") and args.recognizer is not None:
-            kwargs["recognizer"] = args.recognizer
-        if hasattr(args, "recognizer_backend") and args.recognizer_backend is not None:
-            kwargs["recognizer_backend"] = args.recognizer_backend
-        if hasattr(args, "gemini_tier") and args.gemini_tier is not None:
-            kwargs["gemini_tier"] = args.gemini_tier
-
-        # Output
-        if hasattr(args, "output") and args.output is not None:
-            kwargs["output_dir"] = Path(args.output)
-        if hasattr(args, "renderer") and args.renderer is not None:
-            kwargs["renderer"] = args.renderer
-
-        # Paths
-        if hasattr(args, "cache_dir") and args.cache_dir is not None:
-            kwargs["cache_dir"] = Path(args.cache_dir)
-        if hasattr(args, "temp_dir") and args.temp_dir is not None:
-            kwargs["temp_dir"] = Path(args.temp_dir)
-        if hasattr(args, "no_cache") and args.no_cache:
-            kwargs["use_cache"] = False
-
-        # DPI
-        if hasattr(args, "dpi") and args.dpi is not None:
-            kwargs["dpi"] = args.dpi
-        if hasattr(args, "detection_dpi") and args.detection_dpi is not None:
-            kwargs["detection_dpi"] = args.detection_dpi
-        if hasattr(args, "recognition_dpi") and args.recognition_dpi is not None:
-            kwargs["recognition_dpi"] = args.recognition_dpi
-        if hasattr(args, "use_dual_resolution") and args.use_dual_resolution:
-            kwargs["use_dual_resolution"] = args.use_dual_resolution
-
+        kwargs = cls._extract_cli_kwargs(args)
         return cls(**kwargs)
 
     def validate(self) -> None:

@@ -35,7 +35,9 @@ select = [
 ]
 ignore = [
   "E203",      # keep black compatibility
-  "PLR0913"    # allow functions with many args (adjust as needed)
+  "PLR0913",   # allow functions with many args
+  "PLR2004",   # magic value comparison - too many to fix, use constants where critical
+  "PLC0415",   # import outside top-level - intentional for lazy loading
 ]
 fixable = ["ALL"]
 
@@ -57,5 +59,6 @@ known-first-party = ["pipeline", "models"]
 "pipeline/batch/*.py" = ["PLC0415"]  # Lazy imports for batch processing
 # Test files: allow magic numbers (concrete test values) and lazy imports
 "tests/test_*.py" = ["PLR2004", "PLC0415"]
+"tests/**/*.py" = ["PLR2004", "PLC0415"]  # All test files
 # Scripts: allow lazy imports (avoid circular dependencies)
 "scripts/*.py" = ["PLC0415"]

@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock
 
 import pytest
 
@@ -98,6 +97,7 @@ class TestPageInfo:
     def test_page_info_with_all_fields(self, tmp_path):
         """Test PageInfo with all fields populated."""
         import numpy as np
+
         from pipeline.types import BBox, Block
         
         pdf_path = tmp_path / "test.pdf"

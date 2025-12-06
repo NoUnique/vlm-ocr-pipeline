@@ -18,7 +18,6 @@ import pytest
 
 from pipeline.types import BBox, Block, Detector, Recognizer, Sorter
 
-
 # ==================== Session-scoped Fixtures from conftest.py ====================
 # doclayout_yolo_detector, mineru_doclayout_yolo_detector are from conftest.py
 

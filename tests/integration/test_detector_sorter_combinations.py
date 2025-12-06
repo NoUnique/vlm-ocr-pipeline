@@ -5,10 +5,8 @@ Tests verify that valid detector/sorter combinations work together correctly.
 
 from __future__ import annotations
 
-import pytest
-
 from pipeline.config import PipelineConfig
-from pipeline.layout.ordering import REQUIRED_COMBINATIONS, validate_combination
+from pipeline.layout.ordering import validate_combination
 
 
 class TestDetectorSorterCombinations:

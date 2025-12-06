@@ -7,8 +7,6 @@ Tests cover:
 
 from __future__ import annotations
 
-import pytest
-
 from pipeline.types import BBox, Block, blocks_to_olmocr_anchor_text
 
 

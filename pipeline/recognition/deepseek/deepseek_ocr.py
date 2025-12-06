@@ -75,6 +75,161 @@ def parse_deepseek_ocr_output(raw_output: str) -> str:
     return ref_content
 
 
+def _setup_gpu_for_worker(gpu_id: int) -> None:
+    """Set up GPU environment for worker subprocess.
+
+    Args:
+        gpu_id: Physical GPU ID to use
+
+    Raises:
+        RuntimeError: If CUDA is not available
+    """
+    import os  # noqa: PLC0415
+
+    import torch  # noqa: PLC0415
+
+    # Set CUDA_VISIBLE_DEVICES BEFORE any torch operations
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+
+    if not torch.cuda.is_available():
+        raise RuntimeError(f"GPU {gpu_id}: CUDA is not available in this subprocess")
+
+    visible_gpus = torch.cuda.device_count()
+    if visible_gpus != 1:
+        print(f"WARNING: GPU {gpu_id}: Expected 1 visible GPU, but found {visible_gpus}")
+
+    torch.cuda.set_device(0)
+
+
+def _load_worker_model(model_name: str) -> tuple[Any, Any]:
+    """Load model and tokenizer for worker.
+
+    Args:
+        model_name: HuggingFace model name
+
+    Returns:
+        (model, tokenizer) tuple
+    """
+    import torch  # noqa: PLC0415
+    from transformers import AutoModel, AutoTokenizer  # noqa: PLC0415
+
+    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+
+    try:
+        model = AutoModel.from_pretrained(
+            model_name,
+            _attn_implementation="flash_attention_2",
+            trust_remote_code=True,
+            use_safetensors=True,
+        )
+    except (ImportError, ValueError):
+        model = AutoModel.from_pretrained(
+            model_name,
+            _attn_implementation="eager",
+            trust_remote_code=True,
+            use_safetensors=True,
+        )
+
+    model = model.eval().cuda().to(torch.bfloat16)
+    return model, tokenizer
+
+
+def _crop_block_image(image: np.ndarray, block: Block) -> np.ndarray | None:
+    """Crop image to block bounding box.
+
+    Args:
+        image: Full page image
+        block: Block with bbox
+
+    Returns:
+        Cropped image or None if invalid
+    """
+    if not block.bbox:
+        return None
+
+    x0, y0, x1, y1 = block.bbox.x0, block.bbox.y0, block.bbox.x1, block.bbox.y1
+    h, w = image.shape[:2]
+
+    # Clamp to image bounds
+    x0, y0 = max(0, x0), max(0, y0)
+    x1, y1 = min(w, x1), min(h, y1)
+
+    if x1 <= x0 or y1 <= y0:
+        return None
+
+    return image[y0:y1, x0:x1]
+
+
+def _run_model_inference(
+    model: Any,
+    tokenizer: Any,
+    cropped_image: np.ndarray,
+    prompt_template: str,
+    base_size: int,
+    image_size: int,
+    crop_mode: bool,
+) -> str:
+    """Run DeepSeek-OCR inference on cropped image.
+
+    Args:
+        model: Loaded model
+        tokenizer: Loaded tokenizer
+        cropped_image: Cropped block image
+        prompt_template: Prompt for OCR
+        base_size: Base resolution
+        image_size: Image size
+        crop_mode: Dynamic resolution mode
+
+    Returns:
+        Extracted text
+    """
+    import os  # noqa: PLC0415
+    import shutil  # noqa: PLC0415
+    import tempfile  # noqa: PLC0415
+
+    cropped_pil = Image.fromarray(cropped_image)
+
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp_file:
+        tmp_path = tmp_file.name
+        cropped_pil.save(tmp_path)
+
+    tmp_output_dir = tempfile.mkdtemp(prefix="deepseek_ocr_")
+
+    try:
+        result = model.infer(
+            tokenizer,
+            prompt=prompt_template,
+            image_file=tmp_path,
+            output_path=tmp_output_dir,
+            base_size=base_size,
+            image_size=image_size,
+            crop_mode=crop_mode,
+            test_compress=False,
+            save_results=True,
+        )
+
+        # Read output from result.mmd file
+        mmd_file = os.path.join(tmp_output_dir, "result.mmd")
+        if os.path.exists(mmd_file):
+            with open(mmd_file, encoding="utf-8") as f:
+                raw_output = f.read()
+        else:
+            raw_output = str(result) if result else ""
+
+        return parse_deepseek_ocr_output(raw_output)
+
+    finally:
+        # Cleanup
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+        try:
+            shutil.rmtree(tmp_output_dir, ignore_errors=True)
+        except Exception:
+            pass
+
+
 def _process_on_gpu_worker(
     gpu_id: int,
     device: str,
@@ -86,7 +241,7 @@ def _process_on_gpu_worker(
     crop_mode: bool,
     prompt_template: str,
 ) -> list[tuple[int, Block]]:
-    """Worker function to process blocks on a specific GPU (runs in separate process).
+    """Worker function to process blocks on a specific GPU.
 
     Args:
         gpu_id: GPU ID for logging
@@ -102,115 +257,28 @@ def _process_on_gpu_worker(
     Returns:
         List of (index, processed_block) tuples
     """
-    import os  # noqa: PLC0415
-    import shutil  # noqa: PLC0415
-    import tempfile  # noqa: PLC0415
+    # Set up GPU environment
+    _setup_gpu_for_worker(gpu_id)
 
-    # CRITICAL: Set CUDA_VISIBLE_DEVICES for this subprocess BEFORE importing torch
-    # This ensures this subprocess only sees its assigned GPU
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
-
-    import torch  # noqa: PLC0415
-    from transformers import AutoModel, AutoTokenizer  # noqa: PLC0415
-
-    # After setting CUDA_VISIBLE_DEVICES, this subprocess should see exactly 1 GPU at index 0
-    if not torch.cuda.is_available():
-        raise RuntimeError(f"GPU {gpu_id}: CUDA is not available in this subprocess")
-
-    visible_gpus = torch.cuda.device_count()
-    if visible_gpus != 1:
-        print(f"WARNING: GPU {gpu_id}: Expected 1 visible GPU, but found {visible_gpus}")
-
-    # Since we set CUDA_VISIBLE_DEVICES, always use device 0
-    # (which maps to the physical GPU specified by gpu_id)
-    torch.cuda.set_device(0)
-
-    # Load model in this process
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-
-    try:
-        model = AutoModel.from_pretrained(
-            model_name,
-            _attn_implementation="flash_attention_2",
-            trust_remote_code=True,
-            use_safetensors=True,
-        )
-        # Use .cuda() which uses the device set by torch.cuda.set_device()
-        model = model.eval().cuda().to(torch.bfloat16)
-    except (ImportError, ValueError):
-        model = AutoModel.from_pretrained(
-            model_name,
-            _attn_implementation="eager",
-            trust_remote_code=True,
-            use_safetensors=True,
-        )
-        # Use .cuda() which uses the device set by torch.cuda.set_device()
-        model = model.eval().cuda().to(torch.bfloat16)
+    # Load model
+    model, tokenizer = _load_worker_model(model_name)
 
     results = []
 
     for idx, block in assigned_blocks:
-        # Skip blocks without valid bbox
-        if not block.bbox:
+        # Crop image
+        cropped = _crop_block_image(image, block)
+        if cropped is None:
             results.append((idx, block))
             continue
-
-        # Crop image to block bbox
-        x0, y0, x1, y1 = block.bbox.x0, block.bbox.y0, block.bbox.x1, block.bbox.y1
-
-        # Ensure coordinates are within image bounds
-        h, w = image.shape[:2]
-        x0, y0 = max(0, x0), max(0, y0)
-        x1, y1 = min(w, x1), min(h, y1)
-
-        # Check for valid crop dimensions
-        if x1 <= x0 or y1 <= y0:
-            results.append((idx, block))
-            continue
-
-        # Crop the block region
-        cropped = image[y0:y1, x0:x1]
-
-        # Convert to PIL Image
-        cropped_pil = Image.fromarray(cropped)
-
-        # Save to temporary file
-        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp_file:
-            tmp_path = tmp_file.name
-            cropped_pil.save(tmp_path)
-
-        # Create temporary output directory
-        tmp_output_dir = tempfile.mkdtemp(prefix="deepseek_ocr_")
 
         try:
-            # Call model.infer() - must save results to get text output
-            result = model.infer(
-                tokenizer,
-                prompt=prompt_template,
-                image_file=tmp_path,
-                output_path=tmp_output_dir,
-                base_size=base_size,
-                image_size=image_size,
-                crop_mode=crop_mode,
-                test_compress=False,
-                save_results=True,  # Changed from False - need to save to get output
+            # Run inference
+            text = _run_model_inference(
+                model, tokenizer, cropped, prompt_template, base_size, image_size, crop_mode
             )
 
-            # Read the saved text file from output directory
-            # DeepSeek-OCR saves to <output_path>/<input_filename>_text.txt
-
-            # DeepSeek-OCR saves output to result.mmd file
-            mmd_file = os.path.join(tmp_output_dir, "result.mmd")
-            if os.path.exists(mmd_file):
-                with open(mmd_file, encoding="utf-8") as f:
-                    raw_output = f.read()
-            else:
-                # Fallback: check if result has any text
-                raw_output = str(result) if result else ""
-
-            text = parse_deepseek_ocr_output(raw_output)
-
-            # Create updated block with text
+            # Create updated block
             processed_block = Block(
                 type=block.type,
                 bbox=block.bbox,
@@ -227,16 +295,6 @@ def _process_on_gpu_worker(
         except Exception as e:
             logger.warning("[%s] Error processing block %d: %s", device, idx, e)
             results.append((idx, block))
-        finally:
-            # Clean up temporary files
-            try:
-                os.unlink(tmp_path)
-            except Exception:
-                pass
-            try:
-                shutil.rmtree(tmp_output_dir, ignore_errors=True)
-            except Exception:
-                pass
 
     return results
 

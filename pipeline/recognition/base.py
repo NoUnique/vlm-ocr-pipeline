@@ -73,7 +73,6 @@ class BaseRecognizer(ABC):
         Returns:
             List of blocks with text populated
         """
-        pass
 
     def process_blocks(
         self,
@@ -190,7 +189,7 @@ class BaseRecognizer(ABC):
 
         return [
             self.process_blocks(image, blocks)
-            for image, blocks in zip(images, blocks_list)
+            for image, blocks in zip(images, blocks_list, strict=False)
         ]
 
     def __repr__(self) -> str:

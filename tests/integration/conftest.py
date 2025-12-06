@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture
-def integration_config() -> "PipelineConfig":
+def integration_config() -> PipelineConfig:
     """Create a PipelineConfig for integration testing.
 
     Returns:
@@ -35,7 +35,7 @@ def integration_config() -> "PipelineConfig":
 
 
 @pytest.fixture
-def component_factory(integration_config: "PipelineConfig") -> "ComponentFactory":
+def component_factory(integration_config: PipelineConfig) -> ComponentFactory:
     """Create a ComponentFactory for integration testing.
 
     Returns:

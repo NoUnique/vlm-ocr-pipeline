@@ -20,7 +20,7 @@ class TestGPUEnvironmentDetection:
 
         # Mock torch ImportError by temporarily removing it from sys.modules
         # and patching builtins.__import__
-        original_modules = sys.modules.copy()
+        _original_modules = sys.modules.copy()  # Keep for reference if restore needed
 
         def mock_import(name, *args, **kwargs):
             if name == "torch" or name.startswith("torch."):
@@ -189,7 +189,7 @@ class TestGPUConfigSingleton:
         # Should be equal but not same object (re-computed)
         # Note: they will be the same values since hardware hasn't changed
         assert gpu_config.has_cuda == config2.has_cuda
-        assert config1.gpu_count == config2.gpu_count
+        assert gpu_config.gpu_count == config2.gpu_count
 
 
 class TestBackendAvailability:

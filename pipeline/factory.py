@@ -222,7 +222,7 @@ class ComponentFactory:
 
         recognizer = self.config.recognizer
         recognizer_backend = self.config.resolved_recognizer_backend
-        models_config = self.config.models_config
+        _models_config = self.config.models_config  # Reserved for future use
 
         # Build recognizer kwargs based on backend type
         recognizer_kwargs: dict[str, Any] = {}

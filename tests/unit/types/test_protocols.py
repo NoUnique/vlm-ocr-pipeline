@@ -9,13 +9,13 @@ Tests cover:
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 from unittest.mock import Mock
 
 import numpy as np
-import pytest
 
-from pipeline.types import BBox, Block, Detector, Recognizer, Renderer, Sorter
+from pipeline.types import BBox, Block, Detector, Recognizer, Sorter
 
 
 class TestDetectorProtocol:
@@ -24,7 +24,7 @@ class TestDetectorProtocol:
     def test_protocol_has_detect_method(self):
         """Test that Detector Protocol requires detect method."""
         # Protocol classes have method stubs, check via annotations
-        annotations = getattr(Detector, "__protocol_attrs__", set())
+        _annotations = getattr(Detector, "__protocol_attrs__", set())  # For reference
         # At minimum, detect should be callable
         assert callable(getattr(Detector, "detect", None)) or "detect" in dir(Detector)
 
@@ -89,7 +89,7 @@ class TestSorterProtocol:
                 self, blocks: list[Block], image: np.ndarray, **kwargs: Any
             ) -> list[Block]:
                 # Accept and use kwargs
-                page = kwargs.get("pymupdf_page")
+                _page = kwargs.get("pymupdf_page")  # Accept but unused in mock
                 return blocks
 
         sorter = MockSorter()
@@ -128,7 +128,7 @@ class TestRecognizerProtocol:
                 images: Sequence[np.ndarray | None],
                 blocks_list: Sequence[Sequence[Block]],
             ) -> list[list[Block]]:
-                return [self.process_blocks(img, blocks) for img, blocks in zip(images, blocks_list)]
+                return [self.process_blocks(img, blocks) for img, blocks in zip(images, blocks_list, strict=False)]
 
         recognizer = MockRecognizer()
         assert isinstance(recognizer, Recognizer)
@@ -154,7 +154,7 @@ class TestRecognizerProtocol:
                 images: Sequence[np.ndarray | None],
                 blocks_list: Sequence[Sequence[Block]],
             ) -> list[list[Block]]:
-                return [self.process_blocks(img, blocks) for img, blocks in zip(images, blocks_list)]
+                return [self.process_blocks(img, blocks) for img, blocks in zip(images, blocks_list, strict=False)]
 
         recognizer = NoCorrectRecognizer()
         assert isinstance(recognizer, Recognizer)

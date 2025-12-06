@@ -122,190 +122,88 @@ def get_gpu_config() -> GPUConfig:
     return config
 
 
-def _auto_optimize(
+@dataclass
+class _GPUProfile:
+    """GPU optimization profile for auto-configuration."""
+
+    min_gpus: int
+    min_memory_gb: float
+    backend_with_vllm: str
+    backend_without_vllm: str
+    tensor_parallel: int
+    data_parallel: int
+    memory_util: float
+    batch_size: int
+    strategy: str
+    speedup: float
+
+
+# GPU profiles ordered by priority (most capable first)
+_GPU_PROFILES: list[_GPUProfile] = [
+    # 8x A100 80GB: Hybrid (TP=4, DP=2)
+    _GPUProfile(8, 70, "vllm", "hf", 4, 2, 0.90, 8, "hybrid_tp4_dp2", 12.0),
+    # 4x A100 80GB: Hybrid (TP=2, DP=2)
+    _GPUProfile(4, 70, "vllm", "hf", 2, 2, 0.90, 8, "hybrid_tp2_dp2", 6.0),
+    # 2x A100 80GB: Data parallel only
+    _GPUProfile(2, 70, "hf-ray", "hf", 1, 2, 0.90, 8, "data_parallel_dp2", 2.5),
+    # 1x A100 80GB: Single GPU optimized
+    _GPUProfile(1, 70, "vllm", "hf", 1, 1, 0.90, 8, "single_gpu_optimized", 1.5),
+    # 4x RTX 4090 / A10 24GB: Data parallel
+    _GPUProfile(4, 20, "hf-ray", "hf", 1, 4, 0.85, 4, "data_parallel_dp4", 4.0),
+    # 2x RTX 4090 / A10: Data parallel
+    _GPUProfile(2, 20, "hf-ray", "hf", 1, 2, 0.85, 4, "data_parallel_dp2", 2.0),
+    # 1x RTX 4090 / A10: Single GPU
+    _GPUProfile(1, 20, "hf", "hf", 1, 1, 0.85, 4, "single_gpu", 1.0),
+]
+
+
+def _find_matching_profile(gpu_count: int, per_gpu_memory_gb: float) -> _GPUProfile | None:
+    """Find the best matching GPU profile.
+
+    Args:
+        gpu_count: Number of GPUs available
+        per_gpu_memory_gb: Memory per GPU in GB
+
+    Returns:
+        Matching profile or None if no match
+    """
+    for profile in _GPU_PROFILES:
+        if gpu_count >= profile.min_gpus and per_gpu_memory_gb >= profile.min_memory_gb:
+            return profile
+    return None
+
+
+def _build_gpu_config(
+    profile: _GPUProfile | None,
     gpu_count: int,
     gpu_names: list[str],
     per_gpu_memory_gb: float,
     total_memory_gb: float,
     compute_capability: tuple[int, int],
+    vllm_available: bool,
+    ray_available: bool,
 ) -> GPUConfig:
-    """Auto-optimize configuration based on GPU environment.
-
-    Optimization rules:
-    1. 8x A100 80GB → vLLM TP=4, DP=2 (hybrid strategy)
-    2. 4x A100 80GB → vLLM TP=2, DP=2 (hybrid strategy)
-    3. 2x A100 80GB → hf-ray DP=2 (data parallel only)
-    4. 1x A100 80GB → vLLM TP=1 (single GPU optimized)
-    5. 4x RTX/A10 → hf-ray DP=4 (data parallel)
-    6. 1x RTX/A10 → hf (single GPU)
-    7. <1 GPU or small VRAM → pytorch CPU fallback
+    """Build GPUConfig from profile and environment.
 
     Args:
+        profile: Matched GPU profile (None for fallback)
         gpu_count: Number of GPUs
-        gpu_names: List of GPU model names
-        per_gpu_memory_gb: VRAM per GPU in GB
-        total_memory_gb: Total VRAM across all GPUs
+        gpu_names: GPU model names
+        per_gpu_memory_gb: Memory per GPU
+        total_memory_gb: Total GPU memory
         compute_capability: CUDA compute capability
+        vllm_available: Whether vLLM is available
+        ray_available: Whether Ray is available
 
     Returns:
-        GPUConfig with optimal settings
+        Configured GPUConfig instance
     """
-    # Check availability of optional backends
-    vllm_available = _check_backend_available("vllm")
-    ray_available = _check_backend_available("ray")
-
-    # Flash Attention requires Ampere (SM 8.0) or newer
-    supports_flash_attention = compute_capability >= (8, 0)
-
-    # BF16 requires Ampere or newer
+    # Hardware capabilities
+    supports_flash_attention = compute_capability >= (8, 0)  # Ampere or newer
     supports_bf16 = compute_capability >= (8, 0)
 
-    # Strategy selection based on GPU count and memory
-    if gpu_count >= 8 and per_gpu_memory_gb >= 70:
-        # 8x A100 80GB: Hybrid (TP + DP)
-        # Use 4 GPUs for tensor parallel, run 2 instances
-        return GPUConfig(
-            has_cuda=True,
-            gpu_count=gpu_count,
-            gpu_names=gpu_names,
-            total_memory_gb=total_memory_gb,
-            per_gpu_memory_gb=per_gpu_memory_gb,
-            compute_capability=compute_capability,
-            recommended_backend="vllm" if vllm_available else "hf",
-            tensor_parallel_size=4,
-            data_parallel_workers=2,
-            gpu_memory_utilization=0.90,
-            batch_size=8,
-            use_flash_attention=supports_flash_attention,
-            use_bf16=supports_bf16,
-            optimization_strategy="hybrid_tp4_dp2",
-            expected_speedup=12.0,
-        )
-
-    elif gpu_count >= 4 and per_gpu_memory_gb >= 70:
-        # 4x A100 80GB: Hybrid (TP + DP)
-        # Use 2 GPUs for tensor parallel, run 2 instances
-        return GPUConfig(
-            has_cuda=True,
-            gpu_count=gpu_count,
-            gpu_names=gpu_names,
-            total_memory_gb=total_memory_gb,
-            per_gpu_memory_gb=per_gpu_memory_gb,
-            compute_capability=compute_capability,
-            recommended_backend="vllm" if vllm_available else "hf",
-            tensor_parallel_size=2,
-            data_parallel_workers=2,
-            gpu_memory_utilization=0.90,
-            batch_size=8,
-            use_flash_attention=supports_flash_attention,
-            use_bf16=supports_bf16,
-            optimization_strategy="hybrid_tp2_dp2",
-            expected_speedup=6.0,
-        )
-
-    elif gpu_count >= 2 and per_gpu_memory_gb >= 70:
-        # 2x A100 80GB: Data parallel only
-        # Each GPU runs full model independently
-        return GPUConfig(
-            has_cuda=True,
-            gpu_count=gpu_count,
-            gpu_names=gpu_names,
-            total_memory_gb=total_memory_gb,
-            per_gpu_memory_gb=per_gpu_memory_gb,
-            compute_capability=compute_capability,
-            recommended_backend="hf-ray" if ray_available else "hf",
-            tensor_parallel_size=1,
-            data_parallel_workers=2,
-            gpu_memory_utilization=0.90,
-            batch_size=8,
-            use_flash_attention=supports_flash_attention,
-            use_bf16=supports_bf16,
-            optimization_strategy="data_parallel_dp2",
-            expected_speedup=2.5,
-        )
-
-    elif gpu_count >= 1 and per_gpu_memory_gb >= 70:
-        # 1x A100 80GB: Single GPU optimized
-        return GPUConfig(
-            has_cuda=True,
-            gpu_count=gpu_count,
-            gpu_names=gpu_names,
-            total_memory_gb=total_memory_gb,
-            per_gpu_memory_gb=per_gpu_memory_gb,
-            compute_capability=compute_capability,
-            recommended_backend="vllm" if vllm_available else "hf",
-            tensor_parallel_size=1,
-            data_parallel_workers=1,
-            gpu_memory_utilization=0.90,
-            batch_size=8,
-            use_flash_attention=supports_flash_attention,
-            use_bf16=supports_bf16,
-            optimization_strategy="single_gpu_optimized",
-            expected_speedup=1.5,
-        )
-
-    elif gpu_count >= 4 and per_gpu_memory_gb >= 20:
-        # 4x RTX 4090 / A10 24GB: Data parallel
-        return GPUConfig(
-            has_cuda=True,
-            gpu_count=gpu_count,
-            gpu_names=gpu_names,
-            total_memory_gb=total_memory_gb,
-            per_gpu_memory_gb=per_gpu_memory_gb,
-            compute_capability=compute_capability,
-            recommended_backend="hf-ray" if ray_available else "hf",
-            tensor_parallel_size=1,
-            data_parallel_workers=4,
-            gpu_memory_utilization=0.85,
-            batch_size=4,
-            use_flash_attention=supports_flash_attention,
-            use_bf16=supports_bf16,
-            optimization_strategy="data_parallel_dp4",
-            expected_speedup=4.0,
-        )
-
-    elif gpu_count >= 2 and per_gpu_memory_gb >= 20:
-        # 2x RTX 4090 / A10: Data parallel
-        return GPUConfig(
-            has_cuda=True,
-            gpu_count=gpu_count,
-            gpu_names=gpu_names,
-            total_memory_gb=total_memory_gb,
-            per_gpu_memory_gb=per_gpu_memory_gb,
-            compute_capability=compute_capability,
-            recommended_backend="hf-ray" if ray_available else "hf",
-            tensor_parallel_size=1,
-            data_parallel_workers=2,
-            gpu_memory_utilization=0.85,
-            batch_size=4,
-            use_flash_attention=supports_flash_attention,
-            use_bf16=supports_bf16,
-            optimization_strategy="data_parallel_dp2",
-            expected_speedup=2.0,
-        )
-
-    elif gpu_count >= 1 and per_gpu_memory_gb >= 20:
-        # 1x RTX 4090 / A10: Single GPU
-        return GPUConfig(
-            has_cuda=True,
-            gpu_count=gpu_count,
-            gpu_names=gpu_names,
-            total_memory_gb=total_memory_gb,
-            per_gpu_memory_gb=per_gpu_memory_gb,
-            compute_capability=compute_capability,
-            recommended_backend="hf",
-            tensor_parallel_size=1,
-            data_parallel_workers=1,
-            gpu_memory_utilization=0.85,
-            batch_size=4,
-            use_flash_attention=supports_flash_attention,
-            use_bf16=supports_bf16,
-            optimization_strategy="single_gpu",
-            expected_speedup=1.0,
-        )
-
-    else:
-        # Fallback: Use what's available (small GPU or limited memory)
+    # Fallback for no matching profile
+    if profile is None:
         return GPUConfig(
             has_cuda=True,
             gpu_count=gpu_count,
@@ -323,6 +221,76 @@ def _auto_optimize(
             optimization_strategy="conservative",
             expected_speedup=1.0,
         )
+
+    # Select backend based on availability
+    backend = profile.backend_with_vllm
+    if backend == "vllm" and not vllm_available:
+        backend = profile.backend_without_vllm
+    elif backend == "hf-ray" and not ray_available:
+        backend = "hf"
+
+    return GPUConfig(
+        has_cuda=True,
+        gpu_count=gpu_count,
+        gpu_names=gpu_names,
+        total_memory_gb=total_memory_gb,
+        per_gpu_memory_gb=per_gpu_memory_gb,
+        compute_capability=compute_capability,
+        recommended_backend=backend,
+        tensor_parallel_size=profile.tensor_parallel,
+        data_parallel_workers=profile.data_parallel,
+        gpu_memory_utilization=profile.memory_util,
+        batch_size=profile.batch_size,
+        use_flash_attention=supports_flash_attention,
+        use_bf16=supports_bf16,
+        optimization_strategy=profile.strategy,
+        expected_speedup=profile.speedup,
+    )
+
+
+def _auto_optimize(
+    gpu_count: int,
+    gpu_names: list[str],
+    per_gpu_memory_gb: float,
+    total_memory_gb: float,
+    compute_capability: tuple[int, int],
+) -> GPUConfig:
+    """Auto-optimize configuration based on GPU environment.
+
+    Selects the best optimization profile based on available hardware:
+    - High-memory multi-GPU: Hybrid tensor + data parallelism
+    - Mid-memory multi-GPU: Data parallelism only
+    - Single GPU: Optimized single-GPU settings
+    - Low memory: Conservative fallback
+
+    Args:
+        gpu_count: Number of GPUs
+        gpu_names: List of GPU model names
+        per_gpu_memory_gb: VRAM per GPU in GB
+        total_memory_gb: Total VRAM across all GPUs
+        compute_capability: CUDA compute capability
+
+    Returns:
+        GPUConfig with optimal settings
+    """
+    # Check backend availability
+    vllm_available = _check_backend_available("vllm")
+    ray_available = _check_backend_available("ray")
+
+    # Find matching profile
+    profile = _find_matching_profile(gpu_count, per_gpu_memory_gb)
+
+    # Build configuration
+    return _build_gpu_config(
+        profile=profile,
+        gpu_count=gpu_count,
+        gpu_names=gpu_names,
+        per_gpu_memory_gb=per_gpu_memory_gb,
+        total_memory_gb=total_memory_gb,
+        compute_capability=compute_capability,
+        vllm_available=vllm_available,
+        ray_available=ray_available,
+    )
 
 
 def _cpu_fallback_config() -> GPUConfig:

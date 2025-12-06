@@ -94,7 +94,6 @@ class BaseStage(ABC, Generic[InputT, OutputT]):
         Returns:
             Processed output for next stage
         """
-        pass
 
     def process(self, input_data: InputT, **context: Any) -> OutputT:
         """Process input and produce output.
@@ -185,7 +184,6 @@ class BaseStage(ABC, Generic[InputT, OutputT]):
 
         Override in subclasses to release resources, clear caches, etc.
         """
-        pass
 
     def __repr__(self) -> str:
         """String representation."""

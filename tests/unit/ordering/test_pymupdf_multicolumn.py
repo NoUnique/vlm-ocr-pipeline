@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -115,8 +115,8 @@ class TestColumnBoxesFunction:
         """Test that column_boxes raises when PyMuPDF not available."""
         with patch.dict("sys.modules", {"fitz": None}):
             # Reload module to pick up patched fitz
-            import importlib
-            import pipeline.layout.ordering.pymupdf.multi_column as mc
+
+            pass
             
             # Should handle missing fitz gracefully
             # The function checks for fitz availability internally

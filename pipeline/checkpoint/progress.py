@@ -186,41 +186,28 @@ class ProgressTracker:
         self._save()
         logger.info("Pipeline completed successfully")
 
-    def get_resume_point(self) -> tuple[str, Path] | None:
-        """Get resume point if checkpoint exists.
+    def _get_resume_stage(self) -> str | None:
+        """Determine which stage to resume from.
 
         Returns:
-            (stage_name, checkpoint_file) tuple, or None if no valid checkpoint
-
-        Example:
-            >>> resume_point = tracker.get_resume_point()
-            >>> if resume_point:
-            ...     stage, checkpoint = resume_point
-            ...     print(f"Resume from {stage} using {checkpoint}")
+            Stage name to resume from, or None if no valid resume point
         """
-        # Check if there's a valid checkpoint
-        if self.data["status"] == "completed":
-            logger.info("Previous run completed successfully - starting fresh")
-            return None
-
-        if not self.data["completed_stages"]:
-            logger.info("No completed stages found - starting from beginning")
-            return None
-
-        # Determine which stage to resume from
         if self.data["failed_stage"]:
-            # Resume from failed stage
-            resume_stage = self.data["failed_stage"]
-            logger.info("Found failed stage: %s", resume_stage)
-        elif self.data["current_stage"]:
-            # Resume from interrupted stage
-            resume_stage = self.data["current_stage"]
-            logger.info("Found interrupted stage: %s", resume_stage)
-        else:
-            # No clear resume point
-            return None
+            logger.info("Found failed stage: %s", self.data["failed_stage"])
+            return self.data["failed_stage"]
 
-        # Find the last completed stage's output file
+        if self.data["current_stage"]:
+            logger.info("Found interrupted stage: %s", self.data["current_stage"])
+            return self.data["current_stage"]
+
+        return None
+
+    def _get_checkpoint_file(self) -> Path | None:
+        """Get the checkpoint file from the last completed stage.
+
+        Returns:
+            Path to checkpoint file, or None if not available
+        """
         completed_stages = self.data["completed_stages"]
         if not completed_stages:
             return None
@@ -236,6 +223,38 @@ class ProgressTracker:
 
         if not checkpoint_file.exists():
             logger.warning("Checkpoint file not found: %s", checkpoint_file)
+            return None
+
+        return checkpoint_file
+
+    def get_resume_point(self) -> tuple[str, Path] | None:
+        """Get resume point if checkpoint exists.
+
+        Returns:
+            (stage_name, checkpoint_file) tuple, or None if no valid checkpoint
+
+        Example:
+            >>> resume_point = tracker.get_resume_point()
+            >>> if resume_point:
+            ...     stage, checkpoint = resume_point
+            ...     print(f"Resume from {stage} using {checkpoint}")
+        """
+        # Check preconditions
+        if self.data["status"] == "completed":
+            logger.info("Previous run completed successfully - starting fresh")
+            return None
+
+        if not self.data["completed_stages"]:
+            logger.info("No completed stages found - starting from beginning")
+            return None
+
+        # Get resume stage and checkpoint file
+        resume_stage = self._get_resume_stage()
+        if not resume_stage:
+            return None
+
+        checkpoint_file = self._get_checkpoint_file()
+        if not checkpoint_file:
             return None
 
         return (resume_stage, checkpoint_file)

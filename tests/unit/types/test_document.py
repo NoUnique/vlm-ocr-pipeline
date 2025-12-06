@@ -7,8 +7,6 @@ Tests cover:
 
 from __future__ import annotations
 
-import pytest
-
 from pipeline.misc import tz_now
 from pipeline.types import BBox, Block, Document, Page
 

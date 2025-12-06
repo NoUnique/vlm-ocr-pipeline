@@ -11,7 +11,6 @@ from __future__ import annotations
 from unittest.mock import Mock
 
 import numpy as np
-import pytest
 
 from pipeline.stages.detection_stage import DetectionStage
 from pipeline.types import BBox, Block

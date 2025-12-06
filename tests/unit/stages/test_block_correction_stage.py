@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from pipeline.stages.block_correction_stage import BlockCorrectionStage
 from pipeline.types import BBox, Block
 

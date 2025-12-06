@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from pipeline.conversion.output.plaintext import blocks_to_plaintext, page_to_plaintext
 from pipeline.types import BBox, Block, Page
 
