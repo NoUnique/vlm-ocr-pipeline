@@ -779,16 +779,22 @@ class Pipeline:
     ) -> tuple[dict[int, list[Block]], dict[int, str]]:
         """Stages 5-6: Block correction and rendering."""
         # Stage 5: Block Correction
+        corrected_blocks: dict[int, list[Block]] = {}
         if self.config.enable_block_correction:
             logger.info("[Stage 5/7] Block correction for %d pages...", len(recognized_blocks))
+            block_correction_stage = self._create_block_correction_stage()
+            for page_num in pages_to_process:
+                corrected_blocks[page_num] = block_correction_stage.process(recognized_blocks[page_num])
+            del block_correction_stage
+            gc.collect()
         else:
-            logger.info("[Stage 5/7] Block correction (disabled)")
-        block_correction_stage = self._create_block_correction_stage()
-        corrected_blocks: dict[int, list[Block]] = {}
-        for page_num in pages_to_process:
-            corrected_blocks[page_num] = block_correction_stage.process(recognized_blocks[page_num])
-        del block_correction_stage
-        gc.collect()
+            logger.info("[Stage 5/7] Block correction (skipped)")
+            # Copy text to corrected_text directly
+            for page_num in pages_to_process:
+                for block in recognized_blocks[page_num]:
+                    if block.text is not None:
+                        block.corrected_text = block.text
+                corrected_blocks[page_num] = recognized_blocks[page_num]
 
         # Stage 6: Rendering
         logger.info("[Stage 6/7] Rendering %d pages...", len(corrected_blocks))
@@ -822,45 +828,41 @@ class Pipeline:
         page_output_dir: Path,
     ) -> tuple[list[Page], bool]:
         """Stage 7: Page correction and output."""
-        if self.config.enable_page_correction:
-            logger.info("[Stage 7/7] Page correction and saving %d pages...", len(rendered_texts))
-        else:
-            logger.info("[Stage 7/7] Saving %d pages (page correction disabled)...", len(rendered_texts))
-
         processed_pages: list[Page] = []
         processing_stopped = False
 
-        page_correction_stage = self._create_page_correction_stage()
+        if self.config.enable_page_correction:
+            logger.info("[Stage 7/7] Page correction and saving %d pages...", len(rendered_texts))
+            page_correction_stage = self._create_page_correction_stage()
 
-        for page_num in pages_to_process:
-            result = page_correction_stage.process(rendered_texts[page_num], page_num=page_num)
-            corrected_text = result.corrected_text
-            correction_ratio = result.correction_ratio
+            for page_num in pages_to_process:
+                result = page_correction_stage.process(rendered_texts[page_num], page_num=page_num)
+                corrected_text = result.corrected_text
+                correction_ratio = result.correction_ratio
 
-            if result.should_stop:
-                processing_stopped = True
-                break
+                if result.should_stop:
+                    processing_stopped = True
+                    break
 
-            column_layout = self._extract_column_layout(sorted_blocks[page_num])
-            page_result = self.output_stage.build_page_result(
-                pdf_path=pdf_path,
-                page_num=page_num,
-                page_image=page_images[page_num],
-                detected_blocks=sorted_blocks[page_num],
-                processed_blocks=corrected_blocks[page_num],
-                text=rendered_texts[page_num],
-                corrected_text=corrected_text,
-                correction_ratio=correction_ratio,
-                column_layout=column_layout,
-                auxiliary_info=auxiliary_infos[page_num],
-            )
+                self._save_page_result(
+                    pdf_path, page_num, page_images, sorted_blocks, corrected_blocks,
+                    rendered_texts, corrected_text, correction_ratio, auxiliary_infos,
+                    page_output_dir, processed_pages,
+                )
 
-            self.output_stage.save_page_output(page_output_dir, page_num, page_result)
-            processed_pages.append(page_result)
+            del page_correction_stage
+            gc.collect()
+        else:
+            logger.info("[Stage 7/7] Saving %d pages (page correction skipped)...", len(rendered_texts))
+            for page_num in pages_to_process:
+                # No correction: use rendered text as-is
+                self._save_page_result(
+                    pdf_path, page_num, page_images, sorted_blocks, corrected_blocks,
+                    rendered_texts, rendered_texts[page_num], 0.0, auxiliary_infos,
+                    page_output_dir, processed_pages,
+                )
 
         logger.info("[Stage 7/7] Processing complete")
-        del page_correction_stage
-        gc.collect()
 
         return processed_pages, processing_stopped
 
@@ -1123,6 +1125,37 @@ class Pipeline:
         )
 
         return summary
+
+    def _save_page_result(
+        self,
+        pdf_path: Path,
+        page_num: int,
+        page_images: dict[int, np.ndarray],
+        sorted_blocks: dict[int, list[Block]],
+        corrected_blocks: dict[int, list[Block]],
+        rendered_texts: dict[int, str],
+        corrected_text: str,
+        correction_ratio: float,
+        auxiliary_infos: dict[int, dict[str, Any]],
+        page_output_dir: Path,
+        processed_pages: list[Page],
+    ) -> None:
+        """Save a single page result."""
+        column_layout = self._extract_column_layout(sorted_blocks[page_num])
+        page_result = self.output_stage.build_page_result(
+            pdf_path=pdf_path,
+            page_num=page_num,
+            page_image=page_images[page_num],
+            detected_blocks=sorted_blocks[page_num],
+            processed_blocks=corrected_blocks[page_num],
+            text=rendered_texts[page_num],
+            corrected_text=corrected_text,
+            correction_ratio=correction_ratio,
+            column_layout=column_layout,
+            auxiliary_info=auxiliary_infos[page_num],
+        )
+        self.output_stage.save_page_output(page_output_dir, page_num, page_result)
+        processed_pages.append(page_result)
 
     def _extract_column_layout(self, blocks: list[Block]) -> ColumnLayout | None:
         """Extract column layout information from sorted blocks.
