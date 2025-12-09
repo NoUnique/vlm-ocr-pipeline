@@ -94,6 +94,10 @@ class PipelineConfig:
     # ==================== Output Options ====================
     renderer: str = "markdown"
 
+    # ==================== Correction Stage Options ====================
+    enable_block_correction: bool = False  # Block-level text correction (disabled by default)
+    enable_page_correction: bool = False  # Page-level text correction (disabled by default)
+
     # ==================== Performance Options ====================
     use_async: bool = False
 
@@ -259,6 +263,12 @@ class PipelineConfig:
         # Special handling for boolean flags
         if cls._get_arg(args, "no_cache"):
             kwargs["use_cache"] = False
+
+        # Correction stage flags (default False, enabled via CLI)
+        if cls._get_arg(args, "block_correction"):
+            kwargs["enable_block_correction"] = True
+        if cls._get_arg(args, "page_correction"):
+            kwargs["enable_page_correction"] = True
 
         return kwargs
 

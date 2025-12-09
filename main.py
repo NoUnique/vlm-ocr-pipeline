@@ -336,6 +336,19 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         help="Inference backend for recognizer (auto-selected if not specified)",
     )
 
+    # Correction stage options
+    correction_group = parser.add_argument_group("Text Correction")
+    correction_group.add_argument(
+        "--block-correction",
+        action="store_true",
+        help="Enable block-level text correction using VLM (disabled by default)",
+    )
+    correction_group.add_argument(
+        "--page-correction",
+        action="store_true",
+        help="Enable page-level text correction using VLM (disabled by default)",
+    )
+
     # API-specific options
     gemini_group = parser.add_argument_group("Gemini API Options")
     gemini_group.add_argument(

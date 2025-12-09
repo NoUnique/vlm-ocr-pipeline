@@ -449,7 +449,7 @@ class Pipeline:
         """Create block correction stage on-demand."""
         from pipeline.stages import BlockCorrectionStage
 
-        return BlockCorrectionStage(enable=False)
+        return BlockCorrectionStage(enable=self.config.enable_block_correction)
 
     def _create_rendering_stage(self) -> RenderingStage:
         """Create rendering stage on-demand."""
@@ -461,8 +461,11 @@ class Pipeline:
         """Create page correction stage on-demand."""
         from pipeline.stages import PageCorrectionStage
 
-        logger.info("Loading page correction stage...")
-        return PageCorrectionStage(recognizer=self.recognizer, backend=self.backend, enable=True)  # type: ignore[arg-type]
+        return PageCorrectionStage(
+            recognizer=self.recognizer,  # type: ignore[arg-type]
+            backend=self.backend,
+            enable=self.config.enable_page_correction,
+        )
 
     def _cleanup_stage(self, stage_name: str) -> None:
         """Cleanup and unload a stage to free memory."""
@@ -776,7 +779,10 @@ class Pipeline:
     ) -> tuple[dict[int, list[Block]], dict[int, str]]:
         """Stages 5-6: Block correction and rendering."""
         # Stage 5: Block Correction
-        logger.info("[Stage 5/7] Block correction (skipped)")
+        if self.config.enable_block_correction:
+            logger.info("[Stage 5/7] Block correction for %d pages...", len(recognized_blocks))
+        else:
+            logger.info("[Stage 5/7] Block correction (disabled)")
         block_correction_stage = self._create_block_correction_stage()
         corrected_blocks: dict[int, list[Block]] = {}
         for page_num in pages_to_process:
@@ -814,7 +820,10 @@ class Pipeline:
         page_output_dir: Path,
     ) -> tuple[list[Page], bool]:
         """Stage 7: Page correction and output."""
-        logger.info("[Stage 7/7] Correcting and saving %d pages...", len(rendered_texts))
+        if self.config.enable_page_correction:
+            logger.info("[Stage 7/7] Page correction and saving %d pages...", len(rendered_texts))
+        else:
+            logger.info("[Stage 7/7] Saving %d pages (page correction disabled)...", len(rendered_texts))
 
         processed_pages: list[Page] = []
         processing_stopped = False
