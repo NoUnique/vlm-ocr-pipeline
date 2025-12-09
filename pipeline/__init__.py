@@ -668,7 +668,7 @@ class Pipeline:
         detected_blocks: dict[int, list[Block]] = {}
 
         for page_num in pages_to_process:
-            detected_blocks[page_num] = detection_stage.detect(page_images[page_num])
+            detected_blocks[page_num] = detection_stage.process(page_images[page_num])
 
         logger.info("[Stage 2/7] Detection complete")
         del detection_stage
@@ -709,9 +709,9 @@ class Pipeline:
         sorted_blocks: dict[int, list[Block]] = {}
 
         for page_num in pages_to_process:
-            sorted_blocks[page_num] = ordering_stage.sort(
+            sorted_blocks[page_num] = ordering_stage.process(
                 detected_blocks[page_num],
-                page_images[page_num],
+                image=page_images[page_num],
                 pymupdf_page=pymupdf_pages.get(page_num),
             )
 
@@ -754,8 +754,8 @@ class Pipeline:
             if self.sorter_name == "olmocr-vlm":
                 recognized_blocks[page_num] = sorted_blocks[page_num]
             else:
-                recognized_blocks[page_num] = recognition_stage.recognize_blocks(
-                    sorted_blocks[page_num], recognition_images[page_num]
+                recognized_blocks[page_num] = recognition_stage.process(
+                    sorted_blocks[page_num], image=recognition_images[page_num]
                 )
 
         logger.info("[Stage 4/7] Recognition complete")
@@ -786,7 +786,7 @@ class Pipeline:
         block_correction_stage = self._create_block_correction_stage()
         corrected_blocks: dict[int, list[Block]] = {}
         for page_num in pages_to_process:
-            corrected_blocks[page_num] = block_correction_stage.correct_blocks(recognized_blocks[page_num])
+            corrected_blocks[page_num] = block_correction_stage.process(recognized_blocks[page_num])
         del block_correction_stage
         gc.collect()
 
@@ -795,7 +795,9 @@ class Pipeline:
         rendering_stage = self._create_rendering_stage()
         rendered_texts: dict[int, str] = {}
         for page_num in pages_to_process:
-            rendered_texts[page_num] = rendering_stage.render(corrected_blocks[page_num], auxiliary_infos[page_num])
+            rendered_texts[page_num] = rendering_stage.process(
+                corrected_blocks[page_num], auxiliary_info=auxiliary_infos[page_num]
+            )
 
         logger.info("[Stage 6/7] Rendering complete")
         del rendering_stage
@@ -831,11 +833,11 @@ class Pipeline:
         page_correction_stage = self._create_page_correction_stage()
 
         for page_num in pages_to_process:
-            corrected_text, correction_ratio, stop_due_to_correction = page_correction_stage.correct_page(
-                rendered_texts[page_num], page_num
-            )
+            result = page_correction_stage.process(rendered_texts[page_num], page_num=page_num)
+            corrected_text = result.corrected_text
+            correction_ratio = result.correction_ratio
 
-            if stop_due_to_correction:
+            if result.should_stop:
                 processing_stopped = True
                 break
 

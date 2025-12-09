@@ -51,19 +51,6 @@ class DetectionStage(BaseStage[np.ndarray, list[Block]]):
             blocks = self.detector.detect(input_data)
         return blocks
 
-    def detect(self, image: np.ndarray) -> list[Block]:
-        """Detect layout blocks in image.
-
-        Legacy method for backward compatibility.
-
-        Args:
-            image: Page image as numpy array
-
-        Returns:
-            List of detected blocks with bbox, type, confidence
-        """
-        return self.process(image)
-
     def extract_column_layout(self, blocks: list[Block]) -> ColumnLayout | None:
         """Extract column layout information from sorted blocks.
 

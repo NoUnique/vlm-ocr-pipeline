@@ -61,7 +61,7 @@ class TestRenderingStageRender:
         stage = RenderingStage(renderer="markdown")
 
         # Execute
-        result = stage.render(blocks)
+        result = stage.process(blocks)
 
         # Verify
         mock_blocks_to_markdown.assert_called_once_with(blocks)
@@ -77,7 +77,7 @@ class TestRenderingStageRender:
 
         # Execute & Verify - StageError wraps the ValueError
         with pytest.raises(StageError) as exc_info:
-            stage.render(blocks)
+            stage.process(blocks)
 
         assert "Unsupported renderer: html" in str(exc_info.value)
         assert exc_info.value.stage_name == "rendering"
@@ -91,7 +91,7 @@ class TestRenderingStageRender:
         stage = RenderingStage(renderer="markdown")
 
         # Execute
-        result = stage.render([])
+        result = stage.process([])
 
         # Verify
         mock_blocks_to_markdown.assert_called_once_with([])

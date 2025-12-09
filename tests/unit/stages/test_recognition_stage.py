@@ -56,7 +56,7 @@ class TestRecognitionStageRecognize:
         image = np.zeros((100, 100, 3), dtype=np.uint8)
 
         # Execute
-        result = stage.recognize_blocks(input_blocks, image)
+        result = stage.process(input_blocks, image=image)
 
         # Verify
         mock_recognizer.process_blocks.assert_called_once()
@@ -106,7 +106,7 @@ class TestRecognitionStageRecognize:
         image = np.zeros((300, 400, 3), dtype=np.uint8)
 
         # Execute
-        result = stage.recognize_blocks(input_blocks, image)
+        result = stage.process(input_blocks, image=image)
 
         # Verify
         assert len(result) == 2
@@ -123,7 +123,7 @@ class TestRecognitionStageRecognize:
         image = np.zeros((100, 100, 3), dtype=np.uint8)
 
         # Execute
-        result = stage.recognize_blocks([], image)
+        result = stage.process([], image=image)
 
         # Verify
         assert result == []

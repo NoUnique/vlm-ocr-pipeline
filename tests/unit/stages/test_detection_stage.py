@@ -47,7 +47,7 @@ class TestDetectionStageDetect:
         image = np.zeros((100, 100, 3), dtype=np.uint8)
 
         # Execute
-        result = stage.detect(image)
+        result = stage.process(image)
 
         # Verify
         mock_detector.detect.assert_called_once()
@@ -80,7 +80,7 @@ class TestDetectionStageDetect:
         image = np.zeros((600, 500, 3), dtype=np.uint8)
 
         # Execute
-        result = stage.detect(image)
+        result = stage.process(image)
 
         # Verify
         assert len(result) == 3
@@ -98,7 +98,7 @@ class TestDetectionStageDetect:
         image = np.zeros((100, 100, 3), dtype=np.uint8)
 
         # Execute
-        result = stage.detect(image)
+        result = stage.process(image)
 
         # Verify
         assert result == []

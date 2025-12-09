@@ -37,7 +37,7 @@ class TestBlockCorrectionStageCorrect:
         ]
 
         stage = BlockCorrectionStage(enable=False)
-        result = stage.correct_blocks(blocks)
+        result = stage.process(blocks)
 
         assert result[0].corrected_text == "Original text"
 
@@ -55,7 +55,7 @@ class TestBlockCorrectionStageCorrect:
         ]
 
         stage = BlockCorrectionStage(enable=True)
-        result = stage.correct_blocks(blocks)
+        result = stage.process(blocks)
 
         # Currently just copies text as-is
         assert result[0].corrected_text == "Original text"
@@ -64,7 +64,7 @@ class TestBlockCorrectionStageCorrect:
     def test_correct_blocks_empty_list(self):
         """Test block correction with empty list."""
         stage = BlockCorrectionStage(enable=True)
-        result = stage.correct_blocks([])
+        result = stage.process([])
         assert result == []
 
     def test_correct_blocks_preserves_other_fields(self):
@@ -81,7 +81,7 @@ class TestBlockCorrectionStageCorrect:
         ]
 
         stage = BlockCorrectionStage(enable=True)
-        result = stage.correct_blocks(blocks)
+        result = stage.process(blocks)
 
         assert result[0].type == "title"
         assert result[0].bbox == BBox(50, 50, 150, 100)

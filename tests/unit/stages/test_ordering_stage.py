@@ -66,7 +66,7 @@ class TestOrderingStageSort:
         image = np.zeros((100, 100, 3), dtype=np.uint8)
 
         # Execute
-        result = stage.sort(input_blocks, image)
+        result = stage.process(input_blocks, image=image)
 
         # Verify - sorter.sort is called with input_blocks, image, and any kwargs from context
         mock_sorter.sort.assert_called_once()
@@ -87,7 +87,7 @@ class TestOrderingStageSort:
         image = np.zeros((100, 100, 3), dtype=np.uint8)
 
         # Execute
-        result = stage.sort([], image)
+        result = stage.process([], image=image)
 
         # Verify
         mock_sorter.sort.assert_called_once()
@@ -119,7 +119,7 @@ class TestOrderingStageSort:
         image = np.zeros((100, 100, 3), dtype=np.uint8)
 
         # Execute
-        result = stage.sort(input_blocks, image)
+        result = stage.process(input_blocks, image=image)
 
         # Verify
         assert len(result) == 1

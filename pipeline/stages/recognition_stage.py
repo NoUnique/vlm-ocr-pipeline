@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import numpy as np
-
 from pipeline.types import Block
 
 from .base import BaseStage
@@ -55,17 +53,3 @@ class RecognitionStage(BaseStage[list[Block], list[Block]]):
             # Note: process_blocks expects (image, blocks) order
             processed_blocks = self.recognizer.process_blocks(image, input_data)
         return processed_blocks
-
-    def recognize_blocks(self, blocks: list[Block], image: np.ndarray) -> list[Block]:
-        """Extract text from blocks using VLM.
-
-        Legacy method for backward compatibility.
-
-        Args:
-            blocks: List of blocks with bounding boxes
-            image: Page image as numpy array
-
-        Returns:
-            List of blocks with text field populated
-        """
-        return self.process(blocks, image=image)

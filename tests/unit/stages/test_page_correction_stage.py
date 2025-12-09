@@ -36,7 +36,7 @@ class TestPageCorrectionStageInit:
 
 
 class TestPageCorrectionStageCorrect:
-    """Tests for PageCorrectionStage.correct_page method."""
+    """Tests for PageCorrectionStage.process method."""
 
     def test_correct_page_disabled(self):
         """Test page correction when disabled."""
@@ -48,11 +48,11 @@ class TestPageCorrectionStageCorrect:
         )
         raw_text = "# Title\n\nRaw text"
 
-        corrected_text, ratio, should_stop = stage.correct_page(raw_text, page_num=1)
+        result = stage.process(raw_text, page_num=1)
 
-        assert corrected_text == raw_text
-        assert ratio == 0.0
-        assert should_stop is False
+        assert result.corrected_text == raw_text
+        assert result.correction_ratio == 0.0
+        assert result.should_stop is False
         mock_recognizer.correct_text.assert_not_called()
 
     def test_correct_page_paddleocr_vl_backend(self):
@@ -65,11 +65,11 @@ class TestPageCorrectionStageCorrect:
         )
         raw_text = "# Title\n\nRaw text"
 
-        corrected_text, ratio, should_stop = stage.correct_page(raw_text, page_num=1)
+        result = stage.process(raw_text, page_num=1)
 
-        assert corrected_text == raw_text
-        assert ratio == 0.0
-        assert should_stop is False
+        assert result.corrected_text == raw_text
+        assert result.correction_ratio == 0.0
+        assert result.should_stop is False
         mock_recognizer.correct_text.assert_not_called()
 
     def test_correct_page_dict_result(self):
@@ -86,11 +86,11 @@ class TestPageCorrectionStageCorrect:
         )
         raw_text = "# Title\n\nRaw text"
 
-        corrected_text, ratio, should_stop = stage.correct_page(raw_text, page_num=1)
+        result = stage.process(raw_text, page_num=1)
 
-        assert corrected_text == "# Title\n\nCorrected text"
-        assert ratio == 0.15
-        assert should_stop is False
+        assert result.corrected_text == "# Title\n\nCorrected text"
+        assert result.correction_ratio == 0.15
+        assert result.should_stop is False
 
     def test_correct_page_string_result(self):
         """Test page correction with string result."""
@@ -103,11 +103,10 @@ class TestPageCorrectionStageCorrect:
         )
         raw_text = "# Title\n\nRaw text"
 
-        corrected_text, ratio, should_stop = stage.correct_page(raw_text, page_num=1)
+        result = stage.process(raw_text, page_num=1)
 
-        assert corrected_text == "# Title\n\nCorrected text"
-        # ratio is calculated from text difference
-        assert should_stop is False
+        assert result.corrected_text == "# Title\n\nCorrected text"
+        assert result.should_stop is False
 
     def test_correct_page_rate_limit_detected(self):
         """Test page correction with rate limit detection."""
@@ -120,11 +119,11 @@ class TestPageCorrectionStageCorrect:
         )
         raw_text = "# Title\n\nRaw text"
 
-        corrected_text, ratio, should_stop = stage.correct_page(raw_text, page_num=1)
+        result = stage.process(raw_text, page_num=1)
 
-        assert "RATE_LIMIT_EXCEEDED" in corrected_text
-        assert ratio == 0.0
-        assert should_stop is True
+        assert "RATE_LIMIT_EXCEEDED" in result.corrected_text
+        assert result.correction_ratio == 0.0
+        assert result.should_stop is True
 
     def test_correct_page_exception_propagates(self):
         """Test page correction exception propagates to caller."""
@@ -137,7 +136,5 @@ class TestPageCorrectionStageCorrect:
         )
         raw_text = "# Title\n\nRaw text"
 
-        # Exception should propagate (not caught internally)
         with pytest.raises(Exception, match="API Error"):
-            stage.correct_page(raw_text, page_num=1)
-
+            stage.process(raw_text, page_num=1)

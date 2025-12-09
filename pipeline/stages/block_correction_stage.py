@@ -55,16 +55,3 @@ class BlockCorrectionStage(BaseStage[list[Block], list[Block]]):
                 block.correction_ratio = 0.0
 
         return input_data
-
-    def correct_blocks(self, blocks: list[Block]) -> list[Block]:
-        """Correct text in each block individually.
-
-        Legacy method for backward compatibility.
-
-        Args:
-            blocks: List of blocks with text field
-
-        Returns:
-            List of blocks with corrected_text field
-        """
-        return self.process(blocks)

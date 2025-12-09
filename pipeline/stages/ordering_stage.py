@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import numpy as np
-
 from pipeline.types import Block, Sorter
 
 from .base import BaseStage
@@ -44,18 +42,3 @@ class OrderingStage(BaseStage[list[Block], list[Block]]):
 
         sorted_blocks = self.sorter.sort(input_data, image, **context)
         return sorted_blocks
-
-    def sort(self, blocks: list[Block], image: np.ndarray, **kwargs: Any) -> list[Block]:
-        """Sort blocks by reading order.
-
-        Legacy method for backward compatibility.
-
-        Args:
-            blocks: List of detected blocks
-            image: Page image as numpy array
-            **kwargs: Additional arguments for sorter
-
-        Returns:
-            List of blocks with order and optionally column_index
-        """
-        return self.process(blocks, image=image, **kwargs)

@@ -44,20 +44,6 @@ class RenderingStage(BaseStage[list[Block], str]):
         else:
             raise ValueError(f"Unsupported renderer: {self.renderer}")
 
-    def render(self, blocks: list[Block], auxiliary_info: dict[str, Any] | None = None) -> str:
-        """Render blocks to output format.
-
-        Legacy method for backward compatibility.
-
-        Args:
-            blocks: List of blocks with text
-            auxiliary_info: Additional metadata (e.g., text_spans for font-based headers)
-
-        Returns:
-            Rendered text in the specified format
-        """
-        return self.process(blocks, auxiliary_info=auxiliary_info)
-
     def _render_markdown(self, blocks: list[Block], auxiliary_info: dict[str, Any] | None) -> str:
         """Render blocks as Markdown.
 

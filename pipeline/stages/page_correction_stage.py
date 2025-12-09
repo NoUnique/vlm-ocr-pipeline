@@ -80,18 +80,3 @@ class PageCorrectionStage(BaseStage[str, PageCorrectionResult]):
             return PageCorrectionResult(corrected_text, 0.0, True)
 
         return PageCorrectionResult(corrected_text, 0.0, False)
-
-    def correct_page(self, raw_text: str, page_num: int) -> tuple[str, float, bool]:
-        """Perform page-level text correction.
-
-        Legacy method for backward compatibility.
-
-        Args:
-            raw_text: Raw rendered text (Markdown)
-            page_num: Page number (for logging)
-
-        Returns:
-            tuple: (corrected_text, correction_ratio, should_stop)
-        """
-        result = self.process(raw_text, page_num=page_num)
-        return result.corrected_text, result.correction_ratio, result.should_stop
