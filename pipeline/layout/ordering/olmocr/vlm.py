@@ -78,7 +78,7 @@ class OlmOCRVLMSorter(Sorter):
             return self._vlm_client
 
         try:
-            # TODO: Implement olmOCR VLM client loading
+            # NOTE: olmOCR VLM integration requires vLLM server or transformers client
             raise NotImplementedError(
                 "olmOCR VLM integration not yet implemented. "
                 "This requires setting up vLLM server or transformers client."

@@ -145,8 +145,8 @@ class MinerUVLMDetector(Detector):
         print(f"[BBOX-DEBUG] detection_only={self.detection_only}")
 
         if self.detection_only:
-            # TODO: MinerU doesn't expose step 1 (detection only) separately
-            # For now, use two-step and remove ordering info
+            # NOTE: MinerU doesn't expose step 1 (detection only) separately
+            # Workaround: use two-step and discard ordering info
             logger.warning("MinerU VLM detection_only mode: using two-step extract but ignoring ordering")
             results = self.vlm.batch_two_step_extract(images=[pil_image])
             raw_blocks = results[0]

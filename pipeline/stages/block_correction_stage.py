@@ -46,9 +46,9 @@ class BlockCorrectionStage(BaseStage[list[Block], list[Block]]):
                     block.corrected_text = block.text
             return input_data
 
-        # TODO: Implement block-level correction with VLM
-        # For now, just copy text to corrected_text
-        logger.warning("Block-level correction is not yet implemented. Using text as-is.")
+        # NOTE: Block-level VLM correction not yet implemented
+        # Currently copies text to corrected_text as placeholder
+        logger.warning("Block-level correction enabled but not implemented. Using text as-is.")
         for block in input_data:
             if block.text is not None:
                 block.corrected_text = block.text
