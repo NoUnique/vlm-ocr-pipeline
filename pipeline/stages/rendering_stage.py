@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pipeline.conversion.output.markdown import blocks_to_markdown
+from pipeline.io.output.markdown import blocks_to_markdown
 from pipeline.types import Block
 
 from .base import BaseStage

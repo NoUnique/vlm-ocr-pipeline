@@ -29,9 +29,8 @@ except ImportError:
 
 from .config import PipelineConfig
 from .factory import ComponentFactory
+from .io import InputLoader, OutputSaver
 from .misc import tz_now
-from .pdf_processor import PDFProcessor
-from .result_saver import ResultSaver
 from .types import Block, ColumnLayout, Detector, Document, Page, PyMuPDFPage, Recognizer, Sorter
 
 logger = logging.getLogger(__name__)
@@ -140,32 +139,32 @@ class Pipeline:
         self._result_saver: ResultSaver | None = None
 
         # Initialize PDF processor (delegates PDF loading logic)
-        self._pdf_processor: PDFProcessor | None = None
+        self._input_loader: InputLoader | None = None
 
     @property
-    def result_saver(self) -> ResultSaver:
-        """Get or create ResultSaver instance (lazy initialization)."""
-        if self._result_saver is None:
-            self._result_saver = ResultSaver(
+    def output_saver(self) -> OutputSaver:
+        """Get or create OutputSaver instance (lazy initialization)."""
+        if self._output_saver is None:
+            self._output_saver = OutputSaver(
                 detector_name=self.config.detector,
                 sorter_name=self.config.resolved_sorter,
                 backend=self.config.resolved_recognizer_backend,
                 model=self.config.recognizer,
                 renderer=self.config.renderer,
             )
-        return self._result_saver
+        return self._output_saver
 
     @property
-    def pdf_processor(self) -> PDFProcessor:
-        """Get or create PDFProcessor instance (lazy initialization)."""
-        if self._pdf_processor is None:
-            self._pdf_processor = PDFProcessor(
+    def input_loader(self) -> InputLoader:
+        """Get or create InputLoader instance (lazy initialization)."""
+        if self._input_loader is None:
+            self._input_loader = InputLoader(
                 input_stage=self.input_stage,
                 use_dual_resolution=self.config.use_dual_resolution,
                 detection_dpi=self.config.detection_dpi or 150,
                 recognition_dpi=self.config.recognition_dpi or 300,
             )
-        return self._pdf_processor
+        return self._input_loader
 
     def _get_detector_kwargs(self) -> dict[str, Any]:
         """Get detector kwargs for Ray pool initialization."""
@@ -255,7 +254,7 @@ class Pipeline:
     def _scale_blocks(self, blocks: list[Block], scale_factor: float) -> list[Block]:
         """Scale block bounding boxes by a factor.
 
-        Delegates to PDFProcessor for actual scaling logic.
+        Delegates to InputLoader for actual scaling logic.
 
         Args:
             blocks: List of blocks with bounding boxes
@@ -264,7 +263,7 @@ class Pipeline:
         Returns:
             List of blocks with scaled bounding boxes
         """
-        return self.pdf_processor.scale_blocks_for_recognition(blocks, scale_factor)
+        return self.input_loader.scale_blocks_for_recognition(blocks, scale_factor)
 
     def process_image(
         self,
@@ -306,7 +305,7 @@ class Pipeline:
         logger.info("Processing image: %s", image_path)
 
         # Stage 1: Load image
-        from .conversion.input import image as image_loader
+        from .io.input import image as image_loader
 
         image_np = image_loader.load_image(image_path)
 
@@ -365,7 +364,7 @@ class Pipeline:
         logger.info("Processing PDF: %s", pdf_path)
 
         # Import PDF converter functions
-        from .conversion.input import pdf as pdf_converter
+        from .io.input import pdf as pdf_converter
 
         # Get PDF info
         pdf_info = pdf_converter.get_pdf_info(pdf_path)
@@ -459,7 +458,7 @@ class Pipeline:
         page_output_dir: Path,
     ) -> dict[int, list[Block]]:
         """Stage 3: Sort blocks for all pages."""
-        from .conversion.input import pdf as pdf_converter
+        from .io.input import pdf as pdf_converter
 
         logger.info("[Stage 3/7] Sorting blocks for %d pages...", len(detected_blocks))
 
@@ -756,7 +755,7 @@ class Pipeline:
     ) -> None:
         """Save intermediate results after each stage.
 
-        Delegates to ResultSaver for actual saving logic.
+        Delegates to OutputSaver for actual saving logic.
 
         Args:
             pdf_path: Path to PDF file
@@ -767,7 +766,7 @@ class Pipeline:
             rendered_texts: Rendered markdown texts (optional)
             stage: Current stage name
         """
-        self.result_saver.save_intermediate_results(
+        self.output_saver.save_intermediate_results(
             pdf_path=pdf_path,
             pages_to_process=pages_to_process,
             page_output_dir=page_output_dir,
@@ -813,16 +812,16 @@ class Pipeline:
     def _build_pages_summary(self, processed_pages: list[Page]) -> tuple[list[dict[str, Any]], dict[str, int]]:
         """Build summary of processed pages.
         
-        Delegates to ResultSaver.
+        Delegates to OutputSaver.
         """
-        return self.result_saver.build_pages_summary(processed_pages)
+        return self.output_saver.build_pages_summary(processed_pages)
 
     def _determine_summary_filename(self, processing_stopped: bool, has_errors: bool) -> str:
         """Determine summary filename based on processing status.
         
-        Delegates to ResultSaver.
+        Delegates to OutputSaver.
         """
-        return self.result_saver.determine_summary_filename(processing_stopped, has_errors)
+        return self.output_saver.determine_summary_filename(processing_stopped, has_errors)
 
     def _check_for_rate_limit_errors(self, page_result: dict[str, Any]) -> bool:
         """Check if page result contains rate limit errors."""
@@ -1024,6 +1023,6 @@ class Pipeline:
     def _save_results(self, result: dict[str, Any], output_path: Path) -> None:
         """Save processing results to JSON file.
         
-        Delegates to ResultSaver.
+        Delegates to OutputSaver.
         """
-        self.result_saver.save_final_results(result, output_path)
+        self.output_saver.save_final_results(result, output_path)

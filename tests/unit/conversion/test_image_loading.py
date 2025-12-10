@@ -16,7 +16,7 @@ import cv2
 import numpy as np
 import pytest
 
-from pipeline.conversion.input.image import load_image, load_jpeg, load_png
+from pipeline.io.input.image import load_image, load_jpeg, load_png
 
 
 class TestLoadImage:

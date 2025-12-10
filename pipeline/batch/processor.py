@@ -126,7 +126,7 @@ class StagedBatchProcessor:
         Returns:
             List of PageInfo objects
         """
-        from pipeline.conversion.input import pdf as pdf_converter
+        from pipeline.io.input import pdf as pdf_converter
 
         pages: list[PageInfo] = []
 

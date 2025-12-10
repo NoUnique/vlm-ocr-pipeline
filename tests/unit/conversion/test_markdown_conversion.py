@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pipeline.conversion.output.markdown import (
+from pipeline.io.output.markdown import (
     BlockTypeHeaderIdentifier,
     block_to_markdown,
     blocks_to_markdown,

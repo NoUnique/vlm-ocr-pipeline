@@ -16,7 +16,7 @@ from unittest.mock import MagicMock, Mock, patch
 import numpy as np
 import pytest
 
-from pipeline.conversion.input.pdf import (
+from pipeline.io.input.pdf import (
     determine_pages_to_process,
     extract_text_spans_from_pdf,
     get_pdf_info,

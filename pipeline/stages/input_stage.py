@@ -104,7 +104,7 @@ class InputStage:
         Returns:
             Image as numpy array
         """
-        from pipeline.conversion.input.image import load_image
+        from pipeline.io.input.image import load_image
 
         return load_image(image_path)
 
@@ -119,7 +119,7 @@ class InputStage:
         Returns:
             Page image as numpy array
         """
-        from pipeline.conversion.input.pdf import render_pdf_page
+        from pipeline.io.input.pdf import render_pdf_page
 
         effective_dpi = dpi if dpi is not None else self.dpi
         page_image, _temp_path = render_pdf_page(pdf_path, page_num, temp_dir=self.temp_dir, dpi=effective_dpi)
@@ -139,7 +139,7 @@ class InputStage:
             Dictionary with auxiliary info or None if extraction fails
         """
         try:
-            from pipeline.conversion.input.pdf import extract_text_spans_from_pdf
+            from pipeline.io.input.pdf import extract_text_spans_from_pdf
 
             text_spans = extract_text_spans_from_pdf(pdf_path, page_num)
             if text_spans:

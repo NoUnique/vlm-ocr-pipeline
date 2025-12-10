@@ -1,4 +1,4 @@
-"""Result saving utilities for the VLM OCR Pipeline.
+"""Output saving utilities for the VLM OCR Pipeline.
 
 This module handles saving intermediate and final results during pipeline processing.
 """
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class ResultSaver:
+class OutputSaver:
     """Handles saving of pipeline processing results.
 
     This class encapsulates all result-saving logic, including:
@@ -43,7 +43,7 @@ class ResultSaver:
         model: str,
         renderer: str,
     ):
-        """Initialize ResultSaver.
+        """Initialize OutputSaver.
 
         Args:
             detector_name: Name of the detector

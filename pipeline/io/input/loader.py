@@ -1,6 +1,6 @@
-"""PDF processing utilities for the VLM OCR Pipeline.
+"""Input loading utilities for the VLM OCR Pipeline.
 
-This module handles PDF-specific operations like loading pages,
+This module handles Input-specific operations like loading pages,
 extracting images, and managing PyMuPDF document lifecycle.
 """
 
@@ -14,15 +14,15 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 if TYPE_CHECKING:
-    from .stages import InputStage
+    from pipeline.stages import InputStage
 
 logger = logging.getLogger(__name__)
 
 
-class PDFProcessor:
-    """Handles PDF loading and page extraction.
+class InputLoader:
+    """Handles Input loading and page extraction.
 
-    This class encapsulates PDF-specific logic including:
+    This class encapsulates Input-specific logic including:
     - Loading PDF documents
     - Extracting page images at different DPIs
     - Managing PyMuPDF document lifecycle
@@ -42,7 +42,7 @@ class PDFProcessor:
         detection_dpi: int = 150,
         recognition_dpi: int = 300,
     ):
-        """Initialize PDFProcessor.
+        """Initialize InputLoader.
 
         Args:
             input_stage: Input stage for PDF conversion

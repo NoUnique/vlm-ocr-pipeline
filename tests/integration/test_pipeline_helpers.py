@@ -9,7 +9,7 @@ Tests helper methods and utilities used by the Pipeline class:
 import pytest
 
 from pipeline import Pipeline
-from pipeline.conversion.input import pdf as pdf_converter
+from pipeline.io.input import pdf as pdf_converter
 from pipeline.layout.ordering import ReadingOrderAnalyzer
 from pipeline.types import BBox, Block
 
