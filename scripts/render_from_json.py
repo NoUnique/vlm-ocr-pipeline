@@ -68,7 +68,11 @@ def main() -> int:
     parser.add_argument("--input", "-i", required=True, help="Input JSON file or directory")
     parser.add_argument("--output", "-o", default=None, help="Output directory")
     parser.add_argument("--renderer", choices=["markdown", "plaintext"], default="markdown")
-    parser.add_argument("--image-render-mode", choices=["image_only", "image_and_description", "description_only"], default="image_and_description")
+    parser.add_argument(
+        "--image-render-mode",
+        choices=["image_only", "image_and_description", "description_only"],
+        default="image_and_description",
+    )
 
     args = parser.parse_args()
     input_path = Path(args.input)

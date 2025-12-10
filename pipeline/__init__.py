@@ -135,8 +135,8 @@ class Pipeline:
         self.rendering_stage: RenderingStage | None = None
         self.page_correction_stage: PageCorrectionStage | None = None
 
-        # Initialize result saver (delegates saving logic)
-        self._result_saver: ResultSaver | None = None
+        # Initialize output saver (delegates saving logic)
+        self._output_saver: OutputSaver | None = None
 
         # Initialize PDF processor (delegates PDF loading logic)
         self._input_loader: InputLoader | None = None

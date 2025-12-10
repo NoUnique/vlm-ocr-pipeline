@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import numpy as np
 
-from .types import BBox, Block, BlockType
+from .types import Block, BlockType
 
 logger = logging.getLogger(__name__)
 

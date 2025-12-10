@@ -90,7 +90,8 @@ def create_ray_recognizer_actor(
                 List of processed block lists (one per image)
             """
             return [
-                self.recognizer.process_blocks(image, blocks) for image, blocks in zip(images, blocks_list, strict=False)
+                self.recognizer.process_blocks(image, blocks)
+                for image, blocks in zip(images, blocks_list, strict=False)
             ]
 
         def get_info(self) -> dict[str, Any]:
