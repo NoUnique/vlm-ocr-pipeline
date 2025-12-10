@@ -100,7 +100,7 @@ class PPDocLayoutV2Detector(Detector):
         model_name: str | None = None,
         model_dir: str | Path | None = None,
         threshold: float = 0.5,
-        img_size: int | None = None,
+        image_size: int | None = None,
         layout_nms: bool = True,
         layout_unclip_ratio: float | None = None,
         layout_merge_bboxes_mode: str | None = None,
@@ -112,7 +112,7 @@ class PPDocLayoutV2Detector(Detector):
             model_name: Model name (should be "PP-DocLayoutV2")
             model_dir: Path to custom model directory
             threshold: Confidence threshold for detections (default: 0.5)
-            img_size: Input image size for model (default: None, uses model default)
+            image_size: Input image size for model (default: None, uses model default)
             layout_nms: Whether to use NMS (default: True, recommended)
             layout_unclip_ratio: Unclip ratio for layout boxes (default: None)
             layout_merge_bboxes_mode: Mode for merging overlapping boxes (default: None)
@@ -134,7 +134,7 @@ class PPDocLayoutV2Detector(Detector):
         self.model_name = model_name or "PP-DocLayoutV2"
         self.model_dir = Path(model_dir) if model_dir else None
         self.threshold = threshold
-        self.img_size = img_size
+        self.image_size = image_size
         self.layout_nms = layout_nms
         self.layout_unclip_ratio = layout_unclip_ratio
         self.layout_merge_bboxes_mode = layout_merge_bboxes_mode
@@ -182,8 +182,8 @@ class PPDocLayoutV2Detector(Detector):
         predict_kwargs = {"batch_size": 1, "layout_nms": self.layout_nms}
         if self.threshold is not None:
             predict_kwargs["threshold"] = self.threshold
-        if self.img_size is not None:
-            predict_kwargs["img_size"] = self.img_size
+        if self.image_size is not None:
+            predict_kwargs["img_size"] = self.image_size  # PaddleOCR API uses "img_size"
         if self.layout_unclip_ratio is not None:
             predict_kwargs["layout_unclip_ratio"] = self.layout_unclip_ratio
         if self.layout_merge_bboxes_mode is not None:

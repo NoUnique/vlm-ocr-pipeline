@@ -103,9 +103,9 @@ def managed_numpy_array(*arrays: np.ndarray) -> Iterator[tuple[np.ndarray, ...]]
     Example:
         >>> import numpy as np
         >>> large_image = np.zeros((4000, 3000, 3), dtype=np.uint8)
-        >>> with managed_numpy_array(large_image) as (img,):
+        >>> with managed_numpy_array(large_image) as (image,):
         ...     # Process image
-        ...     result = some_processing(img)
+        ...     result = some_processing(image)
         ... # Image automatically cleaned up after this block
     """
     try:

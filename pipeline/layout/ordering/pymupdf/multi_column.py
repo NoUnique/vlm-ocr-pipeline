@@ -49,12 +49,12 @@ def column_boxes(
 
     clip = _create_clip_rect(fitz_module, page, footer_margin, header_margin)
     path_bboxes = _extract_path_bboxes(fitz_module, page)
-    img_bboxes = _extract_image_bboxes(fitz_module, page)
+    image_bboxes = _extract_image_bboxes(fitz_module, page)
     text_bboxes, vert_bboxes = _extract_text_bboxes(
         fitz_module,
         page,
         clip,
-        img_bboxes,
+        image_bboxes,
         no_image_text,
     )
 
@@ -67,7 +67,7 @@ def column_boxes(
         int(page.rect.width),
         path_bboxes,
         vert_bboxes,
-        img_bboxes,
+        image_bboxes,
     )
 
     if not text_bboxes:
@@ -104,17 +104,17 @@ def _extract_path_bboxes(_fitz: PyMuPDFModule, page: PyMuPDFPage) -> list[PyMuPD
 
 
 def _extract_image_bboxes(_fitz: PyMuPDFModule, page: PyMuPDFPage) -> list[PyMuPDFIRect]:
-    img_bboxes: list[PyMuPDFIRect] = []
+    image_bboxes: list[PyMuPDFIRect] = []
     for item in page.get_images():
-        img_bboxes.extend(cast(Sequence[PyMuPDFIRect], page.get_image_rects(item[0])))
-    return img_bboxes
+        image_bboxes.extend(cast(Sequence[PyMuPDFIRect], page.get_image_rects(item[0])))
+    return image_bboxes
 
 
 def _extract_text_bboxes(
     fitz_module: PyMuPDFModule,
     page: PyMuPDFPage,
     clip: PyMuPDFRect,
-    img_bboxes: Sequence[PyMuPDFIRect],
+    image_bboxes: Sequence[PyMuPDFIRect],
     no_image_text: bool,
 ) -> tuple[list[PyMuPDFIRect], list[PyMuPDFIRect]]:
     bboxes: list[PyMuPDFIRect] = []
@@ -129,7 +129,7 @@ def _extract_text_bboxes(
     for block in blocks:
         bbox = fitz_module.IRect(block["bbox"])
 
-        if no_image_text and _in_bbox(bbox, img_bboxes):
+        if no_image_text and _in_bbox(bbox, image_bboxes):
             continue
 
         first_line = block["lines"][0]
@@ -164,19 +164,19 @@ def _extend_right(
     width: int,
     path_bboxes: Sequence[PyMuPDFIRect],
     vert_bboxes: Sequence[PyMuPDFIRect],
-    img_bboxes: Sequence[PyMuPDFIRect],
+    image_bboxes: Sequence[PyMuPDFIRect],
 ) -> list[PyMuPDFIRect]:
     for index, bbox in enumerate(bboxes):
         if _in_bbox(bbox, path_bboxes):
             continue
 
-        if _in_bbox(bbox, img_bboxes):
+        if _in_bbox(bbox, image_bboxes):
             continue
 
         temp_rect = +bbox
         temp_rect.x1 = width
 
-        combined_blocks = list(path_bboxes) + list(vert_bboxes) + list(img_bboxes)
+        combined_blocks = list(path_bboxes) + list(vert_bboxes) + list(image_bboxes)
 
         if _intersects_bboxes(temp_rect, combined_blocks):
             continue

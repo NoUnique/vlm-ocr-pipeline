@@ -117,12 +117,12 @@ class GeminiClient(BaseVLMClient):
         """Check if Gemini API client is available"""
         return self.client is not None
 
-    def extract_text(self, block_img: np.ndarray, block_info: dict[str, Any], prompt: str) -> dict[str, Any]:  # noqa: PLR0911
+    def extract_text(self, block_image: np.ndarray, block_info: dict[str, Any], prompt: str) -> dict[str, Any]:  # noqa: PLR0911
         """
         Extract text from block using Gemini API
 
         Args:
-            block_img: Image block as numpy array
+            block_image: Image block as numpy array
             block_info: Block metadata including type and coordinates
             prompt: Prompt for text extraction
 
@@ -135,7 +135,7 @@ class GeminiClient(BaseVLMClient):
 
         try:
             # Prepare image for API (resize and convert to JPEG)
-            img_bytes = prepare_image_for_api(block_img)
+            image_bytes = prepare_image_for_api(block_image)
 
             contents = [
                 {
@@ -145,7 +145,7 @@ class GeminiClient(BaseVLMClient):
                         {
                             "inline_data": types.Blob(
                                 mime_type="image/jpeg",
-                                data=img_bytes,
+                                data=image_bytes,
                             )
                         },
                     ],
@@ -215,13 +215,13 @@ class GeminiClient(BaseVLMClient):
             )
 
     def process_special_block(  # noqa: PLR0911
-        self, block_img: np.ndarray, block_info: dict[str, Any], prompt: str
+        self, block_image: np.ndarray, block_info: dict[str, Any], prompt: str
     ) -> dict[str, Any]:
         """
         Process special blocks (tables, figures) with Gemini API
 
         Args:
-            block_img: Image block as numpy array
+            block_image: Image block as numpy array
             block_info: Block metadata including type and coordinates
             prompt: Prompt for special content analysis
 
@@ -240,7 +240,7 @@ class GeminiClient(BaseVLMClient):
 
         try:
             # Prepare image for API (resize and convert to JPEG)
-            img_bytes = prepare_image_for_api(block_img)
+            image_bytes = prepare_image_for_api(block_image)
 
             contents = [
                 {
@@ -250,7 +250,7 @@ class GeminiClient(BaseVLMClient):
                         {
                             "inline_data": types.Blob(
                                 mime_type="image/jpeg",
-                                data=img_bytes,
+                                data=image_bytes,
                             )
                         },
                     ],

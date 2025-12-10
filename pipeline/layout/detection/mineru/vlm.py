@@ -166,17 +166,17 @@ class MinerUVLMDetector(Detector):
         logger.debug("Detected %d blocks with MinerU VLM", len(raw_blocks))
 
         # Get image dimensions for bbox scaling
-        img_height, img_width = image.shape[:2]
+        image_height, image_width = image.shape[:2]
 
-        return [self._to_block(block, img_width, img_height) for block in raw_blocks]
+        return [self._to_block(block, image_width, image_height) for block in raw_blocks]
 
-    def _to_block(self, block: dict[str, Any], img_width: int, img_height: int) -> Block:
+    def _to_block(self, block: dict[str, Any], image_width: int, image_height: int) -> Block:
         """Convert MinerU block to unified Block format.
 
         Args:
             block: {"type": str, "bbox": [x0, y0, x1, y1], "text": str (optional), "index": int (optional)}
-            img_width: Image width in pixels
-            img_height: Image height in pixels
+            image_width: Image width in pixels
+            image_height: Image height in pixels
 
         Returns:
             Unified Block dataclass instance with BBox and standardized type
@@ -186,10 +186,10 @@ class MinerUVLMDetector(Detector):
         x0_norm, y0_norm, x1_norm, y1_norm = normalized_bbox[:4]
 
         # Scale to pixel coordinates
-        x0_px = x0_norm * img_width
-        y0_px = y0_norm * img_height
-        x1_px = x1_norm * img_width
-        y1_px = y1_norm * img_height
+        x0_px = x0_norm * image_width
+        y0_px = y0_norm * image_height
+        x1_px = x1_norm * image_width
+        y1_px = y1_norm * image_height
 
         print(
             f"[BBOX-DEBUG] Normalized: {normalized_bbox[:4]} -> "

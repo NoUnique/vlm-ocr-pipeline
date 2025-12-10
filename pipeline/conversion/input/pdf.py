@@ -87,20 +87,20 @@ def render_pdf_page_pymupdf(
                 pix = page.get_pixmap(matrix=mat)  # type: ignore[attr-defined]
 
                 # Convert to numpy array (RGB)
-                img = np.frombuffer(pix.samples, dtype=np.uint8)  # type: ignore[attr-defined]
-                img = img.reshape(pix.height, pix.width, pix.n)  # type: ignore[attr-defined]
+                image = np.frombuffer(pix.samples, dtype=np.uint8)  # type: ignore[attr-defined]
+                image = image.reshape(pix.height, pix.width, pix.n)  # type: ignore[attr-defined]
 
                 # Convert RGBA to RGB if necessary (4 channels = RGBA)
                 rgba_channels = 4
                 if pix.n == rgba_channels:  # type: ignore[attr-defined]
-                    img = img[:, :, :3]  # Drop alpha channel
+                    image = image[:, :, :3]  # Drop alpha channel
 
                 # Save to temp file
                 temp_image_path = temp_dir / f"{pdf_path.stem}_page_{page_num}.jpg"
-                cv2.imwrite(str(temp_image_path), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+                cv2.imwrite(str(temp_image_path), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
                 logger.info("Rendered PDF page with PyMuPDF to: %s", temp_image_path)
 
-                return img, temp_image_path
+                return image, temp_image_path
 
         except Exception as e:
             logger.warning("PyMuPDF rendering failed: %s. Falling back to pdf2image.", e)

@@ -39,7 +39,7 @@ class TestDetectorProtocol:
                 return [Block(type="text", bbox=BBox(0, 0, 100, 100))]
 
             def detect_batch(self, images: list[np.ndarray]) -> list[list[Block]]:
-                return [self.detect(img) for img in images]
+                return [self.detect(image) for image in images]
 
         detector = MockDetector()
         assert isinstance(detector, Detector)
@@ -128,7 +128,7 @@ class TestRecognizerProtocol:
                 images: Sequence[np.ndarray | None],
                 blocks_list: Sequence[Sequence[Block]],
             ) -> list[list[Block]]:
-                return [self.process_blocks(img, blocks) for img, blocks in zip(images, blocks_list, strict=False)]
+                return [self.process_blocks(image, blocks) for image, blocks in zip(images, blocks_list, strict=False)]
 
         recognizer = MockRecognizer()
         assert isinstance(recognizer, Recognizer)
@@ -154,7 +154,7 @@ class TestRecognizerProtocol:
                 images: Sequence[np.ndarray | None],
                 blocks_list: Sequence[Sequence[Block]],
             ) -> list[list[Block]]:
-                return [self.process_blocks(img, blocks) for img, blocks in zip(images, blocks_list, strict=False)]
+                return [self.process_blocks(image, blocks) for image, blocks in zip(images, blocks_list, strict=False)]
 
         recognizer = NoCorrectRecognizer()
         assert isinstance(recognizer, Recognizer)

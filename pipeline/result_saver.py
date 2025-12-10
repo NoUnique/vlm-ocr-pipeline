@@ -114,9 +114,9 @@ class ResultSaver:
 
         auxiliary_info: dict[str, Any] = {}
         if page_images and page_num in page_images:
-            img = page_images[page_num]
-            auxiliary_info["width"] = int(img.shape[1])
-            auxiliary_info["height"] = int(img.shape[0])
+            image = page_images[page_num]
+            auxiliary_info["width"] = int(image.shape[1])
+            auxiliary_info["height"] = int(image.shape[0])
 
         if rendered_texts and page_num in rendered_texts:
             auxiliary_info["text"] = rendered_texts[page_num]

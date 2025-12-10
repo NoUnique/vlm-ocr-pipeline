@@ -110,13 +110,13 @@ class AsyncGeminiClient:
         return self.client is not None
 
     async def extract_text(  # noqa: PLR0911
-        self, block_img: np.ndarray, block_info: dict[str, Any], prompt: str
+        self, block_image: np.ndarray, block_info: dict[str, Any], prompt: str
     ) -> dict[str, Any]:
         """
         Extract text from block using Gemini API (async).
 
         Args:
-            block_img: Image block as numpy array
+            block_image: Image block as numpy array
             block_info: Block metadata including type and coordinates
             prompt: Prompt for text extraction
 
@@ -129,22 +129,22 @@ class AsyncGeminiClient:
 
         try:
             # Resize image if too large
-            h, w = block_img.shape[:2]
+            h, w = block_image.shape[:2]
             max_dim = 1024
 
             if max(h, w) > max_dim:
                 scale = max_dim / max(h, w)
                 new_w = int(w * scale)
                 new_h = int(h * scale)
-                block_img_resized = cv2.resize(block_img, (new_w, new_h))
+                block_image_resized = cv2.resize(block_image, (new_w, new_h))
             else:
-                block_img_resized = block_img
+                block_image_resized = block_image
 
-            pil_image = Image.fromarray(cv2.cvtColor(block_img_resized, cv2.COLOR_BGR2RGB))
+            pil_image = Image.fromarray(cv2.cvtColor(block_image_resized, cv2.COLOR_BGR2RGB))
 
-            img_byte_arr = io.BytesIO()
-            pil_image.save(img_byte_arr, format="JPEG", quality=85, optimize=True)
-            img_bytes = img_byte_arr.getvalue()
+            image_buffer = io.BytesIO()
+            pil_image.save(image_buffer, format="JPEG", quality=85, optimize=True)
+            image_bytes = image_buffer.getvalue()
 
             contents = [
                 {
@@ -154,7 +154,7 @@ class AsyncGeminiClient:
                         {
                             "inline_data": types.Blob(
                                 mime_type="image/jpeg",
-                                data=img_bytes,
+                                data=image_bytes,
                             )
                         },
                     ],
@@ -180,7 +180,7 @@ class AsyncGeminiClient:
                 contents=cast(types.ContentListUnionDict, contents),
             )
 
-            del pil_image, img_byte_arr, img_bytes, block_img_resized
+            del pil_image, image_buffer, image_bytes, block_image_resized
             gc.collect()
 
             text = (response.text or "").strip()
@@ -243,30 +243,30 @@ class AsyncGeminiClient:
             }
 
     async def extract_text_batch(
-        self, regions: list[tuple[np.ndarray, dict[str, Any], str]], max_concurrent: int = 5
+        self, blocks: list[tuple[np.ndarray, dict[str, Any], str]], max_concurrent: int = 5
     ) -> list[dict[str, Any]]:
         """
         Extract text from multiple blocks concurrently with rate limiting.
 
         Args:
-            regions: List of (image, block_info, prompt) tuples
+            blocks: List of (image, block_info, prompt) tuples
             max_concurrent: Maximum number of concurrent API calls
 
         Returns:
             List of extraction results in the same order as input
         """
-        if not regions:
+        if not blocks:
             return []
 
         # Create semaphore to limit concurrent requests
         semaphore = asyncio.Semaphore(max_concurrent)
 
-        async def extract_with_semaphore(img: np.ndarray, info: dict[str, Any], prompt: str) -> dict[str, Any]:
+        async def extract_with_semaphore(image: np.ndarray, info: dict[str, Any], prompt: str) -> dict[str, Any]:
             async with semaphore:
-                return await self.extract_text(img, info, prompt)
+                return await self.extract_text(image, info, prompt)
 
-        # Create tasks for all regions
-        tasks = [extract_with_semaphore(img, info, prompt) for img, info, prompt in regions]
+        # Create tasks for all blocks
+        tasks = [extract_with_semaphore(image, info, prompt) for image, info, prompt in blocks]
 
         # Execute all tasks concurrently
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -276,7 +276,7 @@ class AsyncGeminiClient:
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.error("Task %d failed with exception: %s", i, result)
-                _, info, _ = regions[i]
+                _, info, _ = blocks[i]
                 final_results.append(
                     {
                         "type": info["type"],
@@ -292,13 +292,13 @@ class AsyncGeminiClient:
         return final_results
 
     async def process_special_block(  # noqa: PLR0911
-        self, block_img: np.ndarray, block_info: dict[str, Any], prompt: str
+        self, block_image: np.ndarray, block_info: dict[str, Any], prompt: str
     ) -> dict[str, Any]:
         """
         Process special blocks (tables, figures) with Gemini API (async).
 
         Args:
-            block_img: Image block as numpy array
+            block_image: Image block as numpy array
             block_info: Block metadata including type and coordinates
             prompt: Prompt for special content analysis
 
@@ -317,22 +317,22 @@ class AsyncGeminiClient:
 
         try:
             # Resize image if too large
-            h, w = block_img.shape[:2]
+            h, w = block_image.shape[:2]
             max_dim = 1024
 
             if max(h, w) > max_dim:
                 scale = max_dim / max(h, w)
                 new_w = int(w * scale)
                 new_h = int(h * scale)
-                block_img_resized = cv2.resize(block_img, (new_w, new_h))
+                block_image_resized = cv2.resize(block_image, (new_w, new_h))
             else:
-                block_img_resized = block_img
+                block_image_resized = block_image
 
-            pil_image = Image.fromarray(cv2.cvtColor(block_img_resized, cv2.COLOR_BGR2RGB))
+            pil_image = Image.fromarray(cv2.cvtColor(block_image_resized, cv2.COLOR_BGR2RGB))
 
-            img_byte_arr = io.BytesIO()
-            pil_image.save(img_byte_arr, format="JPEG", quality=85, optimize=True)
-            img_bytes = img_byte_arr.getvalue()
+            image_buffer = io.BytesIO()
+            pil_image.save(image_buffer, format="JPEG", quality=85, optimize=True)
+            image_bytes = image_buffer.getvalue()
 
             contents = [
                 {
@@ -342,7 +342,7 @@ class AsyncGeminiClient:
                         {
                             "inline_data": types.Blob(
                                 mime_type="image/jpeg",
-                                data=img_bytes,
+                                data=image_bytes,
                             )
                         },
                     ],
@@ -367,7 +367,7 @@ class AsyncGeminiClient:
                 contents=cast(types.ContentListUnionDict, contents),
             )
 
-            del pil_image, img_byte_arr, img_bytes, block_img_resized
+            del pil_image, image_buffer, image_bytes, block_image_resized
             gc.collect()
 
             response_text = (response.text or "").strip()
@@ -428,30 +428,30 @@ class AsyncGeminiClient:
             }
 
     async def process_special_block_batch(
-        self, regions: list[tuple[np.ndarray, dict[str, Any], str]], max_concurrent: int = 3
+        self, blocks: list[tuple[np.ndarray, dict[str, Any], str]], max_concurrent: int = 3
     ) -> list[dict[str, Any]]:
         """
         Process multiple special blocks concurrently with rate limiting.
 
         Args:
-            regions: List of (image, block_info, prompt) tuples
+            blocks: List of (image, block_info, prompt) tuples
             max_concurrent: Maximum number of concurrent API calls (lower for special blocks)
 
         Returns:
             List of processing results in the same order as input
         """
-        if not regions:
+        if not blocks:
             return []
 
         # Create semaphore to limit concurrent requests
         semaphore = asyncio.Semaphore(max_concurrent)
 
-        async def process_with_semaphore(img: np.ndarray, info: dict[str, Any], prompt: str) -> dict[str, Any]:
+        async def process_with_semaphore(image: np.ndarray, info: dict[str, Any], prompt: str) -> dict[str, Any]:
             async with semaphore:
-                return await self.process_special_block(img, info, prompt)
+                return await self.process_special_block(image, info, prompt)
 
-        # Create tasks for all regions
-        tasks = [process_with_semaphore(img, info, prompt) for img, info, prompt in regions]
+        # Create tasks for all blocks
+        tasks = [process_with_semaphore(image, info, prompt) for image, info, prompt in blocks]
 
         # Execute all tasks concurrently
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -461,7 +461,7 @@ class AsyncGeminiClient:
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.error("Special block task %d failed with exception: %s", i, result)
-                _, info, _ = regions[i]
+                _, info, _ = blocks[i]
                 final_results.append(
                     {
                         "type": info["type"],

@@ -157,18 +157,18 @@ class OpenAIClient(BaseVLMClient):
 
         pil_image = Image.fromarray(cv2.cvtColor(image_resized, cv2.COLOR_BGR2RGB))
 
-        img_byte_arr = io.BytesIO()
-        pil_image.save(img_byte_arr, format="JPEG", quality=85, optimize=True)
-        img_bytes = img_byte_arr.getvalue()
+        image_buffer = io.BytesIO()
+        pil_image.save(image_buffer, format="JPEG", quality=85, optimize=True)
+        image_bytes = image_buffer.getvalue()
 
-        return base64.b64encode(img_bytes).decode("utf-8")
+        return base64.b64encode(image_bytes).decode("utf-8")
 
-    def extract_text(self, block_img: np.ndarray, block_info: dict[str, Any], prompt: str) -> dict[str, Any]:  # noqa: PLR0911
+    def extract_text(self, block_image: np.ndarray, block_info: dict[str, Any], prompt: str) -> dict[str, Any]:  # noqa: PLR0911
         """
         Extract text from block using OpenAI API
 
         Args:
-            block_img: Image block as numpy array
+            block_image: Image block as numpy array
             block_info: Block metadata including type and coordinates
             prompt: Prompt for text extraction
 
@@ -182,7 +182,7 @@ class OpenAIClient(BaseVLMClient):
             return {"type": block_info["type"], "xywh": block_info["xywh"], "text": "", "confidence": 0.0}
 
         try:
-            base64_image = self._encode_image(block_img)
+            base64_image = self._encode_image(block_image)
 
             messages = [
                 {
@@ -274,13 +274,13 @@ class OpenAIClient(BaseVLMClient):
             }
 
     def process_special_block(  # noqa: PLR0911
-        self, block_img: np.ndarray, block_info: dict[str, Any], prompt: str
+        self, block_image: np.ndarray, block_info: dict[str, Any], prompt: str
     ) -> dict[str, Any]:
         """
         Process special blocks (tables, figures) with OpenAI API
 
         Args:
-            block_img: Image block as numpy array
+            block_image: Image block as numpy array
             block_info: Block metadata including type and coordinates
             prompt: Prompt for special content analysis
 
@@ -300,7 +300,7 @@ class OpenAIClient(BaseVLMClient):
             }
 
         try:
-            base64_image = self._encode_image(block_img)
+            base64_image = self._encode_image(block_image)
 
             messages = [
                 {

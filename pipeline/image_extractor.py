@@ -102,8 +102,8 @@ def save_block_image(
         output_path = images_dir / filename
 
         # Save using PIL
-        img = Image.fromarray(cropped)
-        img.save(output_path)
+        pil_image = Image.fromarray(cropped)
+        pil_image.save(output_path)
 
         # Return relative path from output_dir
         relative_path = f"images/{filename}"

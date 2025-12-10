@@ -415,9 +415,9 @@ class Pipeline:
                     pdf_path, page_num, dpi=recognition_dpi
                 )
             else:
-                page_img = self.input_stage.load_pdf_page(pdf_path, page_num)
-                page_images[page_num] = page_img
-                recognition_images[page_num] = page_img
+                page_image = self.input_stage.load_pdf_page(pdf_path, page_num)
+                page_images[page_num] = page_image
+                recognition_images[page_num] = page_image
 
             aux_info = self.input_stage.extract_auxiliary_info(pdf_path, page_num)
             auxiliary_infos[page_num] = aux_info if aux_info is not None else {}

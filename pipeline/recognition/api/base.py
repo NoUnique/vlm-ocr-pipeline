@@ -80,14 +80,14 @@ class BaseVLMClient(ABC):
     @abstractmethod
     def extract_text(
         self,
-        block_img: np.ndarray,
+        block_image: np.ndarray,
         block_info: dict[str, Any],
         prompt: str,
     ) -> dict[str, Any]:
         """Extract text from an image block.
 
         Args:
-            block_img: Image block as numpy array (BGR or RGB)
+            block_image: Image block as numpy array (BGR or RGB)
             block_info: Metadata about the block (type, coordinates, etc.)
             prompt: Prompt for text extraction
 
@@ -105,14 +105,14 @@ class BaseVLMClient(ABC):
     @abstractmethod
     def process_special_block(
         self,
-        block_img: np.ndarray,
+        block_image: np.ndarray,
         block_info: dict[str, Any],
         prompt: str,
     ) -> dict[str, Any]:
         """Process special content like tables or figures.
 
         Args:
-            block_img: Image block as numpy array
+            block_image: Image block as numpy array
             block_info: Metadata about the block
             prompt: Prompt for content analysis
 
@@ -221,14 +221,14 @@ class BaseAsyncVLMClient(ABC):
     @abstractmethod
     async def extract_text(
         self,
-        block_img: np.ndarray,
+        block_image: np.ndarray,
         block_info: dict[str, Any],
         prompt: str,
     ) -> dict[str, Any]:
         """Extract text from an image block (async).
 
         Args:
-            block_img: Image block as numpy array
+            block_image: Image block as numpy array
             block_info: Metadata about the block
             prompt: Prompt for text extraction
 

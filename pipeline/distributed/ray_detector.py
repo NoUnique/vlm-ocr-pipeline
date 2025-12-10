@@ -83,7 +83,7 @@ def create_ray_detector_actor(
             Returns:
                 List of detection results (one per image)
             """
-            return [self.detector.detect(img) for img in images]
+            return [self.detector.detect(image) for image in images]
 
         def get_info(self) -> dict[str, Any]:
             """Get detector information.

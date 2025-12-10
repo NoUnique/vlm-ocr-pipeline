@@ -96,21 +96,21 @@ class PDFProcessor:
 
         for page_num in pages_to_process:
             # Load detection image
-            page_img = self.input_stage.load_pdf_page(pdf_path, page_num, dpi=self.detection_dpi)
-            page_images[page_num] = page_img
+            page_image = self.input_stage.load_pdf_page(pdf_path, page_num, dpi=self.detection_dpi)
+            page_images[page_num] = page_image
             aux_info = self.input_stage.extract_auxiliary_info(pdf_path, page_num)
             auxiliary_infos[page_num] = aux_info if aux_info is not None else {}
 
             # Load recognition image (if dual resolution)
             if self.use_dual_resolution and self.detection_dpi != self.recognition_dpi:
-                rec_img = self.input_stage.load_pdf_page(
+                recognition_image = self.input_stage.load_pdf_page(
                     pdf_path,
                     page_num,
                     dpi=self.recognition_dpi,
                 )
-                recognition_images[page_num] = rec_img
+                recognition_images[page_num] = recognition_image
             else:
-                recognition_images[page_num] = page_img
+                recognition_images[page_num] = page_image
 
             # Load PyMuPDF page if document is available
             if pymupdf_doc is not None:

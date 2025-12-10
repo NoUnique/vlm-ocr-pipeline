@@ -317,8 +317,8 @@ class TestImageLoadingIntegration:
             loaded_images.append(load_func(file_path))
 
         # All should have loaded successfully
-        assert all(img is not None for img in loaded_images)
-        assert all(img.shape == (100, 100, 3) for img in loaded_images)
+        assert all(image is not None for image in loaded_images)
+        assert all(image.shape == (100, 100, 3) for image in loaded_images)
 
     def test_load_after_modify(self, tmp_path: Path):
         """Test loading image after modifying it on disk."""

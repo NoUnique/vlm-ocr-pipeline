@@ -165,18 +165,18 @@ class AsyncOpenAIClient:
 
         pil_image = Image.fromarray(cv2.cvtColor(image_resized, cv2.COLOR_BGR2RGB))
 
-        img_byte_arr = io.BytesIO()
-        pil_image.save(img_byte_arr, format="JPEG", quality=85, optimize=True)
-        img_bytes = img_byte_arr.getvalue()
+        image_buffer = io.BytesIO()
+        pil_image.save(image_buffer, format="JPEG", quality=85, optimize=True)
+        image_bytes = image_buffer.getvalue()
 
-        return base64.b64encode(img_bytes).decode("utf-8")
+        return base64.b64encode(image_bytes).decode("utf-8")
 
-    async def extract_text(self, block_img: np.ndarray, block_info: dict[str, Any], prompt: str) -> dict[str, Any]:  # noqa: PLR0911
+    async def extract_text(self, block_image: np.ndarray, block_info: dict[str, Any], prompt: str) -> dict[str, Any]:  # noqa: PLR0911
         """
         Extract text from block using OpenAI API (async).
 
         Args:
-            block_img: Image block as numpy array
+            block_image: Image block as numpy array
             block_info: Block metadata including type and coordinates
             prompt: Prompt for text extraction
 
@@ -190,7 +190,7 @@ class AsyncOpenAIClient:
             return {"type": block_info["type"], "xywh": block_info["xywh"], "text": "", "confidence": 0.0}
 
         try:
-            base64_image = self._encode_image(block_img)
+            base64_image = self._encode_image(block_image)
 
             messages = [
                 {
@@ -283,30 +283,30 @@ class AsyncOpenAIClient:
             }
 
     async def extract_text_batch(
-        self, regions: list[tuple[np.ndarray, dict[str, Any], str]], max_concurrent: int = 5
+        self, blocks: list[tuple[np.ndarray, dict[str, Any], str]], max_concurrent: int = 5
     ) -> list[dict[str, Any]]:
         """
         Extract text from multiple blocks concurrently with rate limiting.
 
         Args:
-            regions: List of (image, block_info, prompt) tuples
+            blocks: List of (image, block_info, prompt) tuples
             max_concurrent: Maximum number of concurrent API calls
 
         Returns:
             List of extraction results in the same order as input
         """
-        if not regions:
+        if not blocks:
             return []
 
         # Create semaphore to limit concurrent requests
         semaphore = asyncio.Semaphore(max_concurrent)
 
-        async def extract_with_semaphore(img: np.ndarray, info: dict[str, Any], prompt: str) -> dict[str, Any]:
+        async def extract_with_semaphore(image: np.ndarray, info: dict[str, Any], prompt: str) -> dict[str, Any]:
             async with semaphore:
-                return await self.extract_text(img, info, prompt)
+                return await self.extract_text(image, info, prompt)
 
-        # Create tasks for all regions
-        tasks = [extract_with_semaphore(img, info, prompt) for img, info, prompt in regions]
+        # Create tasks for all blocks
+        tasks = [extract_with_semaphore(image, info, prompt) for image, info, prompt in blocks]
 
         # Execute all tasks concurrently
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -316,7 +316,7 @@ class AsyncOpenAIClient:
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.error("Task %d failed with exception: %s", i, result)
-                _, info, _ = regions[i]
+                _, info, _ = blocks[i]
                 final_results.append(
                     {
                         "type": info["type"],

@@ -43,13 +43,13 @@ class TestOpenAIClient:
             with patch.object(client, "client") as mock_client:
                 mock_client.chat.completions.create.return_value = mock_response
 
-                block_img = np.zeros((100, 100, 3), dtype=np.uint8)
+                block_image = np.zeros((100, 100, 3), dtype=np.uint8)
                 block_info = {
                     "type": "text",
                     "xywh": [10, 20, 80, 50],
                     "confidence": 0.95,
                 }
-                result = client.extract_text(block_img, block_info, "Extract text from this image")
+                result = client.extract_text(block_image, block_info, "Extract text from this image")
 
                 assert result["type"] == "text"
                 assert result["xywh"] == [10, 20, 80, 50]
@@ -72,9 +72,9 @@ class TestOpenAIClient:
                     body=None,
                 )
 
-                block_img = np.zeros((100, 100, 3), dtype=np.uint8)
+                block_image = np.zeros((100, 100, 3), dtype=np.uint8)
                 block_info = {"type": "text", "xywh": [10, 20, 80, 50]}
-                result = client.extract_text(block_img, block_info, "Extract text")
+                result = client.extract_text(block_image, block_info, "Extract text")
 
                 assert result["text"] == "[RATE_LIMIT_EXCEEDED]"
                 assert result["error"] == "openai_rate_limit"
@@ -132,7 +132,7 @@ class TestGeminiClient:
             with patch.object(client, "client") as mock_client:
                 mock_client.models.generate_content.return_value = mock_response
 
-                block_img = np.zeros((100, 100, 3), dtype=np.uint8)
+                block_image = np.zeros((100, 100, 3), dtype=np.uint8)
                 block_info = {
                     "type": "text",
                     "xywh": [10, 20, 80, 50],
@@ -143,7 +143,7 @@ class TestGeminiClient:
                 with patch("pipeline.recognition.api.gemini.rate_limiter") as mock_limiter:
                     mock_limiter.wait_if_needed.return_value = True
 
-                    result = client.extract_text(block_img, block_info, "Extract text from this image")
+                    result = client.extract_text(block_image, block_info, "Extract text from this image")
 
                     assert result["type"] == "text"
                     assert result["xywh"] == [10, 20, 80, 50]
@@ -159,13 +159,13 @@ class TestGeminiClient:
             with patch.object(client, "client") as mock_client:
                 mock_client.models.generate_content.side_effect = google_exceptions.ResourceExhausted("Rate limit")
 
-                block_img = np.zeros((100, 100, 3), dtype=np.uint8)
+                block_image = np.zeros((100, 100, 3), dtype=np.uint8)
                 block_info = {"type": "text", "xywh": [10, 20, 80, 50]}
 
                 with patch("pipeline.recognition.api.gemini.rate_limiter") as mock_limiter:
                     mock_limiter.wait_if_needed.return_value = True
 
-                    result = client.extract_text(block_img, block_info, "Extract text")
+                    result = client.extract_text(block_image, block_info, "Extract text")
 
                     assert result["text"] == "[RATE_LIMIT_EXCEEDED]"
                     assert result["error"] == "gemini_rate_limit"
@@ -199,14 +199,14 @@ class TestGeminiClient:
         with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key"}):
             client = GeminiClient(gemini_model="gemini-2.5-flash")
 
-            block_img = np.zeros((100, 100, 3), dtype=np.uint8)
+            block_image = np.zeros((100, 100, 3), dtype=np.uint8)
             block_info = {"type": "text", "xywh": [10, 20, 80, 50]}
 
             # Mock rate limiter to return False (limit exceeded)
             with patch("pipeline.recognition.api.gemini.rate_limiter") as mock_limiter:
                 mock_limiter.wait_if_needed.return_value = False
 
-                result = client.extract_text(block_img, block_info, "Extract text")
+                result = client.extract_text(block_image, block_info, "Extract text")
 
                 assert result["text"] == "[DAILY_LIMIT_EXCEEDED]"
                 assert result["error"] == "rate_limit_daily"
@@ -227,9 +227,9 @@ class TestAPIClientExceptionHandling:
                     message="Connection failed", request=mock_request
                 )
 
-                block_img = np.zeros((100, 100, 3), dtype=np.uint8)
+                block_image = np.zeros((100, 100, 3), dtype=np.uint8)
                 block_info = {"type": "text", "xywh": [10, 20, 80, 50]}
-                result = client.extract_text(block_img, block_info, "Extract")
+                result = client.extract_text(block_image, block_info, "Extract")
 
                 assert "[OPENAI_CONNECTION_ERROR]" in result["text"]
                 assert result["error"] == "openai_connection_error"
@@ -244,13 +244,13 @@ class TestAPIClientExceptionHandling:
                     "Retry failed", cause=Exception("Network error")
                 )
 
-                block_img = np.zeros((100, 100, 3), dtype=np.uint8)
+                block_image = np.zeros((100, 100, 3), dtype=np.uint8)
                 block_info = {"type": "text", "xywh": [10, 20, 80, 50]}
 
                 with patch("pipeline.recognition.api.gemini.rate_limiter") as mock_limiter:
                     mock_limiter.wait_if_needed.return_value = True
 
-                    result = client.extract_text(block_img, block_info, "Extract")
+                    result = client.extract_text(block_image, block_info, "Extract")
 
                     assert "[GEMINI_RETRY_FAILED]" in result["text"]
                     assert result["error"] == "gemini_retry_error"

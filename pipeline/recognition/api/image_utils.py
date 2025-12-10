@@ -49,8 +49,8 @@ def resize_image(
         Resized image (or original if already within bounds)
 
     Example:
-        >>> img = np.zeros((2000, 1000, 3), dtype=np.uint8)
-        >>> resized = resize_image(img, max_dim=1024)
+        >>> image = np.zeros((2000, 1000, 3), dtype=np.uint8)
+        >>> resized = resize_image(image, max_dim=1024)
         >>> resized.shape
         (1024, 512, 3)
     """
@@ -84,8 +84,8 @@ def numpy_to_jpeg_bytes(
         JPEG-encoded image bytes
 
     Example:
-        >>> img = np.zeros((100, 100, 3), dtype=np.uint8)
-        >>> jpeg_bytes = numpy_to_jpeg_bytes(img)
+        >>> image = np.zeros((100, 100, 3), dtype=np.uint8)
+        >>> jpeg_bytes = numpy_to_jpeg_bytes(image)
         >>> len(jpeg_bytes) > 0
         True
     """
@@ -97,10 +97,10 @@ def numpy_to_jpeg_bytes(
 
     pil_image = Image.fromarray(image_rgb)
 
-    img_byte_arr = io.BytesIO()
-    pil_image.save(img_byte_arr, format="JPEG", quality=quality, optimize=optimize)
+    image_buffer = io.BytesIO()
+    pil_image.save(image_buffer, format="JPEG", quality=quality, optimize=optimize)
 
-    return img_byte_arr.getvalue()
+    return image_buffer.getvalue()
 
 
 def prepare_image_for_api(
@@ -122,8 +122,8 @@ def prepare_image_for_api(
         JPEG-encoded image bytes, ready for API upload
 
     Example:
-        >>> img = np.zeros((2000, 1500, 3), dtype=np.uint8)
-        >>> jpeg_bytes = prepare_image_for_api(img, max_dim=1024)
+        >>> image = np.zeros((2000, 1500, 3), dtype=np.uint8)
+        >>> jpeg_bytes = prepare_image_for_api(image, max_dim=1024)
         >>> len(jpeg_bytes) > 0
         True
     """

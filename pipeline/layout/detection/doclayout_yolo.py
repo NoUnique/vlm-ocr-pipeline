@@ -133,8 +133,8 @@ class DocLayoutYOLODetector(Detector):
 
             # Process each image in batch individually
             # (DocLayoutYOLO model interface processes one at a time)
-            for img in batch:
-                blocks = self.detect(img)
+            for image in batch:
+                blocks = self.detect(image)
                 all_results.append(blocks)
 
         return all_results
@@ -155,8 +155,8 @@ class DocLayoutYOLODetector(Detector):
             batch = [sample_image] * batch_size
 
             # Run detection on batch
-            for img in batch:
-                _ = self.model.predict(img, conf=self.confidence_threshold)
+            for image in batch:
+                _ = self.model.predict(image, conf=self.confidence_threshold)
 
             return batch_size
 
