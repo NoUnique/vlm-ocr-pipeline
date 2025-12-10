@@ -93,6 +93,12 @@ class PipelineConfig:
 
     # ==================== Output Options ====================
     renderer: str = "markdown"
+    skip_rendering: bool = False  # JSON-only mode (no markdown/plaintext output)
+
+    # ==================== Image/Figure Processing Options ====================
+    enable_figure_description: bool = True  # VLM description for images/figures
+    enable_image_extraction: bool = True  # Extract image blocks to files
+    image_render_mode: str = "image_and_description"  # How to render images in output
 
     # ==================== Correction Stage Options ====================
     enable_block_correction: bool = False  # Block-level text correction (disabled by default)

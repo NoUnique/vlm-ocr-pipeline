@@ -414,11 +414,13 @@ def _execute_command(args: argparse.Namespace, parser: argparse.ArgumentParser, 
     try:
         # Lazy import: only load Pipeline when actually processing input
         from pipeline import Pipeline  # noqa: PLC0415
+        from pipeline.config import PipelineConfig  # noqa: PLC0415
 
         # Parse DPI configuration
         dpi, detection_dpi, recognition_dpi, use_dual_resolution = parse_dpi_config(args.dpi)
 
-        pipeline = Pipeline(
+        # Create pipeline configuration
+        config = PipelineConfig(
             confidence_threshold=args.confidence,
             use_cache=not args.no_cache,
             cache_dir=args.cache_dir,
@@ -450,6 +452,8 @@ def _execute_command(args: argparse.Namespace, parser: argparse.ArgumentParser, 
             recognition_dpi=recognition_dpi,
             use_dual_resolution=use_dual_resolution,
         )
+
+        pipeline = Pipeline(config=config)
 
         return _run_pipeline(pipeline, args, logger)
     except KeyboardInterrupt:
@@ -524,7 +528,7 @@ def _run_pipeline(pipeline: Pipeline, args: argparse.Namespace, logger: logging.
     logger.info("Input: %s", args.input)
     logger.info("Output: %s", args.output)
     logger.info("Detector: %s (backend: %s)", args.detector, args.detector_backend or "auto")
-    logger.info("Sorter: %s (backend: %s)", pipeline.sorter_name, args.sorter_backend or "auto")
+    logger.info("Sorter: %s (backend: %s)", pipeline.config.resolved_sorter, args.sorter_backend or "auto")
     logger.info("Recognizer: %s (backend: %s)", args.recognizer, args.recognizer_backend or "auto")
     if args.recognizer.startswith("gemini"):
         logger.info("Gemini Tier: %s", args.gemini_tier)
@@ -639,7 +643,7 @@ def _process_input_file(
         logger.info("Processing image file: %s", input_path)
         result = pipeline.process_image(input_path)
 
-        model_output_dir = Path(args.output) / pipeline.model
+        model_output_dir = Path(args.output) / pipeline.config.recognizer
         output_path = model_output_dir / f"{input_path.stem}.json"
 
         # Handle both Document and dict return types
@@ -687,7 +691,7 @@ def _log_output_location(
         if input_path.suffix.lower() == ".pdf":
             logger.info("Results saved to: %s", result.get("output_directory", args.output))
         else:
-            logger.info("Results saved to: %s", Path(args.output) / pipeline.model)
+            logger.info("Results saved to: %s", Path(args.output) / pipeline.config.recognizer)
     elif input_path.is_dir():
         logger.info("Results saved to: %s", result.get("output_directory", args.output))
     else:

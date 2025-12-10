@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import gc
 import logging
-import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -66,146 +65,28 @@ class Pipeline:
         ... )
     """
 
-    def __init__(
-        self,
-        config: PipelineConfig | None = None,
-        # Legacy parameters (for backward compatibility)
-        confidence_threshold: float | None = None,
-        use_cache: bool = True,
-        cache_dir: str | Path = ".cache",
-        output_dir: str | Path = "output",
-        temp_dir: str | Path = ".tmp",
-        # Layout Detection Stage
-        detector: str = "paddleocr-doclayout-v2",
-        detector_backend: str | None = None,
-        detector_model_path: str | Path | None = None,
-        # Batch processing options
-        auto_batch_size: bool = False,
-        batch_size: int | None = None,
-        target_memory_fraction: float = 0.85,
-        # Reading Order Stage
-        sorter: str | None = None,
-        sorter_backend: str | None = None,
-        sorter_model_path: str | Path | None = None,
-        # Text Recognition Stage
-        recognizer: str = "paddleocr-vl",
-        recognizer_backend: str | None = None,
-        # API-specific options
-        gemini_tier: str = "free",
-        # Output options
-        renderer: str = "markdown",
-        skip_rendering: bool = False,
-        # Image/Figure processing options
-        enable_figure_description: bool = True,
-        enable_image_extraction: bool = True,
-        image_render_mode: str = "image_and_description",
-        # Performance options
-        use_async: bool = False,
-        # DPI options
-        dpi: int | None = None,
-        detection_dpi: int | None = None,
-        recognition_dpi: int | None = None,
-        use_dual_resolution: bool = False,
-    ):
+    def __init__(self, config: PipelineConfig | None = None):
         """Initialize VLM OCR processing pipeline.
 
         Args:
-            config: Pipeline configuration object (recommended).
-                   If provided, other parameters are ignored.
+            config: Pipeline configuration object. If None, uses default configuration.
 
-            # Legacy parameters (deprecated, use PipelineConfig instead):
-            confidence_threshold: Detection confidence threshold (None = load from config)
-            use_cache: Whether to use caching
-            cache_dir: Cache directory path
-            output_dir: Output directory path
-            temp_dir: Temporary files directory path
-            detector: Detector model name or alias (default: "paddleocr-doclayout-v2")
-            detector_backend: Inference backend for detector (None = auto-select)
-            detector_model_path: Custom detector model path
-            auto_batch_size: Auto-calibrate optimal batch size for detector
-            batch_size: Manual batch size for detector
-            target_memory_fraction: Target GPU memory fraction for auto-calibration (0.0-1.0)
-            sorter: Sorter model name or alias (None = auto-select)
-            sorter_backend: Inference backend for sorter (None = auto-select)
-            sorter_model_path: Custom sorter model path
-            recognizer: Recognizer model name (default: "paddleocr-vl")
-            recognizer_backend: Inference backend for recognizer (None = auto-select)
-            gemini_tier: Gemini API tier for rate limiting
-            renderer: Output format renderer ("markdown" or "plaintext")
-            use_async: Enable async API clients for concurrent block processing
-            dpi: DPI for PDF-to-image conversion
-            detection_dpi: DPI for detection stage
-            recognition_dpi: DPI for recognition stage
-            use_dual_resolution: Use different DPIs for detection and recognition stages
+        Example:
+            >>> from pipeline import Pipeline
+            >>> from pipeline.config import PipelineConfig
+            >>>
+            >>> # Recommended: Use PipelineConfig
+            >>> config = PipelineConfig(
+            ...     detector="paddleocr-doclayout-v2",
+            ...     recognizer="gemini-2.5-flash",
+            ... )
+            >>> pipeline = Pipeline(config=config)
+            >>>
+            >>> # Or use default configuration
+            >>> pipeline = Pipeline()
         """
-        # Handle configuration
-        if config is not None:
-            # Use provided config
-            self.config = config
-        else:
-            # Create config from kwargs (legacy mode)
-            # Check if any non-default values were passed
-            has_custom_args = self._has_custom_arguments(
-                confidence_threshold=confidence_threshold,
-                use_cache=use_cache,
-                cache_dir=cache_dir,
-                output_dir=output_dir,
-                temp_dir=temp_dir,
-                detector=detector,
-                detector_backend=detector_backend,
-                detector_model_path=detector_model_path,
-                auto_batch_size=auto_batch_size,
-                batch_size=batch_size,
-                target_memory_fraction=target_memory_fraction,
-                sorter=sorter,
-                sorter_backend=sorter_backend,
-                sorter_model_path=sorter_model_path,
-                recognizer=recognizer,
-                recognizer_backend=recognizer_backend,
-                gemini_tier=gemini_tier,
-                renderer=renderer,
-                use_async=use_async,
-                dpi=dpi,
-                detection_dpi=detection_dpi,
-                recognition_dpi=recognition_dpi,
-                use_dual_resolution=use_dual_resolution,
-            )
-
-            if has_custom_args:
-                warnings.warn(
-                    "Passing kwargs directly to Pipeline() is deprecated. "
-                    "Use PipelineConfig instead:\n"
-                    "  config = PipelineConfig(...)\n"
-                    "  pipeline = Pipeline(config=config)",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-
-            self.config = PipelineConfig(
-                confidence_threshold=confidence_threshold,
-                use_cache=use_cache,
-                cache_dir=Path(cache_dir),
-                output_dir=Path(output_dir),
-                temp_dir=Path(temp_dir),
-                detector=detector,
-                detector_backend=detector_backend,
-                detector_model_path=detector_model_path,
-                auto_batch_size=auto_batch_size,
-                batch_size=batch_size,
-                target_memory_fraction=target_memory_fraction,
-                sorter=sorter,
-                sorter_backend=sorter_backend,
-                sorter_model_path=sorter_model_path,
-                recognizer=recognizer,
-                recognizer_backend=recognizer_backend,
-                gemini_tier=gemini_tier,
-                renderer=renderer,
-                use_async=use_async,
-                dpi=dpi,
-                detection_dpi=detection_dpi,
-                recognition_dpi=recognition_dpi,
-                use_dual_resolution=use_dual_resolution,
-            )
+        # Use provided config or create default
+        self.config = config if config is not None else PipelineConfig()
 
         # Validate configuration
         self.config.validate()
@@ -272,11 +153,11 @@ class Pipeline:
         """Get or create ResultSaver instance (lazy initialization)."""
         if self._result_saver is None:
             self._result_saver = ResultSaver(
-                detector_name=self.detector_name,
-                sorter_name=self.sorter_name,
-                backend=self.backend,
-                model=self.model,
-                renderer=self.renderer,
+                detector_name=self.config.detector,
+                sorter_name=self.config.resolved_sorter,
+                backend=self.config.resolved_recognizer_backend,
+                model=self.config.recognizer,
+                renderer=self.config.renderer,
             )
         return self._result_saver
 
@@ -286,47 +167,11 @@ class Pipeline:
         if self._pdf_processor is None:
             self._pdf_processor = PDFProcessor(
                 input_stage=self.input_stage,
-                use_dual_resolution=self.use_dual_resolution,
-                detection_dpi=self.detection_dpi,
-                recognition_dpi=self.recognition_dpi,
+                use_dual_resolution=self.config.use_dual_resolution,
+                detection_dpi=self.config.detection_dpi or 150,
+                recognition_dpi=self.config.recognition_dpi or 300,
             )
         return self._pdf_processor
-
-    def _has_custom_arguments(self, **kwargs: Any) -> bool:
-        """Check if any non-default arguments were passed."""
-        defaults = {
-            "confidence_threshold": None,
-            "use_cache": True,
-            "cache_dir": ".cache",
-            "output_dir": "output",
-            "temp_dir": ".tmp",
-            "detector": "paddleocr-doclayout-v2",
-            "detector_backend": None,
-            "detector_model_path": None,
-            "auto_batch_size": False,
-            "batch_size": None,
-            "target_memory_fraction": 0.85,
-            "sorter": None,
-            "sorter_backend": None,
-            "sorter_model_path": None,
-            "recognizer": "paddleocr-vl",
-            "recognizer_backend": None,
-            "gemini_tier": "free",
-            "renderer": "markdown",
-            "skip_rendering": False,
-            "enable_figure_description": True,
-            "enable_image_extraction": True,
-            "image_render_mode": "image_and_description",
-            "use_async": False,
-            "dpi": None,
-            "detection_dpi": None,
-            "recognition_dpi": None,
-            "use_dual_resolution": False,
-        }
-        for key, value in kwargs.items():
-            if key in defaults and value != defaults[key]:
-                return True
-        return False
 
     def _get_detector_kwargs(self) -> dict[str, Any]:
         """Get detector kwargs for Ray pool initialization."""
@@ -338,100 +183,13 @@ class Pipeline:
             "target_memory_fraction": self.config.target_memory_fraction,
         }
 
-    # ==================== Backward Compatibility Properties ====================
-
-    @property
-    def detector_name(self) -> str:
-        """Get detector name (backward compatibility)."""
-        return self.config.detector
-
-    @property
-    def sorter_name(self) -> str:
-        """Get sorter name (backward compatibility)."""
-        return self.config.resolved_sorter
-
-    @property
-    def detector_backend(self) -> str | None:
-        """Get detector backend (backward compatibility)."""
-        return self.config.resolved_detector_backend
-
-    @property
-    def sorter_backend(self) -> str | None:
-        """Get sorter backend (backward compatibility)."""
-        return self.config.resolved_sorter_backend
-
-    @property
-    def recognizer_backend(self) -> str | None:
-        """Get recognizer backend (backward compatibility)."""
-        return self.config.resolved_recognizer_backend
-
-    @property
-    def recognizer_model(self) -> str:
-        """Get recognizer model name (backward compatibility)."""
-        return self.config.recognizer
-
-    @property
-    def backend(self) -> str:
-        """Get backend (backward compatibility)."""
-        return self.config.resolved_recognizer_backend
-
-    @property
-    def model(self) -> str:
-        """Get model name (backward compatibility)."""
-        return self.config.recognizer
-
-    @property
-    def gemini_tier(self) -> str:
-        """Get Gemini tier (backward compatibility)."""
-        return self.config.gemini_tier
-
-    @property
-    def renderer(self) -> str:
-        """Get renderer (backward compatibility)."""
-        return self.config.renderer
-
-    @property
-    def dpi(self) -> int:
-        """Get DPI (backward compatibility)."""
-        return self.config.dpi or 200
-
-    @property
-    def detection_dpi(self) -> int:
-        """Get detection DPI (backward compatibility)."""
-        return self.config.detection_dpi or 150
-
-    @property
-    def recognition_dpi(self) -> int:
-        """Get recognition DPI (backward compatibility)."""
-        return self.config.recognition_dpi or 300
-
-    @property
-    def use_dual_resolution(self) -> bool:
-        """Get dual resolution flag (backward compatibility)."""
-        return self.config.use_dual_resolution
-
-    @property
-    def cache_dir(self) -> Path:
-        """Get cache directory (backward compatibility)."""
-        return self.config.cache_dir
-
-    @property
-    def output_dir(self) -> Path:
-        """Get output directory (backward compatibility)."""
-        return self.config.output_dir
-
-    @property
-    def temp_dir(self) -> Path:
-        """Get temp directory (backward compatibility)."""
-        return self.config.temp_dir
-
     # ==================== Stage Factory Methods ====================
 
     def _create_detection_stage(self) -> DetectionStage:
         """Create detection stage on-demand."""
         from pipeline.stages import DetectionStage
 
-        logger.info("Loading detection stage (%s)...", self.detector_name)
+        logger.info("Loading detection stage (%s)...", self.config.detector)
         return DetectionStage(
             self.detector,  # type: ignore[arg-type]
             ray_detector_pool=self.ray_detector_pool,
@@ -441,14 +199,18 @@ class Pipeline:
         """Create ordering stage on-demand."""
         from pipeline.stages import OrderingStage
 
-        logger.info("Loading ordering stage (%s)...", self.sorter_name)
+        logger.info("Loading ordering stage (%s)...", self.config.resolved_sorter)
         return OrderingStage(self.sorter)  # type: ignore[arg-type]
 
     def _create_recognition_stage(self) -> RecognitionStage:
         """Create recognition stage on-demand."""
         from pipeline.stages import RecognitionStage
 
-        logger.info("Loading recognition stage (%s/%s)...", self.backend, self.model)
+        logger.info(
+            "Loading recognition stage (%s/%s)...",
+            self.config.resolved_recognizer_backend,
+            self.config.recognizer,
+        )
         return RecognitionStage(
             self.recognizer,
             ray_recognizer_pool=self.ray_recognizer_pool,
@@ -465,7 +227,7 @@ class Pipeline:
         from pipeline.stages import RenderingStage
 
         return RenderingStage(
-            renderer=self.renderer,
+            renderer=self.config.renderer,
             image_render_mode=self.config.image_render_mode,
         )
 
@@ -475,7 +237,7 @@ class Pipeline:
 
         return PageCorrectionStage(
             recognizer=self.recognizer,  # type: ignore[arg-type]
-            backend=self.backend,
+            backend=self.config.resolved_recognizer_backend,
             enable=self.config.enable_page_correction,
         )
 
@@ -494,7 +256,7 @@ class Pipeline:
 
     def _get_pdf_output_dir(self, pdf_path: Path) -> Path:
         """Return the output directory for a given PDF as <output>/<file_stem>."""
-        return self.output_dir / pdf_path.stem
+        return self.config.output_dir / pdf_path.stem
 
     def _scale_blocks(self, blocks: list[Block], scale_factor: float) -> list[Block]:
         """Scale block bounding boxes by a factor.
@@ -564,7 +326,7 @@ class Pipeline:
             sorted_blocks = blocks
 
         # Stage 4: Recognition - extract text from blocks
-        if self.sorter_name == "olmocr-vlm":
+        if self.config.resolved_sorter == "olmocr-vlm":
             processed_blocks: list[Block] = sorted_blocks
         else:
             processed_blocks = self.recognizer.process_blocks(image_np, sorted_blocks)
@@ -649,11 +411,14 @@ class Pipeline:
         recognition_images: dict[int, np.ndarray] = {}
         auxiliary_infos: dict[int, dict[str, Any]] = {}
 
+        detection_dpi = self.config.detection_dpi or 150
+        recognition_dpi = self.config.recognition_dpi or 300
+
         for page_num in pages_to_process:
-            if self.use_dual_resolution:
-                page_images[page_num] = self.input_stage.load_pdf_page(pdf_path, page_num, dpi=self.detection_dpi)
+            if self.config.use_dual_resolution:
+                page_images[page_num] = self.input_stage.load_pdf_page(pdf_path, page_num, dpi=detection_dpi)
                 recognition_images[page_num] = self.input_stage.load_pdf_page(
-                    pdf_path, page_num, dpi=self.recognition_dpi
+                    pdf_path, page_num, dpi=recognition_dpi
                 )
             else:
                 page_img = self.input_stage.load_pdf_page(pdf_path, page_num)
@@ -707,7 +472,7 @@ class Pipeline:
         # Open PyMuPDF document if needed
         pymupdf_doc = None
         pymupdf_pages: dict[int, PyMuPDFPage | None] = {}
-        if self.sorter_name == "pymupdf":
+        if self.config.resolved_sorter == "pymupdf":
             pymupdf_doc = pdf_converter.open_pymupdf_document(pdf_path)
             if pymupdf_doc is not None:
                 for page_num in pages_to_process:
@@ -739,8 +504,10 @@ class Pipeline:
         )
 
         # Scale blocks if using dual resolution
-        if self.use_dual_resolution and self.detection_dpi != self.recognition_dpi:
-            scale_factor = self.recognition_dpi / self.detection_dpi
+        detection_dpi = self.config.detection_dpi or 150
+        recognition_dpi = self.config.recognition_dpi or 300
+        if self.config.use_dual_resolution and detection_dpi != recognition_dpi:
+            scale_factor = recognition_dpi / detection_dpi
             logger.info("[Stage 3.5/7] Scaling blocks by factor %.2f", scale_factor)
             for page_num in pages_to_process:
                 sorted_blocks[page_num] = self._scale_blocks(sorted_blocks[page_num], scale_factor)
@@ -792,7 +559,7 @@ class Pipeline:
         recognized_blocks: dict[int, list[Block]] = {}
 
         for page_num in pages_to_process:
-            if self.sorter_name == "olmocr-vlm":
+            if self.config.resolved_sorter == "olmocr-vlm":
                 recognized_blocks[page_num] = sorted_blocks[page_num]
             else:
                 recognized_blocks[page_num] = recognition_stage.process(
@@ -1042,11 +809,11 @@ class Pipeline:
             processed_pages=processed_pages,
             processing_stopped=processing_stopped,
             summary_output_dir=summary_output_dir,
-            detector_name=self.detector_name,
-            sorter_name=self.sorter_name,
-            backend=self.backend,
-            model=self.model,
-            renderer=self.renderer,
+            detector_name=self.config.detector,
+            sorter_name=self.config.resolved_sorter,
+            backend=self.config.resolved_recognizer_backend,
+            model=self.config.recognizer,
+            renderer=self.config.renderer,
         )
 
     def _build_pages_summary(self, processed_pages: list[Page]) -> tuple[list[dict[str, Any]], dict[str, int]]:

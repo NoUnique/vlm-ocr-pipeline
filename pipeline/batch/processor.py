@@ -68,7 +68,7 @@ class StagedBatchProcessor:
         """
         input_dir = Path(input_dir)
         output_base = Path(output_dir)
-        model_base_dir = output_base / self.pipeline.model
+        model_base_dir = output_base / self.pipeline.config.recognizer
 
         if not input_dir.exists() or not input_dir.is_dir():
             return {"error": f"Directory not found: {input_dir}"}
@@ -450,10 +450,10 @@ class StagedBatchProcessor:
             num_pages=max((p.page_num for p in pages), default=0),
             processed_pages=len(pages),
             pages=pages,
-            detected_by=self.pipeline.detector_name,
-            ordered_by=self.pipeline.sorter_name,
-            recognized_by=f"{self.pipeline.backend}/{self.pipeline.model}",
-            rendered_by=self.pipeline.renderer,
+            detected_by=self.pipeline.config.detector,
+            ordered_by=self.pipeline.config.resolved_sorter,
+            recognized_by=f"{self.pipeline.config.resolved_recognizer_backend}/{self.pipeline.config.recognizer}",
+            rendered_by=self.pipeline.config.renderer,
             output_directory=str(output_dir),
             processed_at=tz_now().isoformat(),
             status_summary={"complete": len(pages)},

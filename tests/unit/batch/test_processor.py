@@ -16,7 +16,7 @@ class TestStagedBatchProcessorInit:
     def test_init(self):
         """Test processor initialization."""
         mock_pipeline = Mock()
-        mock_pipeline.model = "test-model"
+        mock_pipeline.config.recognizer = "test-model"
         
         processor = StagedBatchProcessor(mock_pipeline)
         
@@ -26,7 +26,7 @@ class TestStagedBatchProcessorInit:
     def test_init_stores_pipeline_reference(self):
         """Test that processor stores pipeline reference."""
         mock_pipeline = Mock()
-        mock_pipeline.model = "gemini-2.5-flash"
+        mock_pipeline.config.recognizer = "gemini-2.5-flash"
         
         processor = StagedBatchProcessor(mock_pipeline)
         
@@ -40,7 +40,7 @@ class TestStagedBatchProcessorDirectory:
     def mock_pipeline(self):
         """Create mock pipeline."""
         pipeline = Mock()
-        pipeline.model = "test-model"
+        pipeline.config.recognizer = "test-model"
         pipeline.detector = Mock()
         pipeline.sorter = Mock()
         pipeline.recognizer = Mock()
