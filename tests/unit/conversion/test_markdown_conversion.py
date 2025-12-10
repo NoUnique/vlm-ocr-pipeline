@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pipeline.conversion.output.markdown import (
-    RegionTypeHeaderIdentifier,
+    BlockTypeHeaderIdentifier,
     block_to_markdown,
     blocks_to_markdown,
     document_to_markdown,
@@ -12,39 +12,39 @@ from pipeline.conversion.output.markdown import (
 from pipeline.types import BBox, Block, Document, Page
 
 
-class TestRegionTypeHeaderIdentifier:
-    """Tests for RegionTypeHeaderIdentifier."""
+class TestBlockTypeHeaderIdentifier:
+    """Tests for BlockTypeHeaderIdentifier."""
 
     def test_get_header_level_title(self):
         """Test getting header level for title."""
-        identifier = RegionTypeHeaderIdentifier()
+        identifier = BlockTypeHeaderIdentifier()
         assert identifier.get_header_level("title") == 1
         assert identifier.get_header_level("Title") == 1  # Case insensitive
 
     def test_get_header_level_subtitle(self):
         """Test getting header level for subtitle."""
-        identifier = RegionTypeHeaderIdentifier()
+        identifier = BlockTypeHeaderIdentifier()
         assert identifier.get_header_level("subtitle") == 2
 
     def test_get_header_level_non_header(self):
         """Test getting header level for non-header type."""
-        identifier = RegionTypeHeaderIdentifier()
+        identifier = BlockTypeHeaderIdentifier()
         assert identifier.get_header_level("text") is None
         assert identifier.get_header_level("table") is None
 
     def test_get_header_prefix_title(self):
         """Test getting header prefix for title."""
-        identifier = RegionTypeHeaderIdentifier()
+        identifier = BlockTypeHeaderIdentifier()
         assert identifier.get_header_prefix("title") == "# "
 
     def test_get_header_prefix_subtitle(self):
         """Test getting header prefix for subtitle."""
-        identifier = RegionTypeHeaderIdentifier()
+        identifier = BlockTypeHeaderIdentifier()
         assert identifier.get_header_prefix("subtitle") == "## "
 
     def test_get_header_prefix_non_header(self):
         """Test getting header prefix for non-header type."""
-        identifier = RegionTypeHeaderIdentifier()
+        identifier = BlockTypeHeaderIdentifier()
         assert identifier.get_header_prefix("text") == ""
 
 

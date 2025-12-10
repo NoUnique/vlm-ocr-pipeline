@@ -10,15 +10,15 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-def save_regions_to_json(
-    regions: list[dict[str, Any]],
+def save_blocks_to_json(
+    blocks: list[dict[str, Any]],
     output_path: Path,
     indent: int = 2,
 ) -> None:
     """Save blocks to JSON file.
 
     Args:
-        regions: List of block dictionaries
+        blocks: List of block dictionaries
         output_path: Output JSON file path
         indent: JSON indentation level (default: 2)
 
@@ -30,14 +30,14 @@ def save_regions_to_json(
         ...     {"type": "text", "bbox": [100, 50, 200, 150], "confidence": 0.95},
         ...     {"type": "title", "bbox": [100, 10, 300, 40], "confidence": 0.98},
         ... ]
-        >>> save_regions_to_json(blocks, Path("output.json"))
+        >>> save_blocks_to_json(blocks, Path("output.json"))
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(regions, f, indent=indent, ensure_ascii=False)
+        json.dump(blocks, f, indent=indent, ensure_ascii=False)
 
-    logger.info("Saved %d blocks to JSON: %s", len(regions), output_path)
+    logger.info("Saved %d blocks to JSON: %s", len(blocks), output_path)
 
 
 def save_pipeline_result_to_json(
@@ -72,7 +72,7 @@ def save_pipeline_result_to_json(
     logger.info("Saved pipeline result to JSON: %s", output_path)
 
 
-def load_regions_from_json(json_path: Path) -> list[dict[str, Any]]:
+def load_blocks_from_json(json_path: Path) -> list[dict[str, Any]]:
     """Load blocks from JSON file.
 
     Args:
@@ -86,7 +86,7 @@ def load_regions_from_json(json_path: Path) -> list[dict[str, Any]]:
         json.JSONDecodeError: If file is not valid JSON
 
     Example:
-        >>> blocks = load_regions_from_json(Path("output.json"))
+        >>> blocks = load_blocks_from_json(Path("output.json"))
         >>> len(blocks)
         10
     """
@@ -95,20 +95,20 @@ def load_regions_from_json(json_path: Path) -> list[dict[str, Any]]:
 
     # Support both direct list and wrapped format
     if isinstance(data, list):
-        regions = data
-    elif isinstance(data, dict) and "regions" in data:
-        regions = data["regions"]
+        blocks = data
+    elif isinstance(data, dict) and "blocks" in data:
+        blocks = data["blocks"]
     elif isinstance(data, dict) and "pages" in data:
         # Multi-page format: extract all blocks
-        regions = []
+        blocks = []
         for page in data["pages"]:
-            if "regions" in page:
-                regions.extend(page["regions"])
+            if "blocks" in page:
+                blocks.extend(page["blocks"])
     else:
         raise ValueError(f"Unsupported JSON format in {json_path}")
 
-    logger.info("Loaded %d blocks from JSON: %s", len(regions), json_path)
-    return regions
+    logger.info("Loaded %d blocks from JSON: %s", len(blocks), json_path)
+    return blocks
 
 
 def load_pipeline_result_from_json(json_path: Path) -> dict[str, Any]:

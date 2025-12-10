@@ -163,13 +163,13 @@ class OpenAIClient(BaseVLMClient):
 
         return base64.b64encode(img_bytes).decode("utf-8")
 
-    def extract_text(self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str) -> dict[str, Any]:  # noqa: PLR0911
+    def extract_text(self, block_img: np.ndarray, block_info: dict[str, Any], prompt: str) -> dict[str, Any]:  # noqa: PLR0911
         """
         Extract text from block using OpenAI API
 
         Args:
-            region_img: Image block as numpy array
-            region_info: Block metadata including type and coordinates
+            block_img: Image block as numpy array
+            block_info: Block metadata including type and coordinates
             prompt: Prompt for text extraction
 
         Returns:
@@ -179,10 +179,10 @@ class OpenAIClient(BaseVLMClient):
             logger.warning(
                 "OpenAI API client not initialized (model=%s, base_url=%s)", self.model, self.base_url or "default"
             )
-            return {"type": region_info["type"], "xywh": region_info["xywh"], "text": "", "confidence": 0.0}
+            return {"type": block_info["type"], "xywh": block_info["xywh"], "text": "", "confidence": 0.0}
 
         try:
-            base64_image = self._encode_image(region_img)
+            base64_image = self._encode_image(block_img)
 
             messages = [
                 {
@@ -204,7 +204,7 @@ class OpenAIClient(BaseVLMClient):
                     self.model,
                     self.base_url or "default",
                 )
-                return {"type": region_info["type"], "xywh": region_info["xywh"], "text": "", "confidence": 0.0}
+                return {"type": block_info["type"], "xywh": block_info["xywh"], "text": "", "confidence": 0.0}
 
             response = client.chat.completions.create(
                 model=self.model,
@@ -216,10 +216,10 @@ class OpenAIClient(BaseVLMClient):
             text = response.choices[0].message.content.strip()
 
             result = {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "text": text,
-                "confidence": region_info.get("confidence", 1.0),
+                "confidence": block_info.get("confidence", 1.0),
             }
 
             # Clean up
@@ -232,8 +232,8 @@ class OpenAIClient(BaseVLMClient):
             # 429 Rate limit errors
             logger.error("OpenAI rate limit exceeded: %s", e)
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "text": "[RATE_LIMIT_EXCEEDED]",
                 "confidence": 0.0,
                 "error": "openai_rate_limit",
@@ -243,8 +243,8 @@ class OpenAIClient(BaseVLMClient):
             # Network/timeout errors
             logger.error("OpenAI connection/timeout error: %s", e)
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "text": "[OPENAI_CONNECTION_ERROR]",
                 "confidence": 0.0,
                 "error": "openai_connection_error",
@@ -254,8 +254,8 @@ class OpenAIClient(BaseVLMClient):
             # Other OpenAI API errors (4xx, 5xx)
             logger.error("OpenAI API error: %s", e)
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "text": "[OPENAI_API_ERROR]",
                 "confidence": 0.0,
                 "error": "openai_api_error",
@@ -265,23 +265,23 @@ class OpenAIClient(BaseVLMClient):
             # Fallback for unexpected errors (allowed per ERROR_HANDLING.md section 3.3)
             logger.error("Unexpected error during OpenAI text extraction: %s", e, exc_info=True)
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "text": "[OPENAI_EXTRACTION_FAILED]",
                 "confidence": 0.0,
                 "error": "unexpected_error",
                 "error_message": str(e),
             }
 
-    def process_special_region(  # noqa: PLR0911
-        self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str
+    def process_special_block(  # noqa: PLR0911
+        self, block_img: np.ndarray, block_info: dict[str, Any], prompt: str
     ) -> dict[str, Any]:
         """
         Process special blocks (tables, figures) with OpenAI API
 
         Args:
-            region_img: Image block as numpy array
-            region_info: Block metadata including type and coordinates
+            block_img: Image block as numpy array
+            block_info: Block metadata including type and coordinates
             prompt: Prompt for special content analysis
 
         Returns:
@@ -292,15 +292,15 @@ class OpenAIClient(BaseVLMClient):
                 "OpenAI API client not initialized (model=%s, base_url=%s)", self.model, self.base_url or "default"
             )
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "content": "OpenAI API not available",
                 "analysis": "Client not initialized",
                 "confidence": 0.0,
             }
 
         try:
-            base64_image = self._encode_image(region_img)
+            base64_image = self._encode_image(block_img)
 
             messages = [
                 {
@@ -313,7 +313,7 @@ class OpenAIClient(BaseVLMClient):
             ]
 
             logger.info(
-                "Requesting OpenAI process_special_region (model=%s, base_url=%s)",
+                "Requesting OpenAI process_special_block (model=%s, base_url=%s)",
                 self.model,
                 self.base_url or "default",
             )
@@ -325,8 +325,8 @@ class OpenAIClient(BaseVLMClient):
                     self.base_url or "default",
                 )
                 return {
-                    "type": region_info["type"],
-                    "xywh": region_info["xywh"],
+                    "type": block_info["type"],
+                    "xywh": block_info["xywh"],
                     "content": "OpenAI API not available",
                     "analysis": "Client not initialized",
                     "confidence": 0.0,
@@ -340,7 +340,7 @@ class OpenAIClient(BaseVLMClient):
             )
 
             response_text = response.choices[0].message.content.strip()
-            parsed_result = self._parse_openai_response(response_text, region_info)
+            parsed_result = self._parse_openai_response(response_text, block_info)
 
             # Clean up
             del base64_image
@@ -352,8 +352,8 @@ class OpenAIClient(BaseVLMClient):
             # 429 Rate limit errors
             logger.error("OpenAI rate limit exceeded: %s", e)
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "content": "[RATE_LIMIT_EXCEEDED]",
                 "analysis": "Rate limit exceeded",
                 "confidence": 0.0,
@@ -364,8 +364,8 @@ class OpenAIClient(BaseVLMClient):
             # Network/timeout errors
             logger.error("OpenAI connection/timeout error: %s", e)
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "content": "[OPENAI_CONNECTION_ERROR]",
                 "analysis": "Connection or timeout error",
                 "confidence": 0.0,
@@ -376,8 +376,8 @@ class OpenAIClient(BaseVLMClient):
             # Other OpenAI API errors (4xx, 5xx)
             logger.error("OpenAI API error: %s", e)
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "content": "[OPENAI_API_ERROR]",
                 "analysis": "OpenAI API error",
                 "confidence": 0.0,
@@ -388,8 +388,8 @@ class OpenAIClient(BaseVLMClient):
             # Fallback for unexpected errors (allowed per ERROR_HANDLING.md section 3.3)
             logger.error("Unexpected error during OpenAI special block processing: %s", e, exc_info=True)
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "content": "[OPENAI_PROCESSING_FAILED]",
                 "analysis": f"Processing failed: {str(e)}",
                 "confidence": 0.0,
@@ -509,18 +509,18 @@ class OpenAIClient(BaseVLMClient):
             result["error_message"] = error_message
         return result
 
-    def _parse_openai_response(self, response_text: str, region_info: dict[str, Any]) -> dict[str, Any]:
+    def _parse_openai_response(self, response_text: str, block_info: dict[str, Any]) -> dict[str, Any]:
         """Parse OpenAI response for special blocks"""
         try:
             parsed = json.loads(response_text)
 
             result = {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
-                "confidence": region_info.get("confidence", 1.0),
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
+                "confidence": block_info.get("confidence", 1.0),
             }
 
-            if region_info["type"] == "table":
+            if block_info["type"] == "table":
                 result["content"] = parsed.get("markdown_table", "")
                 result["analysis"] = parsed.get("summary", "")
                 result["educational_value"] = parsed.get("educational_value", "")
@@ -536,11 +536,11 @@ class OpenAIClient(BaseVLMClient):
         except json.JSONDecodeError:
             logger.warning("Failed to parse OpenAI JSON response, using as plain text")
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "content": response_text,
                 "analysis": "Direct response (JSON parsing failed)",
-                "confidence": region_info.get("confidence", 1.0),
+                "confidence": block_info.get("confidence", 1.0),
             }
 
     def reload_client(self, api_key: str | None = None, base_url: str | None = None) -> bool:

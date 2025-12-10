@@ -45,10 +45,10 @@ class TestAsyncOpenAIClient:
                 mock_create.return_value = mock_response
 
                 test_image = np.zeros((100, 100, 3), dtype=np.uint8)
-                region_info = {"type": "text", "xywh": [10, 10, 50, 20]}
+                block_info = {"type": "text", "xywh": [10, 10, 50, 20]}
                 prompt = "Extract text from this image."
 
-                result = await client.extract_text(test_image, region_info, prompt)
+                result = await client.extract_text(test_image, block_info, prompt)
 
                 assert "text" in result
                 assert result["text"] == "Extracted text"
@@ -175,10 +175,10 @@ class TestAsyncGeminiClient:
                 mock_gen.return_value = mock_response
 
                 test_image = np.zeros((100, 100, 3), dtype=np.uint8)
-                region_info = {"type": "text", "xywh": [10, 10, 50, 20]}
+                block_info = {"type": "text", "xywh": [10, 10, 50, 20]}
                 prompt = "Extract text from this image."
 
-                result = await client.extract_text(test_image, region_info, prompt)
+                result = await client.extract_text(test_image, block_info, prompt)
 
                 assert "text" in result
                 assert result["text"] == "Extracted text from Gemini"
@@ -215,8 +215,8 @@ class TestAsyncGeminiClient:
                 assert mock_gen.await_count == 2
 
     @pytest.mark.anyio
-    async def test_process_special_region_batch(self):
-        """Test Gemini process_special_region_batch processes multiple special blocks."""
+    async def test_process_special_block_batch(self):
+        """Test Gemini process_special_block_batch processes multiple special blocks."""
         with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key"}):
             client = AsyncGeminiClient(gemini_model="gemini-2.5-flash")
 
@@ -235,7 +235,7 @@ class TestAsyncGeminiClient:
                     (test_image, {"type": "figure", "xywh": [10, 50, 50, 20]}, "Analyze figure"),
                 ]
 
-                results = await client.process_special_region_batch(regions, max_concurrent=2)
+                results = await client.process_special_block_batch(regions, max_concurrent=2)
 
                 assert len(results) == 2
                 assert results[0]["content"] == "Table content"

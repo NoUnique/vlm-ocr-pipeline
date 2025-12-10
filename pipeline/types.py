@@ -258,11 +258,11 @@ class BlockTypeMapper:
     }
 
     @classmethod
-    def map_type(cls, region_type: str, detector_name: str) -> str:
+    def map_type(cls, block_type: str, detector_name: str) -> str:
         """Map a detector-specific type to standardized type.
 
         Args:
-            region_type: Original block type from detector
+            block_type: Original block type from detector
             detector_name: Name of detector ("doclayout-yolo", "mineru-doclayout-yolo",
                           "mineru-vlm", "olmocr-vlm", "paddleocr-doclayout-v2")
 
@@ -291,10 +291,10 @@ class BlockTypeMapper:
             mapping_dict = cls.PADDLEOCR_DOCLAYOUT_V2_MAP
 
         if mapping_dict:
-            return mapping_dict.get(region_type.lower(), region_type)
+            return mapping_dict.get(block_type.lower(), block_type)
 
         # No mapping found - return original
-        return region_type
+        return block_type
 
 
 # ==================== BBox Format Definitions ====================

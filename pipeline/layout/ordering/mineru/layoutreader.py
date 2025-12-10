@@ -83,7 +83,7 @@ class MinerULayoutReaderSorter(Sorter):
         page_height, page_width = image.shape[:2]
 
         line_height = self._estimate_line_height(blocks)
-        lines_data = self._split_regions_into_lines(blocks, line_height, page_width, page_height)
+        lines_data = self._split_blocks_into_lines(blocks, line_height, page_width, page_height)
 
         if len(lines_data) > MAX_LINES:
             logger.warning("Too many lines (%d > %d), falling back to simple sort", len(lines_data), MAX_LINES)
@@ -95,7 +95,7 @@ class MinerULayoutReaderSorter(Sorter):
             logger.error("LayoutReader failed: %s, falling back to simple sort", e)
             return self._fallback_sort(blocks)
 
-        sorted_blocks = self._assign_region_ordering(blocks, lines_data, sorted_line_indices)
+        sorted_blocks = self._assign_block_ordering(blocks, lines_data, sorted_line_indices)
 
         logger.debug("Sorted %d blocks using LayoutReader", len(sorted_blocks))
 
@@ -115,7 +115,7 @@ class MinerULayoutReaderSorter(Sorter):
         else:
             return 10.0  # Default fallback
 
-    def _split_regions_into_lines(
+    def _split_blocks_into_lines(
         self,
         blocks: list[Block],
         line_height: float,
@@ -217,7 +217,7 @@ class MinerULayoutReaderSorter(Sorter):
 
         return parse_logits(logits, len(boxes))
 
-    def _assign_region_ordering(
+    def _assign_block_ordering(
         self,
         blocks: list[Block],
         lines_data: list[dict[str, Any]],

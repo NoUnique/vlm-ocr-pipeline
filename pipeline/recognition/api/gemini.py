@@ -117,13 +117,13 @@ class GeminiClient(BaseVLMClient):
         """Check if Gemini API client is available"""
         return self.client is not None
 
-    def extract_text(self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str) -> dict[str, Any]:  # noqa: PLR0911
+    def extract_text(self, block_img: np.ndarray, block_info: dict[str, Any], prompt: str) -> dict[str, Any]:  # noqa: PLR0911
         """
         Extract text from block using Gemini API
 
         Args:
-            region_img: Image block as numpy array
-            region_info: Block metadata including type and coordinates
+            block_img: Image block as numpy array
+            block_info: Block metadata including type and coordinates
             prompt: Prompt for text extraction
 
         Returns:
@@ -131,11 +131,11 @@ class GeminiClient(BaseVLMClient):
         """
         if not self.is_available():
             logger.warning("Gemini API client not initialized")
-            return {"type": region_info["type"], "xywh": region_info["xywh"], "text": "", "confidence": 0.0}
+            return {"type": block_info["type"], "xywh": block_info["xywh"], "text": "", "confidence": 0.0}
 
         try:
             # Prepare image for API (resize and convert to JPEG)
-            img_bytes = prepare_image_for_api(region_img)
+            img_bytes = prepare_image_for_api(block_img)
 
             contents = [
                 {
@@ -156,7 +156,7 @@ class GeminiClient(BaseVLMClient):
             estimated_tokens = self.text_extraction_estimated_tokens
             if not rate_limiter.wait_if_needed(estimated_tokens):
                 return create_extraction_error(
-                    region_info,
+                    block_info,
                     "[DAILY_LIMIT_EXCEEDED]",
                     "rate_limit_daily",
                     "Daily rate limit exceeded",
@@ -167,7 +167,7 @@ class GeminiClient(BaseVLMClient):
             if client is None:
                 logger.warning("Gemini API client became unavailable")
                 return create_extraction_error(
-                    region_info,
+                    block_info,
                     "",
                     "client_unavailable",
                     "Gemini client not initialized",
@@ -181,10 +181,10 @@ class GeminiClient(BaseVLMClient):
             text = (response.text or "").strip()
 
             result = {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "text": text,
-                "confidence": region_info.get("confidence", 1.0),
+                "confidence": block_info.get("confidence", 1.0),
             }
 
             return result
@@ -193,36 +193,36 @@ class GeminiClient(BaseVLMClient):
             # 429 Rate limit errors (RESOURCE_EXHAUSTED)
             logger.error("Gemini rate limit exceeded: %s", e)
             return create_extraction_error(
-                region_info, "[RATE_LIMIT_EXCEEDED]", "gemini_rate_limit", str(e)
+                block_info, "[RATE_LIMIT_EXCEEDED]", "gemini_rate_limit", str(e)
             )
         except google_exceptions.RetryError as e:
             # Retry failures (network issues, timeouts)
             logger.error("Gemini retry error: %s", e)
             return create_extraction_error(
-                region_info, "[GEMINI_RETRY_FAILED]", "gemini_retry_error", str(e)
+                block_info, "[GEMINI_RETRY_FAILED]", "gemini_retry_error", str(e)
             )
         except google_exceptions.GoogleAPIError as e:
             # Other Google API errors (4xx, 5xx)
             logger.error("Gemini API error: %s", e)
             return create_extraction_error(
-                region_info, "[GEMINI_API_ERROR]", "gemini_api_error", str(e)
+                block_info, "[GEMINI_API_ERROR]", "gemini_api_error", str(e)
             )
         except Exception as e:
             # Fallback for unexpected errors (allowed per ERROR_HANDLING.md section 3.3)
             logger.error("Unexpected error during Gemini text extraction: %s", e, exc_info=True)
             return create_extraction_error(
-                region_info, "[GEMINI_EXTRACTION_FAILED]", "unexpected_error", str(e)
+                block_info, "[GEMINI_EXTRACTION_FAILED]", "unexpected_error", str(e)
             )
 
-    def process_special_region(  # noqa: PLR0911
-        self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str
+    def process_special_block(  # noqa: PLR0911
+        self, block_img: np.ndarray, block_info: dict[str, Any], prompt: str
     ) -> dict[str, Any]:
         """
         Process special blocks (tables, figures) with Gemini API
 
         Args:
-            region_img: Image block as numpy array
-            region_info: Block metadata including type and coordinates
+            block_img: Image block as numpy array
+            block_info: Block metadata including type and coordinates
             prompt: Prompt for special content analysis
 
         Returns:
@@ -231,8 +231,8 @@ class GeminiClient(BaseVLMClient):
         if not self.is_available():
             logger.warning("Gemini API client not initialized")
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "content": "Gemini API not available",
                 "analysis": "Client not initialized",
                 "confidence": 0.0,
@@ -240,7 +240,7 @@ class GeminiClient(BaseVLMClient):
 
         try:
             # Prepare image for API (resize and convert to JPEG)
-            img_bytes = prepare_image_for_api(region_img)
+            img_bytes = prepare_image_for_api(block_img)
 
             contents = [
                 {
@@ -261,8 +261,8 @@ class GeminiClient(BaseVLMClient):
             estimated_tokens = self.special_blocks_estimated_tokens
             if not rate_limiter.wait_if_needed(estimated_tokens):
                 return {
-                    "type": region_info["type"],
-                    "xywh": region_info["xywh"],
+                    "type": block_info["type"],
+                    "xywh": block_info["xywh"],
                     "content": "[DAILY_LIMIT_EXCEEDED]",
                     "analysis": "Daily rate limit exceeded",
                     "confidence": 0.0,
@@ -270,13 +270,13 @@ class GeminiClient(BaseVLMClient):
                     "error_message": "Daily rate limit exceeded",
                 }
 
-            logger.info("Requesting Gemini process_special_region (model=%s)", self.gemini_model)
+            logger.info("Requesting Gemini process_special_block (model=%s)", self.gemini_model)
             client = self.client
             if client is None:
                 logger.warning("Gemini API client became unavailable")
                 return {
-                    "type": region_info["type"],
-                    "xywh": region_info["xywh"],
+                    "type": block_info["type"],
+                    "xywh": block_info["xywh"],
                     "content": "Gemini API not available",
                     "analysis": "Client not initialized",
                     "confidence": 0.0,
@@ -288,7 +288,7 @@ class GeminiClient(BaseVLMClient):
             )
 
             response_text = (response.text or "").strip()
-            parsed_result = self._parse_gemini_response(response_text, region_info)
+            parsed_result = self._parse_gemini_response(response_text, block_info)
 
             return parsed_result
 
@@ -296,28 +296,28 @@ class GeminiClient(BaseVLMClient):
             # 429 Rate limit errors (RESOURCE_EXHAUSTED)
             logger.error("Gemini rate limit exceeded: %s", e)
             return create_special_content_error(
-                region_info, "[RATE_LIMIT_EXCEEDED]", "Rate limit exceeded",
+                block_info, "[RATE_LIMIT_EXCEEDED]", "Rate limit exceeded",
                 "gemini_rate_limit", str(e),
             )
         except google_exceptions.RetryError as e:
             # Retry failures (network issues, timeouts)
             logger.error("Gemini retry error: %s", e)
             return create_special_content_error(
-                region_info, "[GEMINI_RETRY_FAILED]", "Retry failed",
+                block_info, "[GEMINI_RETRY_FAILED]", "Retry failed",
                 "gemini_retry_error", str(e),
             )
         except google_exceptions.GoogleAPIError as e:
             # Other Google API errors (4xx, 5xx)
             logger.error("Gemini API error: %s", e)
             return create_special_content_error(
-                region_info, "[GEMINI_API_ERROR]", "Gemini API error",
+                block_info, "[GEMINI_API_ERROR]", "Gemini API error",
                 "gemini_api_error", str(e),
             )
         except Exception as e:
             # Fallback for unexpected errors (allowed per ERROR_HANDLING.md section 3.3)
             logger.error("Unexpected error during Gemini special block processing: %s", e, exc_info=True)
             return create_special_content_error(
-                region_info, "[GEMINI_PROCESSING_FAILED]", f"Processing failed: {e!s}",
+                block_info, "[GEMINI_PROCESSING_FAILED]", f"Processing failed: {e!s}",
                 "unexpected_error", str(e),
             )
 
@@ -440,18 +440,18 @@ class GeminiClient(BaseVLMClient):
             result["error_message"] = error_message
         return result
 
-    def _parse_gemini_response(self, response_text: str, region_info: dict[str, Any]) -> dict[str, Any]:
+    def _parse_gemini_response(self, response_text: str, block_info: dict[str, Any]) -> dict[str, Any]:
         """Parse Gemini response for special blocks"""
         try:
             parsed = json.loads(response_text)
 
             result = {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
-                "confidence": region_info.get("confidence", 1.0),
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
+                "confidence": block_info.get("confidence", 1.0),
             }
 
-            if region_info["type"] == "table":
+            if block_info["type"] == "table":
                 result["content"] = parsed.get("markdown_table", "")
                 result["analysis"] = parsed.get("summary", "")
                 result["educational_value"] = parsed.get("educational_value", "")
@@ -467,11 +467,11 @@ class GeminiClient(BaseVLMClient):
         except json.JSONDecodeError:
             logger.warning("Failed to parse Gemini JSON response, using as plain text")
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "content": response_text,
                 "analysis": "Direct response (JSON parsing failed)",
-                "confidence": region_info.get("confidence", 1.0),
+                "confidence": block_info.get("confidence", 1.0),
             }
 
     def reload_client(self, api_key: str | None = None) -> bool:

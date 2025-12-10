@@ -80,15 +80,15 @@ class BaseVLMClient(ABC):
     @abstractmethod
     def extract_text(
         self,
-        region_img: np.ndarray,
-        region_info: dict[str, Any],
+        block_img: np.ndarray,
+        block_info: dict[str, Any],
         prompt: str,
     ) -> dict[str, Any]:
-        """Extract text from an image region.
+        """Extract text from an image block.
 
         Args:
-            region_img: Image region as numpy array (BGR or RGB)
-            region_info: Metadata about the region (type, coordinates, etc.)
+            block_img: Image block as numpy array (BGR or RGB)
+            block_info: Metadata about the block (type, coordinates, etc.)
             prompt: Prompt for text extraction
 
         Returns:
@@ -103,17 +103,17 @@ class BaseVLMClient(ABC):
         ...
 
     @abstractmethod
-    def process_special_region(
+    def process_special_block(
         self,
-        region_img: np.ndarray,
-        region_info: dict[str, Any],
+        block_img: np.ndarray,
+        block_info: dict[str, Any],
         prompt: str,
     ) -> dict[str, Any]:
         """Process special content like tables or figures.
 
         Args:
-            region_img: Image region as numpy array
-            region_info: Metadata about the region
+            block_img: Image block as numpy array
+            block_info: Metadata about the block
             prompt: Prompt for content analysis
 
         Returns:
@@ -221,15 +221,15 @@ class BaseAsyncVLMClient(ABC):
     @abstractmethod
     async def extract_text(
         self,
-        region_img: np.ndarray,
-        region_info: dict[str, Any],
+        block_img: np.ndarray,
+        block_info: dict[str, Any],
         prompt: str,
     ) -> dict[str, Any]:
-        """Extract text from an image region (async).
+        """Extract text from an image block (async).
 
         Args:
-            region_img: Image region as numpy array
-            region_info: Metadata about the region
+            block_img: Image block as numpy array
+            block_info: Metadata about the block
             prompt: Prompt for text extraction
 
         Returns:
@@ -246,7 +246,7 @@ class BaseAsyncVLMClient(ABC):
         """Extract text from multiple image regions concurrently.
 
         Args:
-            batch_data: List of (image, region_info, prompt) tuples
+            batch_data: List of (image, block_info, prompt) tuples
             max_concurrent: Maximum concurrent API calls
 
         Returns:

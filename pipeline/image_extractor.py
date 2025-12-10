@@ -51,7 +51,7 @@ def extract_block_image(
     block: Block,
     padding: int = 2,
 ) -> np.ndarray:
-    """Extract image region for a block from page image.
+    """Extract cropped image for a block from page image.
 
     Args:
         page_image: Full page image as numpy array (H, W, C)
@@ -59,7 +59,7 @@ def extract_block_image(
         padding: Padding around the block (pixels)
 
     Returns:
-        Cropped image region as numpy array
+        Cropped block image as numpy array
     """
     return block.bbox.crop(page_image, padding=padding)
 
@@ -93,7 +93,7 @@ def save_block_image(
         images_dir = output_dir / "images"
         images_dir.mkdir(parents=True, exist_ok=True)
 
-        # Extract image region
+        # Extract block image
         cropped = extract_block_image(page_image, block, padding=padding)
 
         # Generate filename: page_<num>_block_<idx>_<type>.png

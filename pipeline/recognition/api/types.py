@@ -170,7 +170,7 @@ class SpecialContentResult(TypedDict, total=False):
 
 
 def create_extraction_error(
-    region_info: dict[str, Any],
+    block_info: dict[str, Any],
     error_text: str,
     error_code: str,
     error_message: str,
@@ -178,7 +178,7 @@ def create_extraction_error(
     """Create a standardized extraction error response.
 
     Args:
-        region_info: Original region info with type and xywh
+        block_info: Original block info with type and xywh
         error_text: Text to show in place of extracted text
         error_code: Machine-readable error code
         error_message: Human-readable error description
@@ -195,8 +195,8 @@ def create_extraction_error(
         ... )
     """
     return ExtractionError(
-        type=region_info.get("type", "unknown"),
-        xywh=region_info.get("xywh", [0, 0, 0, 0]),
+        type=block_info.get("type", "unknown"),
+        xywh=block_info.get("xywh", [0, 0, 0, 0]),
         text=error_text,
         confidence=0.0,
         error=error_code,
@@ -230,7 +230,7 @@ def create_correction_error(
 
 
 def create_special_content_error(
-    region_info: dict[str, Any],
+    block_info: dict[str, Any],
     error_content: str,
     error_analysis: str,
     error_code: str,
@@ -239,7 +239,7 @@ def create_special_content_error(
     """Create a standardized special content error response.
 
     Args:
-        region_info: Original region info with type and xywh
+        block_info: Original block info with type and xywh
         error_content: Content to show in place of actual content
         error_analysis: Analysis message for the error
         error_code: Machine-readable error code
@@ -258,8 +258,8 @@ def create_special_content_error(
         ... )
     """
     return SpecialContentResult(
-        type=region_info.get("type", "unknown"),
-        xywh=region_info.get("xywh", [0, 0, 0, 0]),
+        type=block_info.get("type", "unknown"),
+        xywh=block_info.get("xywh", [0, 0, 0, 0]),
         content=error_content,
         analysis=error_analysis,
         confidence=0.0,

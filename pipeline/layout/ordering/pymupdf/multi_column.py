@@ -387,7 +387,7 @@ class MultiColumnSorter(Sorter):
         scale_x = image_width / float(page_rect.width)
         scale_y = image_height / float(page_rect.height)
 
-        column_regions = []
+        column_blocks = []
         for rect in detected_boxes:
             x0 = rect.x0 * scale_x
             y0 = rect.y0 * scale_y
@@ -395,9 +395,9 @@ class MultiColumnSorter(Sorter):
             y1 = rect.y1 * scale_y
 
             bbox = BBox.from_xyxy(x0, y0, x1, y1)
-            column_regions.append({"bbox": bbox})
+            column_blocks.append({"bbox": bbox})
 
-        columns = self._merge_column_boxes(column_regions, image_width)
+        columns = self._merge_column_boxes(column_blocks, image_width)
 
         if len(columns) <= 1:
             return None

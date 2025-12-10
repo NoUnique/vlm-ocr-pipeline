@@ -188,34 +188,34 @@ def block_to_markdown_with_font(  # noqa: PLR0911
     return text
 
 
-def regions_to_markdown_with_fonts(
-    regions: list[dict[str, Any]],
+def blocks_to_markdown_with_fonts(
+    blocks: list[dict[str, Any]],
     auxiliary_info: dict[str, Any] | None = None,
     header_identifier: FontSizeHeaderIdentifier | None = None,
     auto_detect_headers: bool = True,
     preserve_reading_order: bool = True,
     iou_threshold: float = 0.3,
 ) -> str:
-    """Convert regions to Markdown using font size information from auxiliary info.
+    """Convert blocks to Markdown using font size information from auxiliary info.
 
     This is the main function that implements PyMuPDF4LLM-style conversion
     with proper separation of concerns.
 
     Args:
-        regions: List of region dictionaries (from layout detection)
+        blocks: List of block dictionaries (from layout detection)
         auxiliary_info: Auxiliary info dict containing 'text_spans'
         header_identifier: Font size-based header identifier
         auto_detect_headers: Auto-detect header levels from font sizes
         preserve_reading_order: Sort by order
-        iou_threshold: IoU threshold for region-span matching
+        iou_threshold: IoU threshold for block-span matching
 
     Returns:
         Markdown-formatted string
 
     Example:
-        >>> regions = [{"bbox": [100, 50, 300, 80], "text": "Chapter 1"}]
+        >>> blocks = [{"bbox": [100, 50, 300, 80], "text": "Chapter 1"}]
         >>> auxiliary_info = {"text_spans": [{"bbox": [100, 50, 300, 80], "size": 24.0}]}
-        >>> md = regions_to_markdown_with_fonts(regions, auxiliary_info)
+        >>> md = blocks_to_markdown_with_fonts(blocks, auxiliary_info)
         >>> print(md)
         # Chapter 1
     """
@@ -236,13 +236,13 @@ def regions_to_markdown_with_fonts(
         header_identifier = FontSizeHeaderIdentifier()
 
     # Sort by reading order if available
-    sorted_blocks = regions
+    sorted_blocks = blocks
     if preserve_reading_order:
-        ranked = [r for r in regions if r.get("order") is not None]
-        unranked = [r for r in regions if r.get("order") is None]
+        ranked = [b for b in blocks if b.get("order") is not None]
+        unranked = [b for b in blocks if b.get("order") is None]
 
         if ranked:
-            sorted_blocks = sorted(ranked, key=lambda r: r["order"])
+            sorted_blocks = sorted(ranked, key=lambda b: b["order"])
             sorted_blocks.extend(unranked)
 
     lines: list[str] = []
@@ -281,7 +281,7 @@ def to_markdown(
         json_data: Pipeline result dict (with auxiliary_info) or regions list
         header_identifier: Custom font size-based header identifier
         auto_detect_headers: Auto-detect header levels from font sizes
-        iou_threshold: IoU threshold for region-span matching
+        iou_threshold: IoU threshold for block-span matching
 
     Returns:
         Markdown-formatted string
@@ -297,8 +297,8 @@ def to_markdown(
         >>> md = to_markdown(page_result)
     """
     if isinstance(json_data, list):
-        # Direct list of regions (no auxiliary info)
-        return regions_to_markdown_with_fonts(
+        # Direct list of blocks (no auxiliary info)
+        return blocks_to_markdown_with_fonts(
             json_data,
             auxiliary_info=None,
             header_identifier=header_identifier,
@@ -307,31 +307,31 @@ def to_markdown(
         )
 
     elif isinstance(json_data, dict):
-        # Extract regions and auxiliary_info
+        # Extract blocks and auxiliary_info
         auxiliary_info = json_data.get("auxiliary_info")
 
-        if "regions" in json_data:
-            regions = json_data["regions"]
+        if "blocks" in json_data:
+            blocks = json_data["blocks"]
         elif "pages" in json_data:
-            # Multi-page result - concatenate all regions and auxiliary info
-            all_regions = []
+            # Multi-page result - concatenate all blocks and auxiliary info
+            all_blocks = []
             all_text_spans = []
             for page_data in json_data["pages"]:
-                page_regions = page_data.get("blocks", [])
-                all_regions.extend(page_regions)
+                page_blocks = page_data.get("blocks", [])
+                all_blocks.extend(page_blocks)
 
                 # Extract text spans from page's auxiliary_info
                 page_aux = page_data.get("auxiliary_info", {})
                 page_spans = page_aux.get("text_spans", [])
                 all_text_spans.extend(page_spans)
 
-            regions = all_regions
+            blocks = all_blocks
             auxiliary_info = {"text_spans": all_text_spans} if all_text_spans else None
         else:
-            raise ValueError("Dict must contain 'pages', 'regions', or 'processed_blocks' key")
+            raise ValueError("Dict must contain 'pages' or 'blocks' key")
 
-        return regions_to_markdown_with_fonts(
-            regions,
+        return blocks_to_markdown_with_fonts(
+            blocks,
             auxiliary_info=auxiliary_info,
             header_identifier=header_identifier,
             auto_detect_headers=auto_detect_headers,

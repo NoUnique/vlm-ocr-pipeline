@@ -20,7 +20,7 @@ from pipeline.types import Block, Document, Page
 logger = logging.getLogger(__name__)
 
 
-class RegionTypeHeaderIdentifier:
+class BlockTypeHeaderIdentifier:
     """Identify header levels based on block types.
 
     This is the default header identifier that uses block type classification
@@ -52,7 +52,7 @@ class RegionTypeHeaderIdentifier:
             Header level (1-6) or None if not a header
 
         Example:
-            >>> identifier = RegionTypeHeaderIdentifier()
+            >>> identifier = BlockTypeHeaderIdentifier()
             >>> identifier.get_header_level("title")
             1
             >>> identifier.get_header_level("text")
@@ -70,7 +70,7 @@ class RegionTypeHeaderIdentifier:
             Markdown header prefix (e.g., "# ", "## ") or empty string
 
         Example:
-            >>> identifier = RegionTypeHeaderIdentifier()
+            >>> identifier = BlockTypeHeaderIdentifier()
             >>> identifier.get_header_prefix("title")
             '# '
             >>> identifier.get_header_prefix("text")
@@ -87,7 +87,7 @@ class RegionTypeHeaderIdentifier:
 
 def block_to_markdown(  # noqa: PLR0911, PLR0912, PLR0915
     block: Block,
-    header_identifier: RegionTypeHeaderIdentifier | None = None,
+    header_identifier: BlockTypeHeaderIdentifier | None = None,
 ) -> str:
     """Convert a Block object to Markdown format using block type.
 
@@ -107,7 +107,7 @@ def block_to_markdown(  # noqa: PLR0911, PLR0912, PLR0915
         '# Introduction'
     """
     if header_identifier is None:
-        header_identifier = RegionTypeHeaderIdentifier()
+        header_identifier = BlockTypeHeaderIdentifier()
 
     block_type = block.type.lower()
     text = block.corrected_text or block.text or ""
@@ -229,7 +229,7 @@ def blocks_to_markdown(
     blocks: list[Block],
     include_bbox: bool = False,
     include_confidence: bool = False,
-    header_identifier: RegionTypeHeaderIdentifier | None = None,
+    header_identifier: BlockTypeHeaderIdentifier | None = None,
     preserve_reading_order: bool = True,
 ) -> str:
     """Convert list of Block objects to Markdown format using block types.
@@ -262,7 +262,7 @@ def blocks_to_markdown(
         Introduction.
     """
     if header_identifier is None:
-        header_identifier = RegionTypeHeaderIdentifier()
+        header_identifier = BlockTypeHeaderIdentifier()
 
     # Sort by reading order if available and requested
     sorted_blocks = blocks
@@ -419,9 +419,9 @@ def document_to_markdown(
 # ==================== Wrapper: Dict → Object → Markdown ====================
 
 
-def region_dict_to_markdown(
+def block_dict_to_markdown(
     data: dict[str, Any],
-    header_identifier: RegionTypeHeaderIdentifier | None = None,
+    header_identifier: BlockTypeHeaderIdentifier | None = None,
 ) -> str:
     """Convert block dict to Markdown (convenience wrapper).
 
@@ -434,21 +434,21 @@ def region_dict_to_markdown(
 
     Example:
         >>> data = {"type": "title", "xywh": [0, 0, 100, 20], "detection_confidence": 0.9, "text": "Hello"}
-        >>> region_dict_to_markdown(data)
+        >>> block_dict_to_markdown(data)
         '# Hello'
     """
     block = Block.from_dict(data)
     return block_to_markdown(block, header_identifier=header_identifier)
 
 
-def regions_dict_to_markdown(
+def blocks_dict_to_markdown(
     data: list[dict[str, Any]],
     include_bbox: bool = False,
     include_confidence: bool = False,
-    header_identifier: RegionTypeHeaderIdentifier | None = None,
+    header_identifier: BlockTypeHeaderIdentifier | None = None,
     preserve_reading_order: bool = True,
 ) -> str:
-    """Convert list of region dicts to Markdown (convenience wrapper).
+    """Convert list of block dicts to Markdown (convenience wrapper).
 
     Args:
         data: List of block dictionaries (from Block.to_dict())
@@ -462,7 +462,7 @@ def regions_dict_to_markdown(
 
     Example:
         >>> data = [{"type": "title", "xywh": [0, 0, 100, 20], "confidence": 0.9, "text": "Hello"}]
-        >>> regions_dict_to_markdown(data)
+        >>> blocks_dict_to_markdown(data)
         '# Hello'
     """
     blocks = [Block.from_dict(b) for b in data]

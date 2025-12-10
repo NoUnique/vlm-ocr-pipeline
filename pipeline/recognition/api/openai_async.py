@@ -171,13 +171,13 @@ class AsyncOpenAIClient:
 
         return base64.b64encode(img_bytes).decode("utf-8")
 
-    async def extract_text(self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str) -> dict[str, Any]:  # noqa: PLR0911
+    async def extract_text(self, block_img: np.ndarray, block_info: dict[str, Any], prompt: str) -> dict[str, Any]:  # noqa: PLR0911
         """
         Extract text from block using OpenAI API (async).
 
         Args:
-            region_img: Image block as numpy array
-            region_info: Block metadata including type and coordinates
+            block_img: Image block as numpy array
+            block_info: Block metadata including type and coordinates
             prompt: Prompt for text extraction
 
         Returns:
@@ -187,10 +187,10 @@ class AsyncOpenAIClient:
             logger.warning(
                 "OpenAI API client not initialized (model=%s, base_url=%s)", self.model, self.base_url or "default"
             )
-            return {"type": region_info["type"], "xywh": region_info["xywh"], "text": "", "confidence": 0.0}
+            return {"type": block_info["type"], "xywh": block_info["xywh"], "text": "", "confidence": 0.0}
 
         try:
-            base64_image = self._encode_image(region_img)
+            base64_image = self._encode_image(block_img)
 
             messages = [
                 {
@@ -212,7 +212,7 @@ class AsyncOpenAIClient:
                     self.model,
                     self.base_url or "default",
                 )
-                return {"type": region_info["type"], "xywh": region_info["xywh"], "text": "", "confidence": 0.0}
+                return {"type": block_info["type"], "xywh": block_info["xywh"], "text": "", "confidence": 0.0}
 
             # Async API call
             response = await client.chat.completions.create(
@@ -225,10 +225,10 @@ class AsyncOpenAIClient:
             text = response.choices[0].message.content.strip()
 
             result = {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "text": text,
-                "confidence": region_info.get("confidence", 1.0),
+                "confidence": block_info.get("confidence", 1.0),
             }
 
             # Clean up
@@ -241,8 +241,8 @@ class AsyncOpenAIClient:
             # 429 Rate limit errors
             logger.error("OpenAI rate limit exceeded: %s", e)
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "text": "[RATE_LIMIT_EXCEEDED]",
                 "confidence": 0.0,
                 "error": "openai_rate_limit",
@@ -252,8 +252,8 @@ class AsyncOpenAIClient:
             # Network/timeout errors
             logger.error("OpenAI connection/timeout error: %s", e)
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "text": "[OPENAI_CONNECTION_ERROR]",
                 "confidence": 0.0,
                 "error": "openai_connection_error",
@@ -263,8 +263,8 @@ class AsyncOpenAIClient:
             # Other OpenAI API errors (4xx, 5xx)
             logger.error("OpenAI API error: %s", e)
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "text": "[OPENAI_API_ERROR]",
                 "confidence": 0.0,
                 "error": "openai_api_error",
@@ -274,8 +274,8 @@ class AsyncOpenAIClient:
             # Fallback for unexpected errors (allowed per ERROR_HANDLING.md section 3.3)
             logger.error("Unexpected error in async extract_text: %s", e, exc_info=True)
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "text": "[EXTRACTION_ERROR]",
                 "confidence": 0.0,
                 "error": "unexpected_error",
@@ -289,7 +289,7 @@ class AsyncOpenAIClient:
         Extract text from multiple blocks concurrently with rate limiting.
 
         Args:
-            regions: List of (image, region_info, prompt) tuples
+            regions: List of (image, block_info, prompt) tuples
             max_concurrent: Maximum number of concurrent API calls
 
         Returns:

@@ -713,7 +713,7 @@ class DeepSeekOCRRecognizer(Recognizer):
             logger.warning("[%s] Block %d has invalid dimensions: (%d,%d,%d,%d)", device, idx, x0, y0, x1, y1)
             return block
 
-        # Crop the block region
+        # Crop the block image
         cropped = image[y0:y1, x0:x1]
 
         # Convert to PIL Image
@@ -816,7 +816,7 @@ class DeepSeekOCRRecognizer(Recognizer):
                 output_blocks.append(block)
                 continue
 
-            # Crop the block region and convert to PIL
+            # Crop the block image and convert to PIL
             cropped = image[y0:y1, x0:x1]
             cropped_pil = Image.fromarray(cropped)
             logger.info("Cropped block %d to shape: %s", idx, cropped.shape)

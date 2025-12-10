@@ -110,14 +110,14 @@ class AsyncGeminiClient:
         return self.client is not None
 
     async def extract_text(  # noqa: PLR0911
-        self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str
+        self, block_img: np.ndarray, block_info: dict[str, Any], prompt: str
     ) -> dict[str, Any]:
         """
         Extract text from block using Gemini API (async).
 
         Args:
-            region_img: Image block as numpy array
-            region_info: Block metadata including type and coordinates
+            block_img: Image block as numpy array
+            block_info: Block metadata including type and coordinates
             prompt: Prompt for text extraction
 
         Returns:
@@ -125,22 +125,22 @@ class AsyncGeminiClient:
         """
         if not self.is_available():
             logger.warning("Async Gemini API client not initialized")
-            return {"type": region_info["type"], "xywh": region_info["xywh"], "text": "", "confidence": 0.0}
+            return {"type": block_info["type"], "xywh": block_info["xywh"], "text": "", "confidence": 0.0}
 
         try:
             # Resize image if too large
-            h, w = region_img.shape[:2]
+            h, w = block_img.shape[:2]
             max_dim = 1024
 
             if max(h, w) > max_dim:
                 scale = max_dim / max(h, w)
                 new_w = int(w * scale)
                 new_h = int(h * scale)
-                region_img_resized = cv2.resize(region_img, (new_w, new_h))
+                block_img_resized = cv2.resize(block_img, (new_w, new_h))
             else:
-                region_img_resized = region_img
+                block_img_resized = block_img
 
-            pil_image = Image.fromarray(cv2.cvtColor(region_img_resized, cv2.COLOR_BGR2RGB))
+            pil_image = Image.fromarray(cv2.cvtColor(block_img_resized, cv2.COLOR_BGR2RGB))
 
             img_byte_arr = io.BytesIO()
             pil_image.save(img_byte_arr, format="JPEG", quality=85, optimize=True)
@@ -166,8 +166,8 @@ class AsyncGeminiClient:
             if client is None:
                 logger.warning("Async Gemini API client became unavailable")
                 return {
-                    "type": region_info["type"],
-                    "xywh": region_info["xywh"],
+                    "type": block_info["type"],
+                    "xywh": block_info["xywh"],
                     "text": "",
                     "confidence": 0.0,
                     "error": "client_unavailable",
@@ -180,16 +180,16 @@ class AsyncGeminiClient:
                 contents=cast(types.ContentListUnionDict, contents),
             )
 
-            del pil_image, img_byte_arr, img_bytes, region_img_resized
+            del pil_image, img_byte_arr, img_bytes, block_img_resized
             gc.collect()
 
             text = (response.text or "").strip()
 
             result = {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "text": text,
-                "confidence": region_info.get("confidence", 1.0),
+                "confidence": block_info.get("confidence", 1.0),
             }
 
             del response
@@ -201,8 +201,8 @@ class AsyncGeminiClient:
             # 429 Rate limit errors (RESOURCE_EXHAUSTED)
             logger.error("Gemini rate limit exceeded: %s", e)
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "text": "[RATE_LIMIT_EXCEEDED]",
                 "confidence": 0.0,
                 "error": "gemini_rate_limit",
@@ -212,8 +212,8 @@ class AsyncGeminiClient:
             # Retry failures (network issues, timeouts)
             logger.error("Gemini retry error: %s", e)
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "text": "[GEMINI_RETRY_FAILED]",
                 "confidence": 0.0,
                 "error": "gemini_retry_error",
@@ -223,8 +223,8 @@ class AsyncGeminiClient:
             # Other Google API errors (4xx, 5xx)
             logger.error("Gemini API error: %s", e)
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "text": "[GEMINI_API_ERROR]",
                 "confidence": 0.0,
                 "error": "gemini_api_error",
@@ -234,8 +234,8 @@ class AsyncGeminiClient:
             # Fallback for unexpected errors (allowed per ERROR_HANDLING.md section 3.3)
             logger.error("Unexpected error during async Gemini text extraction: %s", e, exc_info=True)
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "text": "[GEMINI_EXTRACTION_FAILED]",
                 "confidence": 0.0,
                 "error": "unexpected_error",
@@ -249,7 +249,7 @@ class AsyncGeminiClient:
         Extract text from multiple blocks concurrently with rate limiting.
 
         Args:
-            regions: List of (image, region_info, prompt) tuples
+            regions: List of (image, block_info, prompt) tuples
             max_concurrent: Maximum number of concurrent API calls
 
         Returns:
@@ -291,15 +291,15 @@ class AsyncGeminiClient:
 
         return final_results
 
-    async def process_special_region(  # noqa: PLR0911
-        self, region_img: np.ndarray, region_info: dict[str, Any], prompt: str
+    async def process_special_block(  # noqa: PLR0911
+        self, block_img: np.ndarray, block_info: dict[str, Any], prompt: str
     ) -> dict[str, Any]:
         """
         Process special blocks (tables, figures) with Gemini API (async).
 
         Args:
-            region_img: Image block as numpy array
-            region_info: Block metadata including type and coordinates
+            block_img: Image block as numpy array
+            block_info: Block metadata including type and coordinates
             prompt: Prompt for special content analysis
 
         Returns:
@@ -308,8 +308,8 @@ class AsyncGeminiClient:
         if not self.is_available():
             logger.warning("Async Gemini API client not initialized")
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "content": "Gemini API not available",
                 "analysis": "Client not initialized",
                 "confidence": 0.0,
@@ -317,18 +317,18 @@ class AsyncGeminiClient:
 
         try:
             # Resize image if too large
-            h, w = region_img.shape[:2]
+            h, w = block_img.shape[:2]
             max_dim = 1024
 
             if max(h, w) > max_dim:
                 scale = max_dim / max(h, w)
                 new_w = int(w * scale)
                 new_h = int(h * scale)
-                region_img_resized = cv2.resize(region_img, (new_w, new_h))
+                block_img_resized = cv2.resize(block_img, (new_w, new_h))
             else:
-                region_img_resized = region_img
+                block_img_resized = block_img
 
-            pil_image = Image.fromarray(cv2.cvtColor(region_img_resized, cv2.COLOR_BGR2RGB))
+            pil_image = Image.fromarray(cv2.cvtColor(block_img_resized, cv2.COLOR_BGR2RGB))
 
             img_byte_arr = io.BytesIO()
             pil_image.save(img_byte_arr, format="JPEG", quality=85, optimize=True)
@@ -349,13 +349,13 @@ class AsyncGeminiClient:
                 }
             ]
 
-            logger.debug("Requesting async Gemini process_special_region (model=%s)", self.gemini_model)
+            logger.debug("Requesting async Gemini process_special_block (model=%s)", self.gemini_model)
             client = self.client
             if client is None:
                 logger.warning("Async Gemini API client became unavailable")
                 return {
-                    "type": region_info["type"],
-                    "xywh": region_info["xywh"],
+                    "type": block_info["type"],
+                    "xywh": block_info["xywh"],
                     "content": "Gemini API not available",
                     "analysis": "Client not initialized",
                     "confidence": 0.0,
@@ -367,11 +367,11 @@ class AsyncGeminiClient:
                 contents=cast(types.ContentListUnionDict, contents),
             )
 
-            del pil_image, img_byte_arr, img_bytes, region_img_resized
+            del pil_image, img_byte_arr, img_bytes, block_img_resized
             gc.collect()
 
             response_text = (response.text or "").strip()
-            parsed_result = self._parse_gemini_response(response_text, region_info)
+            parsed_result = self._parse_gemini_response(response_text, block_info)
 
             del response
             gc.collect()
@@ -382,8 +382,8 @@ class AsyncGeminiClient:
             # 429 Rate limit errors (RESOURCE_EXHAUSTED)
             logger.error("Gemini rate limit exceeded: %s", e)
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "content": "[RATE_LIMIT_EXCEEDED]",
                 "analysis": "Rate limit exceeded",
                 "confidence": 0.0,
@@ -394,8 +394,8 @@ class AsyncGeminiClient:
             # Retry failures (network issues, timeouts)
             logger.error("Gemini retry error: %s", e)
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "content": "[GEMINI_RETRY_FAILED]",
                 "analysis": "Retry failed",
                 "confidence": 0.0,
@@ -406,8 +406,8 @@ class AsyncGeminiClient:
             # Other Google API errors (4xx, 5xx)
             logger.error("Gemini API error: %s", e)
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "content": "[GEMINI_API_ERROR]",
                 "analysis": "Gemini API error",
                 "confidence": 0.0,
@@ -418,8 +418,8 @@ class AsyncGeminiClient:
             # Fallback for unexpected errors (allowed per ERROR_HANDLING.md section 3.3)
             logger.error("Unexpected error during async Gemini special block processing: %s", e, exc_info=True)
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "content": "[GEMINI_PROCESSING_FAILED]",
                 "analysis": f"Processing failed: {str(e)}",
                 "confidence": 0.0,
@@ -427,14 +427,14 @@ class AsyncGeminiClient:
                 "error_message": str(e),
             }
 
-    async def process_special_region_batch(
+    async def process_special_block_batch(
         self, regions: list[tuple[np.ndarray, dict[str, Any], str]], max_concurrent: int = 3
     ) -> list[dict[str, Any]]:
         """
         Process multiple special blocks concurrently with rate limiting.
 
         Args:
-            regions: List of (image, region_info, prompt) tuples
+            regions: List of (image, block_info, prompt) tuples
             max_concurrent: Maximum number of concurrent API calls (lower for special blocks)
 
         Returns:
@@ -448,7 +448,7 @@ class AsyncGeminiClient:
 
         async def process_with_semaphore(img: np.ndarray, info: dict[str, Any], prompt: str) -> dict[str, Any]:
             async with semaphore:
-                return await self.process_special_region(img, info, prompt)
+                return await self.process_special_block(img, info, prompt)
 
         # Create tasks for all regions
         tasks = [process_with_semaphore(img, info, prompt) for img, info, prompt in regions]
@@ -460,7 +460,7 @@ class AsyncGeminiClient:
         final_results = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                logger.error("Special region task %d failed with exception: %s", i, result)
+                logger.error("Special block task %d failed with exception: %s", i, result)
                 _, info, _ = regions[i]
                 final_results.append(
                     {
@@ -587,18 +587,18 @@ class AsyncGeminiClient:
             result["error_message"] = error_message
         return result
 
-    def _parse_gemini_response(self, response_text: str, region_info: dict[str, Any]) -> dict[str, Any]:
+    def _parse_gemini_response(self, response_text: str, block_info: dict[str, Any]) -> dict[str, Any]:
         """Parse Gemini response for special blocks."""
         try:
             parsed = json.loads(response_text)
 
             result = {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
-                "confidence": region_info.get("confidence", 1.0),
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
+                "confidence": block_info.get("confidence", 1.0),
             }
 
-            if region_info["type"] == "table":
+            if block_info["type"] == "table":
                 result["content"] = parsed.get("markdown_table", "")
                 result["analysis"] = parsed.get("summary", "")
                 result["educational_value"] = parsed.get("educational_value", "")
@@ -614,11 +614,11 @@ class AsyncGeminiClient:
         except json.JSONDecodeError:
             logger.warning("Failed to parse async Gemini JSON response, using as plain text")
             return {
-                "type": region_info["type"],
-                "xywh": region_info["xywh"],
+                "type": block_info["type"],
+                "xywh": block_info["xywh"],
                 "content": response_text,
                 "analysis": "Direct response (JSON parsing failed)",
-                "confidence": region_info.get("confidence", 1.0),
+                "confidence": block_info.get("confidence", 1.0),
             }
 
     def reload_client(self, api_key: str | None = None) -> bool:

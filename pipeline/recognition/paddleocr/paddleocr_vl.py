@@ -220,7 +220,7 @@ class PaddleOCRVLRecognizer(Recognizer):
                 output_blocks.append(block)
                 continue
 
-            # Crop the block region
+            # Crop the block image
             cropped = image[y0:y1, x0:x1]
             logger.info("Cropped block %d to shape: %s", idx, cropped.shape)
 
