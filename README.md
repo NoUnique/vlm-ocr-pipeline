@@ -205,14 +205,14 @@ graph TD
 ### Pipeline Flow Example
 
 ```python
-# Each stage processes data sequentially
+# Each stage processes data sequentially using unified process() method
 page_image = input_stage.load_pdf_page(pdf_path, page_num)
-blocks = detection_stage.detect(page_image)
-sorted_blocks = ordering_stage.sort(blocks, page_image)
-processed_blocks = recognition_stage.recognize_blocks(sorted_blocks, page_image)
-processed_blocks = block_correction_stage.correct_blocks(processed_blocks)
-text = rendering_stage.render(processed_blocks, auxiliary_info)
-corrected_text, ratio, stop = page_correction_stage.correct_page(text, page_num)
+blocks = detection_stage.process(page_image)
+sorted_blocks = ordering_stage.process(blocks, image=page_image)
+processed_blocks = recognition_stage.process(sorted_blocks, image=page_image)
+processed_blocks = block_correction_stage.process(processed_blocks)  # Optional, disabled by default
+text = rendering_stage.process(processed_blocks, auxiliary_info=auxiliary_info)
+result = page_correction_stage.process(text, page_num=page_num)  # Optional, disabled by default
 page_result = output_stage.build_page_result(...)
 output_stage.save_page_output(output_dir, page_num, page_result)
 ```
@@ -560,6 +560,11 @@ python main.py --input document.pdf --dpi 150,300   # Custom dual DPI (detection
 
 # Enable debug logging
 python main.py --input document.pdf --log-level DEBUG
+
+# Text correction options (disabled by default)
+python main.py --input document.pdf --block-correction   # Enable block-level VLM correction
+python main.py --input document.pdf --page-correction    # Enable page-level VLM correction
+python main.py --input document.pdf --block-correction --page-correction  # Enable both
 
 # Combined advanced usage
 python main.py --input /docs/ --max-pages 3 --confidence 0.8 --dpi 250

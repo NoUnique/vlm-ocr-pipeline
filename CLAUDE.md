@@ -84,6 +84,11 @@ python main.py --input doc.pdf --auto-batch-size --target-memory-fraction 0.9  #
 
 # Check rate limits (Gemini only)
 python main.py --rate-limit-status --recognizer gemini-2.5-flash --gemini-tier free
+
+# Text correction options (disabled by default)
+python main.py --input doc.pdf --block-correction    # Enable block-level VLM correction
+python main.py --input doc.pdf --page-correction     # Enable page-level VLM correction
+python main.py --input doc.pdf --block-correction --page-correction  # Enable both
 ```
 
 ### Documentation
@@ -220,44 +225,46 @@ See [docs/CI_CD.md](docs/CI_CD.md) for detailed documentation.
 
 ## Core Architecture
 
-### 5-Stage Pipeline Design
+### 8-Stage Pipeline Design
 
-The system follows a clear separation of concerns through five distinct stages:
+The system follows a clear separation of concerns through eight distinct stages:
 
-1. **Document Conversion (Input)** (`pipeline/conversion/input/`)
-   - Converts PDFs to images (pdf2image) or loads images directly
-   - Extracts auxiliary info (text spans with font metadata) for markdown conversion
-   - Functions: `render_pdf_page()`, `load_image()`, `extract_text_spans_from_pdf()`
+1. **Input Stage** (`pipeline/stages/input_stage.py`)
+   - Loads PDFs/images, extracts auxiliary info (text spans with font metadata)
+   - Methods: `load_pdf_page()`, `load_image()`, `extract_auxiliary_info()`
 
-2. **Layout Detection** (`pipeline/layout/detection/`)
-   - Factory pattern: `create_detector(name, **kwargs)` in `__init__.py`
-   - Returns `list[Block]` with detected bounding boxes
-   - Detectors: `doclayout-yolo` (this project's YOLO), `mineru-doclayout-yolo`, `mineru-vlm`, `paddleocr-doclayout-v2` (PP-DocLayoutV2)
-   - Protocol interface: `Detector.detect(image) -> list[Block]`
+2. **Detection Stage** (`pipeline/stages/detection_stage.py`)
+   - Detects layout blocks using selected detector
+   - Method: `process(image) -> list[Block]`
+   - Detectors: `doclayout-yolo`, `mineru-doclayout-yolo`, `mineru-vlm`, `paddleocr-doclayout-v2`
 
-3. **Reading Order Analysis** (`pipeline/layout/ordering/`)
-   - Factory pattern: `create_sorter(name, **kwargs)` in `__init__.py`
-   - Adds `order` and optionally `column_index` to blocks
-   - Sorters: `pymupdf` (multi-column), `mineru-layoutreader` (LayoutLMv3), `mineru-xycut` (fast, default), `mineru-vlm`, `olmocr-vlm`, `paddleocr-doclayout-v2` (preserves pointer network ordering)
-   - Protocol interface: `Sorter.sort(blocks, image, **kwargs) -> list[Block]`
-   - Combination validator: `validate_combination(detector, sorter)` ensures compatibility
+3. **Ordering Stage** (`pipeline/stages/ordering_stage.py`)
+   - Analyzes reading order, adds `order` and `column_index` to blocks
+   - Method: `process(blocks, image=image) -> list[Block]`
+   - Sorters: `pymupdf`, `mineru-layoutreader`, `mineru-xycut` (default), `mineru-vlm`, `olmocr-vlm`
 
-4. **Text Recognition & Correction** (`pipeline/recognition/`)
-   - VLM-powered text extraction per block: `TextRecognizer.process_blocks()`
-   - Page-level correction: `TextRecognizer.correct_text()`
-   - Multi-backend support (OpenAI/Gemini/PaddleOCR-VL) with prompt templates in `settings/prompts/{model}/`
-   - **PaddleOCR-VL Recognizer**: Uses PaddleOCR-VL-0.9B model for block-level text recognition
-     - **Architecture**: NaViT-style dynamic resolution vision encoder (SiglipVisionModel) + ERNIE-4.5-0.3B language model
-     - **Model Size**: 0.9B parameters (compact but powerful)
-     - **Features**: 109 languages support, SOTA on OmniDocBench v1.5 (text, formula, table, reading order)
-     - **Query-based**: Different prompts for different block types ("OCR:", "Table Recognition:", "Formula Recognition:", "Chart Recognition:")
-     - **Backends**: native (default), vllm-server, sglang-server
-   - Intelligent caching system to avoid re-processing identical content
+4. **Recognition Stage** (`pipeline/stages/recognition_stage.py`)
+   - Extracts text from each block using VLM or local model
+   - Method: `process(blocks, image=image) -> list[Block]`
+   - Backends: OpenAI, Gemini, PaddleOCR-VL, DeepSeek-OCR
 
-5. **Result Conversion (Output)** (`pipeline/conversion/output/`)
-   - Converts processed blocks to various output formats
-   - Currently implements Markdown conversion with two strategies (see below)
-   - Extensible design for future formats (HTML, LaTeX, etc.)
+5. **Block Correction Stage** (`pipeline/stages/block_correction_stage.py`)
+   - Block-level text correction (disabled by default, enable via `--block-correction`)
+   - Method: `process(blocks) -> list[Block]`
+   - Currently placeholder, copies `text` to `corrected_text`
+
+6. **Rendering Stage** (`pipeline/stages/rendering_stage.py`)
+   - Converts processed blocks to Markdown or plaintext
+   - Method: `process(blocks, auxiliary_info=info) -> str`
+
+7. **Page Correction Stage** (`pipeline/stages/page_correction_stage.py`)
+   - Page-level VLM correction (disabled by default, enable via `--page-correction`)
+   - Method: `process(text, page_num=num) -> PageCorrectionResult`
+   - Skipped for local models (PaddleOCR-VL)
+
+8. **Output Stage** (`pipeline/stages/output_stage.py`)
+   - Builds `Page` objects, saves results as JSON/Markdown
+   - Methods: `build_page_result()`, `save_page_output()`, `create_pdf_summary()`
 
 ### Key Design Patterns
 
@@ -317,7 +324,11 @@ class Block:
 
 ### Important File Locations
 
-**Core Pipeline**: `pipeline/__init__.py` - Main `Pipeline` class orchestrating all stages
+**Core Pipeline**:
+- `pipeline/__init__.py` - Main `Pipeline` class (orchestrator)
+- `pipeline/result_saver.py` - Result saving logic (extracted from Pipeline)
+- `pipeline/pdf_processor.py` - PDF processing utilities (extracted from Pipeline)
+- `pipeline/config.py` - Pipeline configuration (includes correction enable options)
 
 **Type System**: `pipeline/types.py` - BBox, Region, Detector/Sorter protocols (read this first!)
 
