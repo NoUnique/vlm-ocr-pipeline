@@ -15,6 +15,14 @@ if TYPE_CHECKING:
     from .config import PipelineConfig
     from .distributed import RayDetectorPool, RayRecognizerPool
     from .gpu_environment import GPUConfig
+    from .stages import (
+        BlockCorrectionStage,
+        DetectionStage,
+        OrderingStage,
+        PageCorrectionStage,
+        RecognitionStage,
+        RenderingStage,
+    )
     from .types import Detector, Recognizer, Sorter
 
 logger = logging.getLogger(__name__)
@@ -392,5 +400,103 @@ class ComponentFactory:
             self.config.cache_dir,
             self.config.output_dir,
             self.config.temp_dir,
+        )
+
+    # ==================== Stage Factory Methods ====================
+
+    def create_detection_stage(
+        self,
+        detector: Detector | None,
+        ray_detector_pool: RayDetectorPool | None = None,
+    ) -> DetectionStage:
+        """Create detection stage.
+
+        Args:
+            detector: Detector instance
+            ray_detector_pool: Optional Ray pool for distributed detection
+
+        Returns:
+            DetectionStage instance
+        """
+        from .stages import DetectionStage
+
+        logger.info("Creating detection stage (%s)...", self.config.detector)
+        return DetectionStage(detector, ray_detector_pool=ray_detector_pool)
+
+    def create_ordering_stage(self, sorter: Sorter | None) -> OrderingStage:
+        """Create ordering stage.
+
+        Args:
+            sorter: Sorter instance
+
+        Returns:
+            OrderingStage instance
+        """
+        from .stages import OrderingStage
+
+        logger.info("Creating ordering stage (%s)...", self.config.resolved_sorter)
+        return OrderingStage(sorter)
+
+    def create_recognition_stage(
+        self,
+        recognizer: Recognizer,
+        ray_recognizer_pool: RayRecognizerPool | None = None,
+    ) -> RecognitionStage:
+        """Create recognition stage.
+
+        Args:
+            recognizer: Recognizer instance
+            ray_recognizer_pool: Optional Ray pool for distributed recognition
+
+        Returns:
+            RecognitionStage instance
+        """
+        from .stages import RecognitionStage
+
+        logger.info(
+            "Creating recognition stage (%s/%s)...",
+            self.config.resolved_recognizer_backend,
+            self.config.recognizer,
+        )
+        return RecognitionStage(recognizer, ray_recognizer_pool=ray_recognizer_pool)
+
+    def create_block_correction_stage(self) -> BlockCorrectionStage:
+        """Create block correction stage.
+
+        Returns:
+            BlockCorrectionStage instance
+        """
+        from .stages import BlockCorrectionStage
+
+        return BlockCorrectionStage(enable=self.config.enable_block_correction)
+
+    def create_rendering_stage(self) -> RenderingStage:
+        """Create rendering stage.
+
+        Returns:
+            RenderingStage instance
+        """
+        from .stages import RenderingStage
+
+        return RenderingStage(
+            renderer=self.config.renderer,
+            image_render_mode=self.config.image_render_mode,
+        )
+
+    def create_page_correction_stage(self, recognizer: Recognizer) -> PageCorrectionStage:
+        """Create page correction stage.
+
+        Args:
+            recognizer: Recognizer instance for text correction
+
+        Returns:
+            PageCorrectionStage instance
+        """
+        from .stages import PageCorrectionStage
+
+        return PageCorrectionStage(
+            recognizer=recognizer,
+            backend=self.config.resolved_recognizer_backend,
+            enable=self.config.enable_page_correction,
         )
 

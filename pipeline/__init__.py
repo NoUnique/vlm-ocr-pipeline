@@ -178,62 +178,31 @@ class Pipeline:
         }
 
     # ==================== Stage Factory Methods ====================
+    # These methods delegate to ComponentFactory for stage creation
 
     def _create_detection_stage(self) -> DetectionStage:
         """Create detection stage on-demand."""
-        from pipeline.stages import DetectionStage
-
-        logger.info("Loading detection stage (%s)...", self.config.detector)
-        return DetectionStage(
-            self.detector,  # type: ignore[arg-type]
-            ray_detector_pool=self.ray_detector_pool,
-        )
+        return self.factory.create_detection_stage(self.detector, self.ray_detector_pool)
 
     def _create_ordering_stage(self) -> OrderingStage:
         """Create ordering stage on-demand."""
-        from pipeline.stages import OrderingStage
-
-        logger.info("Loading ordering stage (%s)...", self.config.resolved_sorter)
-        return OrderingStage(self.sorter)  # type: ignore[arg-type]
+        return self.factory.create_ordering_stage(self.sorter)
 
     def _create_recognition_stage(self) -> RecognitionStage:
         """Create recognition stage on-demand."""
-        from pipeline.stages import RecognitionStage
-
-        logger.info(
-            "Loading recognition stage (%s/%s)...",
-            self.config.resolved_recognizer_backend,
-            self.config.recognizer,
-        )
-        return RecognitionStage(
-            self.recognizer,
-            ray_recognizer_pool=self.ray_recognizer_pool,
-        )
+        return self.factory.create_recognition_stage(self.recognizer, self.ray_recognizer_pool)
 
     def _create_block_correction_stage(self) -> BlockCorrectionStage:
         """Create block correction stage on-demand."""
-        from pipeline.stages import BlockCorrectionStage
-
-        return BlockCorrectionStage(enable=self.config.enable_block_correction)
+        return self.factory.create_block_correction_stage()
 
     def _create_rendering_stage(self) -> RenderingStage:
         """Create rendering stage on-demand."""
-        from pipeline.stages import RenderingStage
-
-        return RenderingStage(
-            renderer=self.config.renderer,
-            image_render_mode=self.config.image_render_mode,
-        )
+        return self.factory.create_rendering_stage()
 
     def _create_page_correction_stage(self) -> PageCorrectionStage:
         """Create page correction stage on-demand."""
-        from pipeline.stages import PageCorrectionStage
-
-        return PageCorrectionStage(
-            recognizer=self.recognizer,  # type: ignore[arg-type]
-            backend=self.config.resolved_recognizer_backend,
-            enable=self.config.enable_page_correction,
-        )
+        return self.factory.create_page_correction_stage(self.recognizer)
 
     def _cleanup_stage(self, stage_name: str) -> None:
         """Cleanup and unload a stage to free memory."""
