@@ -37,7 +37,7 @@ __all__ = [
 ]
 
 _SORTER_REGISTRY: dict[str, Callable[..., Sorter]] = {
-    "pymupdf": MultiColumnSorter,  # Legacy name for backward compatibility
+    "pymupdf": MultiColumnSorter,
 }
 
 if MinerULayoutReaderSorter is not None:

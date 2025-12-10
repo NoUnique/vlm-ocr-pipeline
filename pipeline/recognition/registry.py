@@ -70,13 +70,6 @@ class RecognizerRegistry:
         "paddleocr": "paddleocr-vl",
     }
 
-    # Aliases for backward compatibility
-    _ALIASES: dict[str, str] = {
-        "text-recognizer": "gemini",
-        "vlm": "gemini",
-        "ocr": "paddleocr-vl",
-    }
-
     def __init__(self) -> None:
         """Initialize recognizer registry."""
         self._custom_recognizers: dict[str, Callable[..., Recognizer]] = {}
@@ -116,10 +109,6 @@ class RecognizerRegistry:
         Returns:
             Tuple of (resolved_name, extra_kwargs)
         """
-        # Check aliases first
-        if name in self._ALIASES:
-            return self._ALIASES[name], {}
-
         # Check direct recognizer names
         if name in self._BUILTIN_RECOGNIZERS or name in self._custom_recognizers:
             return name, {}
@@ -210,14 +199,6 @@ class RecognizerRegistry:
         all_names = set(self._BUILTIN_RECOGNIZERS.keys())
         all_names.update(self._custom_recognizers.keys())
         return sorted(all_names)
-
-    def list_aliases(self) -> dict[str, str]:
-        """List all recognizer aliases.
-
-        Returns:
-            Dictionary mapping alias to canonical name
-        """
-        return dict(self._ALIASES)
 
     def is_available(self, name: str) -> bool:
         """Check if recognizer is available.

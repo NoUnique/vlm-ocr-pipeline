@@ -54,26 +54,6 @@ class TestDetectorRegistryListAvailable:
         assert "non-existent" not in registry
 
 
-class TestDetectorRegistryAliases:
-    """Tests for detector aliases."""
-
-    def test_list_aliases(self):
-        """Test listing aliases."""
-        registry = DetectorRegistry()
-        aliases = registry.list_aliases()
-        
-        assert isinstance(aliases, dict)
-        # Check some expected aliases exist
-        assert "layout-detector" in aliases
-
-    def test_alias_resolution(self):
-        """Test alias resolution in is_available."""
-        registry = DetectorRegistry()
-        
-        # Aliases should resolve to valid detectors
-        assert registry.is_available("layout-detector")
-
-
 class TestDetectorRegistryRegister:
     """Tests for custom detector registration."""
 

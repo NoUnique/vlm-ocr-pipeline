@@ -54,14 +54,6 @@ class DetectorRegistry:
         ),
     }
 
-    # Aliases for backward compatibility
-    _ALIASES: dict[str, str] = {
-        "layout-detector": "doclayout-yolo",
-        "docLayoutYolo": "doclayout-yolo",
-        "mineru": "mineru-doclayout-yolo",
-        "paddleocr": "paddleocr-doclayout-v2",
-    }
-
     def __init__(self) -> None:
         """Initialize detector registry."""
         self._custom_detectors: dict[str, Callable[..., Detector]] = {}
@@ -99,30 +91,27 @@ class DetectorRegistry:
         Raises:
             ValueError: If detector not found
         """
-        # Resolve aliases
-        resolved_name = self._ALIASES.get(name, name)
-
         # Check custom detectors first
-        if resolved_name in self._custom_detectors:
-            return self._custom_detectors[resolved_name]
+        if name in self._custom_detectors:
+            return self._custom_detectors[name]
 
         # Check cache
-        if resolved_name in self._loaded_classes:
-            return self._loaded_classes[resolved_name]
+        if name in self._loaded_classes:
+            return self._loaded_classes[name]
 
         # Lazy load built-in detector
-        if resolved_name in self._BUILTIN_DETECTORS:
-            module_path, class_name = self._BUILTIN_DETECTORS[resolved_name]
+        if name in self._BUILTIN_DETECTORS:
+            module_path, class_name = self._BUILTIN_DETECTORS[name]
             try:
                 import importlib
 
                 module = importlib.import_module(module_path)
                 detector_class = getattr(module, class_name)
-                self._loaded_classes[resolved_name] = detector_class
+                self._loaded_classes[name] = detector_class
                 return detector_class
             except ImportError as e:
                 raise DependencyError(
-                    f"Failed to import detector '{resolved_name}': {e}"
+                    f"Failed to import detector '{name}': {e}"
                 ) from e
             except AttributeError as e:
                 raise InvalidConfigError(
@@ -160,14 +149,6 @@ class DetectorRegistry:
         all_names.update(self._custom_detectors.keys())
         return sorted(all_names)
 
-    def list_aliases(self) -> dict[str, str]:
-        """List all detector aliases.
-
-        Returns:
-            Dictionary mapping alias to canonical name
-        """
-        return dict(self._ALIASES)
-
     def is_available(self, name: str) -> bool:
         """Check if detector is available.
 
@@ -177,11 +158,7 @@ class DetectorRegistry:
         Returns:
             True if detector is available
         """
-        resolved_name = self._ALIASES.get(name, name)
-        return (
-            resolved_name in self._BUILTIN_DETECTORS
-            or resolved_name in self._custom_detectors
-        )
+        return name in self._BUILTIN_DETECTORS or name in self._custom_detectors
 
     def __contains__(self, name: str) -> bool:
         """Check if detector is in registry."""

@@ -57,12 +57,6 @@ class Pipeline:
         ... )
         >>> pipeline = Pipeline(config=config)
         >>> document = pipeline.process_pdf(Path("document.pdf"))
-
-        >>> # Legacy way (still supported with deprecation warning)
-        >>> pipeline = Pipeline(
-        ...     detector="paddleocr-doclayout-v2",
-        ...     recognizer="gemini-2.5-flash",
-        ... )
     """
 
     def __init__(self, config: PipelineConfig | None = None):

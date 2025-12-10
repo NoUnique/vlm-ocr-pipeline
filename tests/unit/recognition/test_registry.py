@@ -56,18 +56,6 @@ class TestRecognizerRegistryListAvailable:
         assert "openai" in registry
 
 
-class TestRecognizerRegistryAliases:
-    """Tests for recognizer aliases."""
-
-    def test_list_aliases(self):
-        """Test listing aliases."""
-        registry = RecognizerRegistry()
-        aliases = registry.list_aliases()
-        
-        assert isinstance(aliases, dict)
-        assert "vlm" in aliases
-
-
 class TestRecognizerRegistryResolveName:
     """Tests for name resolution."""
 

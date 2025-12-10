@@ -10,7 +10,7 @@ Usage:
     >>> from pipeline.stages import DetectionStage, BaseStage
     >>> detector = create_detector("doclayout-yolo")
     >>> stage = DetectionStage(detector)
-    >>> blocks = stage.process(image)  # or stage.detect(image) for legacy API
+    >>> blocks = stage.process(image)
 """
 
 from __future__ import annotations

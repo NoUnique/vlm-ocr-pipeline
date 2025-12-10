@@ -224,10 +224,6 @@ class PromptManager:
         analysis_type = block_type_mapping.get(block_type, "figure_analysis")
         return self.get_prompt("content_analysis", analysis_type, "user")
 
-    def get_gemini_prompt_for_block_type(self, block_type: str) -> str:
-        """Get Gemini-specific prompt for a block type (deprecated, use get_prompt_for_block_type)"""
-        return self.get_prompt_for_block_type(block_type)
-
     def reload_prompts(self) -> None:
         """Reload prompts from disk (useful for development)"""
         self.prompts = self._load_prompts()

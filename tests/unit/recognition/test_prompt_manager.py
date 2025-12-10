@@ -317,19 +317,6 @@ class TestGetPromptForBlockType:
         assert isinstance(prompt, str)
 
 
-class TestGetGeminiPromptForBlockType:
-    """Tests for deprecated get_gemini_prompt_for_block_type method."""
-
-    def test_deprecated_method_calls_new_method(self):
-        """Test that deprecated method delegates to new method."""
-        manager = PromptManager(model="mystery-model")
-
-        old_prompt = manager.get_gemini_prompt_for_block_type("table")
-        new_prompt = manager.get_prompt_for_block_type("table")
-
-        assert old_prompt == new_prompt
-
-
 class TestReloadPrompts:
     """Tests for reload_prompts method."""
 

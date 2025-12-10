@@ -33,7 +33,6 @@ __all__ = [
     "create_detector",
     "list_available_detectors",
     # Detector classes (lazy loaded)
-    "LayoutDetector",
     "DocLayoutYOLODetector",
     "MinerUVLMDetector",
     "MinerUDocLayoutYOLODetector",
@@ -95,10 +94,5 @@ def __getattr__(name: str) -> Any:
         from .paddleocr import PPDocLayoutV2Detector  # noqa: PLC0415
 
         return PPDocLayoutV2Detector
-    elif name == "LayoutDetector":
-        # Alias for DocLayoutYOLODetector for backwards compatibility
-        from .doclayout_yolo import DocLayoutYOLODetector  # noqa: PLC0415
-
-        return DocLayoutYOLODetector
     else:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

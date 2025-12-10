@@ -603,10 +603,6 @@ def save_blocks_to_markdown(
     logger.info("Saved %d blocks to Markdown: %s", len(blocks), output_path)
 
 
-# Backward compatibility alias
-save_regions_to_markdown = save_blocks_to_markdown
-
-
 def save_page_to_markdown(
     page: Page,
     output_path: Path,
@@ -669,8 +665,3 @@ def save_document_to_markdown(
     logger.info("Saved document '%s' to Markdown: %s", doc.pdf_name, output_path)
 
 
-# ==================== Backward Compatibility Aliases ====================
-# For backward compatibility with code that uses the old naming
-
-region_to_markdown = block_to_markdown
-regions_to_markdown = blocks_to_markdown
