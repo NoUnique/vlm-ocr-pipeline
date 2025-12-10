@@ -388,42 +388,6 @@ class Pipeline:
 
         return document
 
-    def _load_page_images(
-        self,
-        pdf_path: Path,
-        pages_to_process: list[int],
-    ) -> tuple[dict[int, np.ndarray], dict[int, np.ndarray], dict[int, dict[str, Any]]]:
-        """Stage 1: Load all page images and auxiliary info.
-
-        Returns:
-            Tuple of (page_images, recognition_images, auxiliary_infos)
-        """
-        logger.info("[Stage 1/7] Loading %d page images...", len(pages_to_process))
-
-        page_images: dict[int, np.ndarray] = {}
-        recognition_images: dict[int, np.ndarray] = {}
-        auxiliary_infos: dict[int, dict[str, Any]] = {}
-
-        detection_dpi = self.config.detection_dpi or 150
-        recognition_dpi = self.config.recognition_dpi or 300
-
-        for page_num in pages_to_process:
-            if self.config.use_dual_resolution:
-                page_images[page_num] = self.input_stage.load_pdf_page(pdf_path, page_num, dpi=detection_dpi)
-                recognition_images[page_num] = self.input_stage.load_pdf_page(
-                    pdf_path, page_num, dpi=recognition_dpi
-                )
-            else:
-                page_image = self.input_stage.load_pdf_page(pdf_path, page_num)
-                page_images[page_num] = page_image
-                recognition_images[page_num] = page_image
-
-            aux_info = self.input_stage.extract_auxiliary_info(pdf_path, page_num)
-            auxiliary_infos[page_num] = aux_info if aux_info is not None else {}
-
-        logger.info("[Stage 1/7] Loaded %d pages", len(page_images))
-        return page_images, recognition_images, auxiliary_infos
-
     def _run_detection_stage(
         self,
         pdf_path: Path,
@@ -704,8 +668,10 @@ class Pipeline:
         Returns:
             Tuple of (list of Page objects, processing_stopped flag)
         """
-        # Stage 1: Load images
-        page_images, recognition_images, auxiliary_infos = self._load_page_images(pdf_path, pages_to_process)
+        # Stage 1: Load images (delegates to InputLoader)
+        page_images, recognition_images, auxiliary_infos, _, _ = self.input_loader.load_page_images(
+            pdf_path, pages_to_process
+        )
 
         # Stage 2: Detection
         detected_blocks = self._run_detection_stage(pdf_path, pages_to_process, page_images, page_output_dir)
@@ -822,82 +788,6 @@ class Pipeline:
         Delegates to OutputSaver.
         """
         return self.output_saver.determine_summary_filename(processing_stopped, has_errors)
-
-    def _check_for_rate_limit_errors(self, page_result: dict[str, Any]) -> bool:
-        """Check if page result contains rate limit errors."""
-        try:
-            # Check in blocks
-            blocks = page_result.get("blocks", [])
-            if isinstance(blocks, list):
-                for block in blocks:
-                    if isinstance(block, dict) and block.get("error") in ["gemini_rate_limit", "rate_limit_daily"]:
-                        return True
-
-            # Check in corrected_text (can be string or dict)
-            corrected_text = page_result.get("corrected_text", "")
-            if isinstance(corrected_text, dict) and corrected_text.get("error") in [
-                "gemini_rate_limit",
-                "rate_limit_daily",
-            ]:
-                return True
-            elif isinstance(corrected_text, str) and any(
-                error_indicator in corrected_text
-                for error_indicator in [
-                    "RATE_LIMIT_EXCEEDED",
-                    "TEXT_CORRECTION_RATE_LIMIT_EXCEEDED",
-                    "DAILY_LIMIT_EXCEEDED",
-                    "TEXT_CORRECTION_DAILY_LIMIT_EXCEEDED",
-                ]
-            ):
-                return True
-        except (AttributeError, TypeError) as e:
-            logger.debug("Error checking rate limit errors: %s", e)
-
-        return False
-
-    def _check_for_any_errors(self, summary: dict[str, Any]) -> bool:
-        """Check if summary contains any processing errors."""
-        try:
-            pages_data = summary.get("pages_data", [])
-            for page_result in pages_data:
-                # Check for page-level errors
-                if page_result.get("error"):
-                    return True
-
-                # Check for block-level errors
-                blocks = page_result.get("blocks", [])
-                for block in blocks:
-                    if isinstance(block, dict) and block.get("error"):
-                        return True
-
-                # Check for text correction errors
-                corrected_text = page_result.get("corrected_text", "")
-                if isinstance(corrected_text, dict) and corrected_text.get("error"):
-                    return True
-                elif isinstance(corrected_text, str) and any(
-                    error_indicator in corrected_text
-                    for error_indicator in [
-                        "[RATE_LIMIT_EXCEEDED]",
-                        "[TEXT_CORRECTION_RATE_LIMIT_EXCEEDED]",
-                        "[TEXT_CORRECTION_SERVICE_UNAVAILABLE]",
-                        "[TEXT_CORRECTION_FAILED]",
-                        "[GEMINI_EXTRACTION_FAILED]",
-                        "[VISION_API_FAILED]",
-                        "[VISION_API_NOT_INITIALIZED]",
-                        "[DAILY_LIMIT_EXCEEDED]",
-                        "[TEXT_CORRECTION_DAILY_LIMIT_EXCEEDED]",
-                    ]
-                ):
-                    return True
-
-                # Check for processing_stopped flag
-                if summary.get("processing_stopped", False):
-                    return True
-
-        except (AttributeError, TypeError, KeyError) as e:
-            logger.debug("Error checking for processing errors: %s", e)
-
-        return False
 
     def process_directory(
         self,
