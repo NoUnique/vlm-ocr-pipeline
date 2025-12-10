@@ -94,6 +94,11 @@ class Pipeline:
         gemini_tier: str = "free",
         # Output options
         renderer: str = "markdown",
+        skip_rendering: bool = False,
+        # Image/Figure processing options
+        enable_figure_description: bool = True,
+        enable_image_extraction: bool = True,
+        image_render_mode: str = "image_and_description",
         # Performance options
         use_async: bool = False,
         # DPI options
@@ -308,6 +313,10 @@ class Pipeline:
             "recognizer_backend": None,
             "gemini_tier": "free",
             "renderer": "markdown",
+            "skip_rendering": False,
+            "enable_figure_description": True,
+            "enable_image_extraction": True,
+            "image_render_mode": "image_and_description",
             "use_async": False,
             "dpi": None,
             "detection_dpi": None,
@@ -455,7 +464,10 @@ class Pipeline:
         """Create rendering stage on-demand."""
         from pipeline.stages import RenderingStage
 
-        return RenderingStage(renderer=self.renderer)
+        return RenderingStage(
+            renderer=self.renderer,
+            image_render_mode=self.config.image_render_mode,
+        )
 
     def _create_page_correction_stage(self) -> PageCorrectionStage:
         """Create page correction stage on-demand."""
@@ -735,6 +747,35 @@ class Pipeline:
 
         return sorted_blocks
 
+    def _run_image_extraction(
+        self,
+        pages_to_process: list[int],
+        blocks: dict[int, list[Block]],
+        page_images: dict[int, np.ndarray],
+        page_output_dir: Path,
+    ) -> None:
+        """Extract and save image blocks to separate files.
+
+        Args:
+            pages_to_process: List of page numbers
+            blocks: Blocks for each page (will be modified in-place to add image_path)
+            page_images: Page images for extraction
+            page_output_dir: Output directory
+        """
+        from .image_extractor import extract_images_from_blocks  # noqa: PLC0415
+
+        logger.info("[Stage 3.5/7] Extracting image blocks for %d pages...", len(pages_to_process))
+
+        for page_num in pages_to_process:
+            extract_images_from_blocks(
+                page_image=page_images[page_num],
+                blocks=blocks[page_num],
+                output_dir=page_output_dir,
+                page_num=page_num,
+            )
+
+        logger.info("[Stage 3.5/7] Image extraction complete")
+
     def _run_recognition_stage(
         self,
         pdf_path: Path,
@@ -796,10 +837,21 @@ class Pipeline:
                         block.corrected_text = block.text
                 corrected_blocks[page_num] = recognized_blocks[page_num]
 
-        # Stage 6: Rendering
+        # Stage 6: Rendering (can be skipped with skip_rendering option)
+        rendered_texts: dict[int, str] = {}
+        if self.config.skip_rendering:
+            logger.info("[Stage 6/7] Rendering (skipped - JSON only mode)")
+            for page_num in pages_to_process:
+                rendered_texts[page_num] = ""
+            self._save_intermediate_results(
+                pdf_path, pages_to_process, page_output_dir,
+                detected_blocks=corrected_blocks, page_images=page_images,
+                rendered_texts=None, stage="recognition",
+            )
+            return corrected_blocks, rendered_texts
+
         logger.info("[Stage 6/7] Rendering %d pages...", len(corrected_blocks))
         rendering_stage = self._create_rendering_stage()
-        rendered_texts: dict[int, str] = {}
         for page_num in pages_to_process:
             rendered_texts[page_num] = rendering_stage.process(
                 corrected_blocks[page_num], auxiliary_info=auxiliary_infos[page_num]
@@ -902,6 +954,12 @@ class Pipeline:
         sorted_blocks = self._run_ordering_stage(
             pdf_path, pages_to_process, detected_blocks, page_images, page_output_dir
         )
+
+        # Stage 3.5: Image extraction (if enabled)
+        if self.config.enable_image_extraction:
+            self._run_image_extraction(
+                pages_to_process, sorted_blocks, recognition_images, page_output_dir
+            )
 
         # Stage 4: Recognition
         recognized_blocks = self._run_recognition_stage(

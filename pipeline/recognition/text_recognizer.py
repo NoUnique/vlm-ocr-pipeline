@@ -143,22 +143,30 @@ class TextRecognizer(Recognizer):
 
         return processed_blocks
 
-    def _process_single_block(self, image: np.ndarray, block: Block) -> Block:
-        """Process a single block to extract text.
+    def _process_single_block(
+        self,
+        image: np.ndarray,
+        block: Block,
+        generate_figure_description: bool = True,
+    ) -> Block:
+        """Process a single block to extract text or description.
 
         IMPORTANT: This recognizer will ALWAYS extract text using the configured VLM backend,
         regardless of whether the detector already provided text content. This ensures that
         when a user selects a specific recognizer (e.g., Gemini), that recognizer is used
         for text extraction, not the detector's built-in OCR.
 
+        For image/figure/chart blocks, generates a description instead of text extraction.
+
         Args:
             image: Full page image
             block: Block instance with bounding box
+            generate_figure_description: Whether to generate descriptions for image blocks
 
         Returns:
-            Block with text field populated
+            Block with text field populated (and description for image blocks)
         """
-        block_type = block.type
+        block_type = block.type.lower()
 
         # Clear any pre-existing text from detector
         # This ensures we use the recognizer's extraction, not the detector's content
@@ -176,8 +184,17 @@ class TextRecognizer(Recognizer):
             logger.error("Failed to crop block: %s", e)
             return block
 
+        # Check if this is an image/figure/chart block
+        is_image_block = block_type in {
+            "image", "image_body", "figure", "chart",
+        }
+
         # Get prompt for block type
-        prompt = self._get_prompt_for_block_type(block_type)
+        prompt = self._get_prompt_for_block_type(block.type)
+
+        # For image blocks, generate description if enabled
+        if is_image_block and generate_figure_description:
+            prompt = self._get_figure_description_prompt()
 
         # Extract text with managed memory
         with managed_numpy_array(block_image) as (managed_image,):
@@ -188,13 +205,44 @@ class TextRecognizer(Recognizer):
                         "Cannot extract text without a configured client."
                     )
                 result = self.client.extract_text(managed_image, block.to_dict(), prompt)
-                block.text = result.get("text", "") if isinstance(result, dict) else str(result)
+                extracted_text = result.get("text", "") if isinstance(result, dict) else str(result)
+
+                # For image blocks, store in description field
+                if is_image_block and generate_figure_description:
+                    block.description = extracted_text
+                    block.text = ""  # Set empty text for image blocks
+                else:
+                    block.text = extracted_text
             except Exception as e:
                 # Fallback for unexpected errors - set empty text to continue processing
                 logger.error("Failed to extract text: %s", e, exc_info=True)
+                if is_image_block:
+                    block.description = ""
                 block.text = ""
 
         return block
+
+    def _get_figure_description_prompt(self) -> str:
+        """Get prompt for generating figure/image description.
+
+        Returns:
+            Prompt string for figure description
+        """
+        # Try to get from prompt manager first
+        try:
+            return self.prompt_manager.get_prompt("content_analysis", "figure_description", "user")
+        except (KeyError, AttributeError):
+            # Fallback prompt for figure description
+            return (
+                "Describe this image or figure in detail. Include:\n"
+                "1. What type of image/figure it is (photo, chart, graph, diagram, etc.)\n"
+                "2. The main elements or content visible\n"
+                "3. Any text, labels, or annotations visible\n"
+                "4. Key information or data shown (if applicable)\n"
+                "5. Any notable colors, patterns, or visual characteristics\n\n"
+                "Provide a comprehensive description that allows someone to understand "
+                "the content without seeing the image."
+            )
 
     def _crop_block(self, image: np.ndarray, block: Block) -> np.ndarray:
         """Crop a block from the full image.

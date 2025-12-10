@@ -1034,6 +1034,9 @@ class Block:
     - corrected_text: VLM-corrected text (Added by text correction)
     - correction_ratio: Block-level correction ratio (0.0 = no change, 1.0 = completely different)
       (Added by text correction)
+    - corrected_by: Model name that performed text correction (Added by text correction)
+    - image_path: Path to extracted image file for image/figure blocks (Added by image extraction)
+    - description: VLM-generated description for image/figure/chart blocks (Added by recognition)
     - source: Which detector/sorter produced this block (internal use only, not serialized)
     - index: Internal index (MinerU VLM)
 
@@ -1056,6 +1059,11 @@ class Block:
     text: str | None = None
     corrected_text: str | None = None
     correction_ratio: float | None = None  # Block-level correction ratio (0.0 = no change, 1.0 = completely different)
+    corrected_by: str | None = None  # Model name that performed text correction
+
+    # Image/Figure block fields
+    image_path: str | None = None  # Path to extracted image file for image/figure/chart blocks
+    description: str | None = None  # VLM-generated description for image/figure/chart blocks
 
     # Metadata (internal use, not serialized to JSON)
     source: str | None = None  # "doclayout-yolo", "mineru-vlm", etc.
@@ -1065,7 +1073,8 @@ class Block:
         """Convert to JSON-serializable dict.
 
         Field order:
-            order → type → xywh → detection_confidence → column_index → text → corrected_text → correction_ratio
+            order → type → xywh → detection_confidence → column_index → text → corrected_text
+            → correction_ratio → corrected_by → image_path → description
         This order prioritizes reading order first, then type, then position, then content.
 
         Bbox is serialized as xywh list [x, y, width, height] for human readability.
@@ -1112,6 +1121,17 @@ class Block:
         if self.correction_ratio is not None:
             result["correction_ratio"] = self.correction_ratio
 
+        # 9. Corrected by (model name that performed correction)
+        if self.corrected_by is not None:
+            result["corrected_by"] = self.corrected_by
+
+        # 10. Image/figure block fields
+        if self.image_path is not None:
+            result["image_path"] = self.image_path
+
+        if self.description is not None:
+            result["description"] = self.description
+
         # Note: 'source' and 'index' are intentionally excluded (internal metadata)
 
         return result
@@ -1153,6 +1173,10 @@ class Block:
             column_index=data.get("column_index"),
             text=data.get("text"),
             corrected_text=data.get("corrected_text"),
+            correction_ratio=data.get("correction_ratio"),
+            corrected_by=data.get("corrected_by"),
+            image_path=data.get("image_path"),
+            description=data.get("description"),
             source=data.get("source"),
             index=data.get("index"),
         )
@@ -1277,6 +1301,7 @@ class Document:
     detected_by: str | None = None  # Detector name
     ordered_by: str | None = None  # Sorter name
     recognized_by: str | None = None  # Backend/model name
+    corrected_by: str | None = None  # Model name for text correction (block/page level)
     rendered_by: str | None = None  # Renderer name (markdown/plaintext)
     output_directory: str | None = None
     processed_at: str | None = None
@@ -1308,6 +1333,8 @@ class Document:
             result["ordered_by"] = self.ordered_by
         if self.recognized_by is not None:
             result["recognized_by"] = self.recognized_by
+        if self.corrected_by is not None:
+            result["corrected_by"] = self.corrected_by
         if self.rendered_by is not None:
             result["rendered_by"] = self.rendered_by
         if self.output_directory is not None:
@@ -1339,6 +1366,11 @@ class Document:
             num_pages=data["num_pages"],
             processed_pages=data["processed_pages"],
             pages=[Page.from_dict(p) for p in data.get("pages", [])],
+            detected_by=data.get("detected_by"),
+            ordered_by=data.get("ordered_by"),
+            recognized_by=data.get("recognized_by"),
+            corrected_by=data.get("corrected_by"),
+            rendered_by=data.get("rendered_by"),
             output_directory=data.get("output_directory"),
             processed_at=data.get("processed_at"),
             status_summary=data.get("status_summary"),

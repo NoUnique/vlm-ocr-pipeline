@@ -270,6 +270,21 @@ class PipelineConfig:
         if cls._get_arg(args, "page_correction"):
             kwargs["enable_page_correction"] = True
 
+        # Image/Figure processing flags (default True, disabled via CLI)
+        if cls._get_arg(args, "no_figure_description"):
+            kwargs["enable_figure_description"] = False
+        if cls._get_arg(args, "no_image_extraction"):
+            kwargs["enable_image_extraction"] = False
+
+        # Image render mode
+        image_render_mode = cls._get_arg(args, "image_render_mode")
+        if image_render_mode is not None:
+            kwargs["image_render_mode"] = image_render_mode
+
+        # Skip rendering (JSON only mode)
+        if cls._get_arg(args, "json_only"):
+            kwargs["skip_rendering"] = True
+
         return kwargs
 
     @classmethod
@@ -322,6 +337,9 @@ class PipelineConfig:
 
         # Validate renderer
         self._validate_renderer()
+
+        # Validate image render mode
+        self._validate_image_render_mode()
 
         # Resolve confidence threshold from config if not set
         self._resolve_confidence_threshold()
@@ -473,6 +491,15 @@ class PipelineConfig:
             )
         self.renderer = self.renderer.lower()
 
+    def _validate_image_render_mode(self) -> None:
+        """Validate image render mode option."""
+        valid_modes = ["image_only", "image_and_description", "description_only"]
+        if self.image_render_mode.lower() not in valid_modes:
+            raise ValueError(
+                f"Invalid image_render_mode: {self.image_render_mode}. Must be one of: {valid_modes}"
+            )
+        self.image_render_mode = self.image_render_mode.lower()
+
     def _resolve_confidence_threshold(self) -> None:
         """Resolve confidence threshold from config if not set."""
         from .constants import DEFAULT_CONFIDENCE_THRESHOLD
@@ -515,6 +542,11 @@ class PipelineConfig:
             "gemini_tier": self.gemini_tier,
             # Output
             "renderer": self.renderer,
+            "skip_rendering": self.skip_rendering,
+            # Image/Figure processing
+            "enable_figure_description": self.enable_figure_description,
+            "enable_image_extraction": self.enable_image_extraction,
+            "image_render_mode": self.image_render_mode,
             # Performance
             "use_async": self.use_async,
             # DPI

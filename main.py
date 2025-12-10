@@ -349,6 +349,41 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         help="Enable page-level text correction using VLM (disabled by default)",
     )
 
+    # Image/Figure processing options
+    image_group = parser.add_argument_group("Image/Figure Processing")
+    image_group.add_argument(
+        "--no-figure-description",
+        action="store_true",
+        help="Disable VLM description generation for images/figures (enabled by default)",
+    )
+    image_group.add_argument(
+        "--no-image-extraction",
+        action="store_true",
+        help="Disable extracting image blocks to separate files (enabled by default)",
+    )
+    image_group.add_argument(
+        "--image-render-mode",
+        type=str,
+        choices=["image_only", "image_and_description", "description_only"],
+        default="image_and_description",
+        help="How to render image blocks in output (default: image_and_description)",
+    )
+
+    # Output options
+    output_group = parser.add_argument_group("Output Options")
+    output_group.add_argument(
+        "--json-only",
+        action="store_true",
+        help="Skip rendering and only output JSON (no markdown/plaintext files)",
+    )
+    output_group.add_argument(
+        "--renderer",
+        type=str,
+        choices=["markdown", "plaintext"],
+        default="markdown",
+        help="Output format for rendered text (default: markdown)",
+    )
+
     # API-specific options
     gemini_group = parser.add_argument_group("Gemini API Options")
     gemini_group.add_argument(
@@ -402,6 +437,13 @@ def _execute_command(args: argparse.Namespace, parser: argparse.ArgumentParser, 
             recognizer=args.recognizer,
             recognizer_backend=args.recognizer_backend,
             gemini_tier=args.gemini_tier,
+            # Output options
+            renderer=args.renderer,
+            skip_rendering=args.json_only,
+            # Image/Figure processing options
+            enable_figure_description=not args.no_figure_description,
+            enable_image_extraction=not args.no_image_extraction,
+            image_render_mode=args.image_render_mode,
             # DPI options
             dpi=dpi,
             detection_dpi=detection_dpi,
