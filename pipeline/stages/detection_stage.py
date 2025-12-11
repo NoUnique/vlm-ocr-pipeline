@@ -51,7 +51,8 @@ class DetectionStage(BaseStage[np.ndarray, list[Block]]):
             blocks = self.detector.detect(input_data)
         return blocks
 
-    def extract_column_layout(self, blocks: list[Block]) -> ColumnLayout | None:
+    @staticmethod
+    def extract_column_layout(blocks: list[Block]) -> ColumnLayout | None:
         """Extract column layout information from sorted blocks.
 
         Args:

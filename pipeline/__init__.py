@@ -31,6 +31,7 @@ from .config import PipelineConfig
 from .factory import ComponentFactory
 from .io import InputLoader, OutputSaver
 from .misc import tz_now
+from .stages import DetectionStage
 from .types import Block, ColumnLayout, Detector, Document, Page, PyMuPDFPage, Recognizer, Sorter
 
 logger = logging.getLogger(__name__)
@@ -849,7 +850,7 @@ class Pipeline:
         processed_pages: list[Page],
     ) -> None:
         """Save a single page result."""
-        column_layout = self._extract_column_layout(sorted_blocks[page_num])
+        column_layout = DetectionStage.extract_column_layout(sorted_blocks[page_num])
         page_result = self.output_stage.build_page_result(
             pdf_path=pdf_path,
             page_num=page_num,
