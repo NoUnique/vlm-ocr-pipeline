@@ -268,7 +268,7 @@ The system follows a clear separation of concerns through eight distinct stages:
 
 ### Key Design Patterns
 
-**Unified BBox System**: All bounding boxes use the `BBox` dataclass from `pipeline/types.py`:
+**Unified BBox System**: All bounding boxes use the `BBox` dataclass from `pipeline/types/`:
 - Internal format: `BBox(x0, y0, x1, y1)` with **integer** coordinates (xyxy corners)
 - JSON output: `[x, y, w, h]` (xywh format for human readability)
 - Automatic conversion between 6+ formats (YOLO, MinerU, PyMuPDF, PyPDF, olmOCR)
@@ -295,7 +295,7 @@ class Block:
 - Validation: `validate_combination()` ensures detector/sorter compatibility
 - Examples in `tests/test_factory.py`, `tests/test_validator.py`
 
-**Protocol Interfaces**: Type-safe plugin system via `Detector` and `Sorter` protocols in `pipeline/types.py`
+**Protocol Interfaces**: Type-safe plugin system via `Detector` and `Sorter` protocols in `pipeline/types/interfaces.py`
 
 **Backend System**: Stage-specific inference backends for detectors, sorters, and recognizers
 - Configured via `settings/models.yaml` - maps models to supported backends
@@ -326,11 +326,17 @@ class Block:
 
 **Core Pipeline**:
 - `pipeline/__init__.py` - Main `Pipeline` class (orchestrator)
-- `pipeline/result_saver.py` - Result saving logic (extracted from Pipeline)
-- `pipeline/pdf_processor.py` - PDF processing utilities (extracted from Pipeline)
+- `pipeline/io/output/saver.py` - `OutputSaver` class for result saving
+- `pipeline/io/input/loader.py` - `InputLoader` class for PDF/image loading
 - `pipeline/config.py` - Pipeline configuration (includes correction enable options)
 
-**Type System**: `pipeline/types.py` - BBox, Region, Detector/Sorter protocols (read this first!)
+**Type System**: `pipeline/types/` - Modular type definitions (read this first!)
+- `bbox.py` - BBox class for bounding box operations
+- `block.py` - Block dataclass and BlockType definitions
+- `page.py`, `document.py` - Page and Document dataclasses
+- `interfaces.py` - Detector, Sorter, Recognizer, Renderer protocols
+- `auxiliary.py` - TextSpan, AuxiliaryInfo TypedDicts
+- `result.py` - PipelineResult, StageTimingInfo
 
 **Backend Validation**: `pipeline/backend_validator.py` - Backend compatibility validation and resolution
 
@@ -351,9 +357,9 @@ class Block:
   - `paddleocr_vl.py` - PaddleOCRVLRecognizer using PaddleOCR-VL-0.9B (0.9B params, NaViT + ERNIE-4.5-0.3B)
   - Requires PaddleX v3.3.1 in `external/PaddleX/`
 
-**Conversion** (Stages 1 & 5):
-- Input (Stage 1): `pipeline/conversion/input/` - PDF/image loading
-- Output (Stage 5): `pipeline/conversion/output/markdown/` - Markdown generation (two strategies: region-based and font-based)
+**I/O** (Input/Output):
+- Input: `pipeline/io/input/` - PDF/image loading (`InputLoader`, `pdf.py`, `image.py`)
+- Output: `pipeline/io/output/` - Result saving and Markdown generation (`OutputSaver`, `markdown/`)
 
 **Optimization**:
 - `pipeline/optimization/batch_size.py` - Adaptive batch size calibration with GPU memory profiling
@@ -395,7 +401,7 @@ When refactoring:
 5. **PyPDF requires page height** - Use `BBox.from_pypdf_rect(rect, page_height)` for Y-flip
 
 ### Adding New Detectors/Sorters
-1. Implement `Detector` or `Sorter` protocol from `pipeline/types.py`
+1. Implement `Detector` or `Sorter` protocol from `pipeline/types/interfaces.py`
 2. Register in `create_detector()` or `create_sorter()` factory
 3. Add validation rule in `validate_combination()` if needed
 4. Use lazy imports (`PLC0415` exception in ruff.toml) for optional dependencies
@@ -465,15 +471,15 @@ uv pip install dill
 
 The Result Conversion stage (Stage 5) currently implements two Markdown conversion strategies:
 
-**1. Region Type-Based** (Default - `pipeline/conversion/output/markdown/__init__.py`):
+**1. Block Type-Based** (Default - `pipeline/io/output/markdown/__init__.py`):
 - Fast, no PDF parsing required
-- Maps region types (title, subtitle) to Markdown headers
-- Use for quick conversion: `json_to_markdown(regions)`
+- Maps block types (title, subtitle) to Markdown headers
+- Use for quick conversion: `blocks_to_markdown(blocks)`
 
-**2. Font Size-Based** (`pipeline/conversion/output/markdown/pymupdf4llm.py`):
+**2. Font Size-Based** (`pipeline/io/output/markdown/pymupdf4llm.py`):
 - Requires PyMuPDF text span parsing (stored in `auxiliary_info.text_spans` from Stage 1)
 - Auto-detects headers from font sizes (largest → H1, 2nd largest → H2)
-- Uses IoU matching to link text spans to regions
+- Uses IoU matching to link text spans to blocks
 - **PyMuPDF terminology**: Uses `size` and `font` (not `font_size`, `font_name`)
 - Use for precise header detection: `to_markdown(page_result, auto_detect_headers=True)`
 
@@ -486,7 +492,8 @@ The Result Conversion stage (Stage 5) currently implements two Markdown conversi
 
 ## Reference Documentation
 
-- **BBox Formats**: See `BBOX_FORMATS.md` for detailed conversion examples
-- **Block Types**: See `DETECTOR_BLOCK_TYPES.md` for detector-specific type mappings
+- **BBox Formats**: See `docs/guides/bbox-formats.md` for detailed conversion examples
+- **Block Types**: See `docs/guides/detector-block-types.md` for detector-specific type mappings
+- **Error Handling**: See `docs/guides/error-handling.md` for error handling patterns
 - **README.md**: User-facing documentation with installation, usage, API examples
 - **Cursor Rules**: `.cursorrules` contains detailed coding standards (Google docstrings, type hints, testing requirements)
