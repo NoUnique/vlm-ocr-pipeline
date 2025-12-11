@@ -1,2 +1,0 @@
-"""Stages unit tests."""
-

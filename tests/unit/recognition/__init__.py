@@ -1,2 +1,0 @@
-"""Recognition unit tests."""
-
