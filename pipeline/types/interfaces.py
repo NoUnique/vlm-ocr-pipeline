@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from .block import Block
 
 
+@runtime_checkable
 class Detector(Protocol):
     """Layout detection interface.
 
@@ -229,6 +230,7 @@ class Recognizer(Protocol):
         ...
 
 
+@runtime_checkable
 class Renderer(Protocol):
     """Output rendering interface.
 

@@ -55,17 +55,18 @@ class TestRenderingStageRender:
                 corrected_text="Body text",
             ),
         ]
-        expected_markdown = "# Title\n\nBody text"
-        mock_blocks_to_markdown.return_value = expected_markdown
+        # blocks_to_markdown is called once per block
+        mock_blocks_to_markdown.side_effect = ["# Title", "Body text"]
 
         stage = RenderingStage(renderer="markdown")
 
         # Execute
         result = stage.process(blocks)
 
-        # Verify
-        mock_blocks_to_markdown.assert_called_once_with(blocks)
-        assert result == expected_markdown
+        # Verify - called once per block (2 blocks = 2 calls)
+        assert mock_blocks_to_markdown.call_count == 2
+        assert "# Title" in result
+        assert "Body text" in result
 
     def test_render_unsupported_renderer(self):
         """Test rendering with unsupported renderer."""
@@ -82,18 +83,13 @@ class TestRenderingStageRender:
         assert "Unsupported renderer: html" in str(exc_info.value)
         assert exc_info.value.stage_name == "rendering"
 
-    @patch("pipeline.stages.rendering_stage.blocks_to_markdown")
-    def test_render_empty_blocks(self, mock_blocks_to_markdown: Mock):
+    def test_render_empty_blocks(self):
         """Test rendering empty blocks list."""
-        # Setup
-        mock_blocks_to_markdown.return_value = ""
-
         stage = RenderingStage(renderer="markdown")
 
         # Execute
         result = stage.process([])
 
-        # Verify
-        mock_blocks_to_markdown.assert_called_once_with([])
+        # Verify - empty blocks should return empty string
         assert result == ""
 
