@@ -230,7 +230,7 @@ class StagedBatchProcessor:
             # Sequential detection
             for page_info in valid_pages:
                 try:
-                    blocks = self.pipeline.detection_stage.detect(page_info.image)  # type: ignore
+                    blocks = self.pipeline.detection_stage.process(page_info.image)  # type: ignore
                     page_info.blocks = blocks
                 except Exception as e:
                     logger.error("Failed to detect %s: %s", page_info.page_id, e)
@@ -264,9 +264,9 @@ class StagedBatchProcessor:
 
         for page_info in valid_pages:
             try:
-                sorted_blocks = self.pipeline.ordering_stage.sort(
+                sorted_blocks = self.pipeline.ordering_stage.process(
                     page_info.blocks,  # type: ignore
-                    page_info.image,  # type: ignore
+                    image=page_info.image,  # type: ignore
                 )
                 page_info.sorted_blocks = sorted_blocks
             except Exception as e:
@@ -316,9 +316,9 @@ class StagedBatchProcessor:
             # Sequential recognition
             for page_info in valid_pages:
                 try:
-                    recognized_blocks = self.pipeline.recognition_stage.recognize_blocks(
+                    recognized_blocks = self.pipeline.recognition_stage.process(
                         page_info.sorted_blocks,  # type: ignore
-                        page_info.image,  # type: ignore
+                        image=page_info.image,  # type: ignore
                     )
                     page_info.recognized_blocks = recognized_blocks
                 except Exception as e:
@@ -397,16 +397,18 @@ class StagedBatchProcessor:
         from pipeline.types import Page
 
         # Render text
-        text = self.pipeline.rendering_stage.render(
+        text = self.pipeline.rendering_stage.process(
             page_info.recognized_blocks,  # type: ignore
-            page_info.auxiliary_info,
+            auxiliary_info=page_info.auxiliary_info,
         )
 
         # Page correction
-        corrected_text, correction_ratio, _ = self.pipeline.page_correction_stage.correct_page(
+        correction_result = self.pipeline.page_correction_stage.process(
             text,
-            page_info.page_num,
+            page_num=page_info.page_num,
         )
+        corrected_text = correction_result.corrected_text
+        correction_ratio = correction_result.correction_ratio
 
         # Build auxiliary info
         auxiliary_info = page_info.auxiliary_info.copy()
