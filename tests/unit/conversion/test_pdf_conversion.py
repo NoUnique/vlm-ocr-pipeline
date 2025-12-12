@@ -28,7 +28,7 @@ from pipeline.io.input.pdf import (
 class TestGetPdfInfo:
     """Tests for get_pdf_info function."""
 
-    @patch("pipeline.conversion.input.pdf.pdfinfo_from_path")
+    @patch("pipeline.io.input.pdf.pdfinfo_from_path")
     def test_get_pdf_info_success(self, mock_pdfinfo: Mock, tmp_path: Path):
         """Test successful PDF info extraction."""
         pdf_path = tmp_path / "test.pdf"
@@ -48,7 +48,7 @@ class TestGetPdfInfo:
         assert result == expected_info
         mock_pdfinfo.assert_called_once_with(str(pdf_path))
 
-    @patch("pipeline.conversion.input.pdf.pdfinfo_from_path")
+    @patch("pipeline.io.input.pdf.pdfinfo_from_path")
     def test_get_pdf_info_minimal(self, mock_pdfinfo: Mock, tmp_path: Path):
         """Test PDF info with minimal metadata."""
         pdf_path = tmp_path / "minimal.pdf"
@@ -62,7 +62,7 @@ class TestGetPdfInfo:
         assert result == minimal_info
         assert result["Pages"] == 1
 
-    @patch("pipeline.conversion.input.pdf.pdfinfo_from_path")
+    @patch("pipeline.io.input.pdf.pdfinfo_from_path")
     def test_get_pdf_info_with_unicode(self, mock_pdfinfo: Mock, tmp_path: Path):
         """Test PDF info with unicode characters."""
         pdf_path = tmp_path / "unicode.pdf"
@@ -84,7 +84,7 @@ class TestGetPdfInfo:
 class TestRenderPdfPage:
     """Tests for render_pdf_page function."""
 
-    @patch("pipeline.conversion.input.pdf.convert_from_path")
+    @patch("pipeline.io.input.pdf.convert_from_path")
     @patch("cv2.imwrite")
     def test_render_pdf_page_success(
         self,
@@ -115,7 +115,7 @@ class TestRenderPdfPage:
         )
         assert temp_image_path == temp_dir / "test_page_1.jpg"
 
-    @patch("pipeline.conversion.input.pdf.convert_from_path")
+    @patch("pipeline.io.input.pdf.convert_from_path")
     def test_render_pdf_page_custom_dpi(self, mock_convert: Mock, tmp_path: Path):
         """Test rendering with custom DPI."""
         pdf_path = tmp_path / "test.pdf"
@@ -138,7 +138,7 @@ class TestRenderPdfPage:
             dpi=300,
         )
 
-    @patch("pipeline.conversion.input.pdf.convert_from_path")
+    @patch("pipeline.io.input.pdf.convert_from_path")
     def test_render_pdf_page_empty_result(self, mock_convert: Mock, tmp_path: Path):
         """Test rendering failure when no images returned."""
         pdf_path = tmp_path / "test.pdf"
@@ -150,7 +150,7 @@ class TestRenderPdfPage:
         with pytest.raises(ValueError, match="Failed to render page 1"):
             render_pdf_page(pdf_path, 1, temp_dir)
 
-    @patch("pipeline.conversion.input.pdf.convert_from_path")
+    @patch("pipeline.io.input.pdf.convert_from_path")
     def test_render_pdf_page_creates_temp_dir(
         self,
         mock_convert: Mock,
@@ -171,7 +171,7 @@ class TestRenderPdfPage:
 
         assert temp_dir.exists()
 
-    @patch("pipeline.conversion.input.pdf.convert_from_path")
+    @patch("pipeline.io.input.pdf.convert_from_path")
     def test_render_pdf_page_different_pages(
         self,
         mock_convert: Mock,
@@ -197,7 +197,7 @@ class TestRenderPdfPage:
 class TestOpenPymupdfDocument:
     """Tests for open_pymupdf_document function."""
 
-    @patch("pipeline.conversion.input.pdf.fitz")
+    @patch("pipeline.io.input.pdf.fitz")
     def test_open_pymupdf_document_success(self, mock_fitz: Mock, tmp_path: Path):
         """Test successful document opening."""
         pdf_path = tmp_path / "test.pdf"
@@ -215,7 +215,7 @@ class TestOpenPymupdfDocument:
     def test_open_pymupdf_document_no_fitz(self, tmp_path: Path, monkeypatch):
         """Test when PyMuPDF is not available."""
         # Simulate fitz not being available
-        monkeypatch.setattr("pipeline.conversion.input.pdf.fitz", None)
+        monkeypatch.setattr("pipeline.io.input.pdf.fitz", None)
 
         pdf_path = tmp_path / "test.pdf"
         pdf_path.touch()
@@ -224,7 +224,7 @@ class TestOpenPymupdfDocument:
 
         assert result is None
 
-    @patch("pipeline.conversion.input.pdf.fitz")
+    @patch("pipeline.io.input.pdf.fitz")
     def test_open_pymupdf_document_failure(self, mock_fitz: Mock, tmp_path: Path):
         """Test document opening failure."""
         pdf_path = tmp_path / "invalid.pdf"
@@ -240,7 +240,7 @@ class TestOpenPymupdfDocument:
 class TestExtractTextSpansFromPdf:
     """Tests for extract_text_spans_from_pdf function."""
 
-    @patch("pipeline.conversion.input.pdf.open_pdf_document")
+    @patch("pipeline.io.input.pdf.open_pdf_document")
     def test_extract_text_spans_success(self, mock_open_pdf: Mock, tmp_path: Path):
         """Test successful text span extraction."""
         pdf_path = tmp_path / "test.pdf"
@@ -294,7 +294,7 @@ class TestExtractTextSpansFromPdf:
         assert spans[1]["size"] == 14.0
         assert spans[1]["font"] == "Times-Bold"
 
-    @patch("pipeline.conversion.input.pdf.open_pdf_document")
+    @patch("pipeline.io.input.pdf.open_pdf_document")
     def test_extract_text_spans_with_image_blocks(
         self,
         mock_open_pdf: Mock,
@@ -338,7 +338,7 @@ class TestExtractTextSpansFromPdf:
         assert len(spans) == 1
         assert spans[0]["text"] == "Text content"
 
-    @patch("pipeline.conversion.input.pdf.open_pdf_document")
+    @patch("pipeline.io.input.pdf.open_pdf_document")
     def test_extract_text_spans_empty_text(self, mock_open_pdf: Mock, tmp_path: Path):
         """Test that empty/whitespace text is skipped."""
         pdf_path = tmp_path / "test.pdf"
@@ -389,7 +389,7 @@ class TestExtractTextSpansFromPdf:
         assert len(spans) == 1
         assert spans[0]["text"] == "Valid text"
 
-    @patch("pipeline.conversion.input.pdf.open_pdf_document")
+    @patch("pipeline.io.input.pdf.open_pdf_document")
     def test_extract_text_spans_invalid_page(self, mock_open_pdf: Mock, tmp_path: Path):
         """Test extraction with invalid page number."""
         pdf_path = tmp_path / "test.pdf"
@@ -409,7 +409,7 @@ class TestExtractTextSpansFromPdf:
 
     def test_extract_text_spans_no_fitz(self, tmp_path: Path, monkeypatch):
         """Test when PyMuPDF is not available."""
-        monkeypatch.setattr("pipeline.conversion.input.pdf.fitz", None)
+        monkeypatch.setattr("pipeline.io.input.pdf.fitz", None)
 
         pdf_path = tmp_path / "test.pdf"
         pdf_path.touch()
@@ -418,7 +418,7 @@ class TestExtractTextSpansFromPdf:
 
         assert spans == []
 
-    @patch("pipeline.conversion.input.pdf.open_pdf_document")
+    @patch("pipeline.io.input.pdf.open_pdf_document")
     def test_extract_text_spans_exception_handling(
         self,
         mock_open_pdf: Mock,
@@ -434,8 +434,8 @@ class TestExtractTextSpansFromPdf:
 
         assert spans == []
 
-    @patch("pipeline.conversion.input.pdf.fitz")
-    @patch("pipeline.conversion.input.pdf.open_pdf_document")
+    @patch("pipeline.io.input.pdf.fitz")
+    @patch("pipeline.io.input.pdf.open_pdf_document")
     def test_extract_text_spans_with_default_values(
         self,
         mock_open_pdf: Mock,
@@ -478,7 +478,7 @@ class TestExtractTextSpansFromPdf:
         assert spans[0]["size"] == 12.0  # Default
         assert spans[0]["font"] == "Unknown"  # Default
 
-    @patch("pipeline.conversion.input.pdf.open_pdf_document")
+    @patch("pipeline.io.input.pdf.open_pdf_document")
     def test_extract_text_spans_unicode(self, mock_open_pdf: Mock, tmp_path: Path):
         """Test extraction with unicode text."""
         pdf_path = tmp_path / "test.pdf"
@@ -524,7 +524,7 @@ class TestExtractTextSpansFromPdf:
         assert spans[0]["text"] == "한글 텍스트"
         assert spans[1]["text"] == "日本語"
 
-    @patch("pipeline.conversion.input.pdf.open_pdf_document")
+    @patch("pipeline.io.input.pdf.open_pdf_document")
     def test_extract_text_spans_multiple_lines(self, mock_open_pdf: Mock, tmp_path: Path):
         """Test extraction from multiple lines."""
         pdf_path = tmp_path / "test.pdf"

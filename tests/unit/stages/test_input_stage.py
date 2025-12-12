@@ -45,7 +45,7 @@ class TestInputStageInit:
 class TestInputStageLoadImage:
     """Tests for InputStage image loading."""
 
-    @patch("pipeline.conversion.input.image.load_image")
+    @patch("pipeline.io.input.image.load_image")
     def test_load_image(self, mock_load_image: Mock, tmp_path: Path):
         """Test loading image file."""
         # Setup
@@ -66,7 +66,7 @@ class TestInputStageLoadImage:
 class TestInputStageLoadPDF:
     """Tests for InputStage PDF loading."""
 
-    @patch("pipeline.conversion.input.pdf.render_pdf_page")
+    @patch("pipeline.io.input.pdf.render_pdf_page")
     def test_load_pdf_page(self, mock_render: Mock, tmp_path: Path):
         """Test loading PDF page."""
         # Setup
@@ -88,7 +88,7 @@ class TestInputStageLoadPDF:
 class TestInputStageAuxiliaryInfo:
     """Tests for InputStage auxiliary info extraction."""
 
-    @patch("pipeline.conversion.input.pdf.extract_text_spans_from_pdf")
+    @patch("pipeline.io.input.pdf.extract_text_spans_from_pdf")
     def test_extract_auxiliary_info_success(self, mock_extract: Mock, tmp_path: Path):
         """Test extracting auxiliary info successfully."""
         # Setup
@@ -106,7 +106,7 @@ class TestInputStageAuxiliaryInfo:
         assert result is not None
         assert result["text_spans"] == mock_spans
 
-    @patch("pipeline.conversion.input.pdf.extract_text_spans_from_pdf")
+    @patch("pipeline.io.input.pdf.extract_text_spans_from_pdf")
     def test_extract_auxiliary_info_no_spans(self, mock_extract: Mock, tmp_path: Path):
         """Test extracting auxiliary info when no spans found."""
         # Setup
@@ -121,7 +121,7 @@ class TestInputStageAuxiliaryInfo:
         # Verify
         assert result is None
 
-    @patch("pipeline.conversion.input.pdf.extract_text_spans_from_pdf")
+    @patch("pipeline.io.input.pdf.extract_text_spans_from_pdf")
     def test_extract_auxiliary_info_exception(self, mock_extract: Mock, tmp_path: Path):
         """Test extracting auxiliary info when exception occurs."""
         # Setup

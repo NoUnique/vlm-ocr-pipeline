@@ -291,7 +291,7 @@ class TestImageLoadingIntegration:
         image_path = tmp_path / "test.jpg"
         cv2.imwrite(str(image_path), test_image)
 
-        with patch("pipeline.conversion.input.image.load_image") as mock_load:
+        with patch("pipeline.io.input.image.load_image") as mock_load:
             mock_load.return_value = test_image
             result = load_jpeg(image_path)
 
