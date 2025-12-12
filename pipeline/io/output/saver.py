@@ -10,8 +10,8 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from .misc import tz_now
-from .types import Block, Page
+from pipeline.misc import tz_now
+from pipeline.types import Block, Page
 
 if TYPE_CHECKING:
     import numpy as np

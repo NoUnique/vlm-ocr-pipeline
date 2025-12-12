@@ -6,8 +6,9 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from .block import Block
+
 if TYPE_CHECKING:
-    from .block import Block
     from .document import Document
 
 
