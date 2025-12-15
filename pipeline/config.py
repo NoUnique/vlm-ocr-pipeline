@@ -16,6 +16,8 @@ from typing import Any
 
 import yaml
 
+from pipeline.exceptions import InvalidConfigError
+
 logger = logging.getLogger(__name__)
 
 
@@ -409,9 +411,9 @@ class PipelineConfig:
             self.recognizer, self.recognizer_backend
         )
         if recognizer_error:
-            raise ValueError(f"Recognizer backend validation failed: {recognizer_error}")
+            raise InvalidConfigError(f"Recognizer backend validation failed: {recognizer_error}")
         if self._resolved_recognizer_backend is None:
-            raise ValueError(f"No backend available for recognizer: {self.recognizer}")
+            raise InvalidConfigError(f"No backend available for recognizer: {self.recognizer}")
 
         # Resolve sorter backend (after sorter is resolved)
         # This is called again in _resolve_detector_sorter_combination after sorter is determined
@@ -438,7 +440,7 @@ class PipelineConfig:
         if sorter is not None and sorter in REQUIRED_COMBINATIONS:
             required_detector = REQUIRED_COMBINATIONS[sorter]
             if not detector_is_default and detector != required_detector:
-                raise ValueError(
+                raise InvalidConfigError(
                     f"Sorter '{sorter}' requires detector '{required_detector}' (tightly coupled), "
                     f"but detector '{detector}' was specified. "
                     f"Either omit --detector or use --detector {required_detector}."
@@ -476,7 +478,7 @@ class PipelineConfig:
         # Validate combination
         is_valid, message = validate_combination(detector, sorter)
         if not is_valid:
-            raise ValueError(f"Invalid detector/sorter combination: {message}")
+            raise InvalidConfigError(f"Invalid detector/sorter combination: {message}")
 
         logger.info("Pipeline combination: %s", message)
 
@@ -492,7 +494,7 @@ class PipelineConfig:
         """Validate renderer option."""
         valid_renderers = ["markdown", "plaintext"]
         if self.renderer.lower() not in valid_renderers:
-            raise ValueError(
+            raise InvalidConfigError(
                 f"Invalid renderer: {self.renderer}. Must be one of: {valid_renderers}"
             )
         self.renderer = self.renderer.lower()
@@ -501,7 +503,7 @@ class PipelineConfig:
         """Validate image render mode option."""
         valid_modes = ["image_only", "image_and_description", "description_only"]
         if self.image_render_mode.lower() not in valid_modes:
-            raise ValueError(
+            raise InvalidConfigError(
                 f"Invalid image_render_mode: {self.image_render_mode}. Must be one of: {valid_modes}"
             )
         self.image_render_mode = self.image_render_mode.lower()

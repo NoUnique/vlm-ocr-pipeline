@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from pipeline.exceptions import APIClientError, InvalidConfigError
 from pipeline.prompt import PromptManager
 from pipeline.resources import managed_numpy_array
 from pipeline.types import Block, Recognizer
@@ -123,7 +124,7 @@ class TextRecognizer(Recognizer):
             self.client = None
             self.async_client = None
         else:
-            raise ValueError(f"Unknown backend: {backend}")
+            raise InvalidConfigError(f"Unknown backend: {backend}")
 
     def process_blocks(self, image: np.ndarray, blocks: Sequence[Block]) -> list[Block]:
         """Process all blocks to extract text.
@@ -200,7 +201,7 @@ class TextRecognizer(Recognizer):
         with managed_numpy_array(block_image) as (managed_image,):
             try:
                 if self.client is None:
-                    raise RuntimeError(
+                    raise APIClientError(
                         f"API client not initialized for backend '{self.backend}'. "
                         "Cannot extract text without a configured client."
                     )
@@ -288,7 +289,7 @@ class TextRecognizer(Recognizer):
 
         try:
             if self.client is None:
-                raise RuntimeError(
+                raise APIClientError(
                     f"API client not initialized for backend '{self.backend}'. "
                     "Cannot correct text without a configured client."
                 )
@@ -320,10 +321,10 @@ class TextRecognizer(Recognizer):
             List of blocks with text extracted
 
         Raises:
-            RuntimeError: If async client is not initialized
+            APIClientError: If async client is not initialized
         """
         if self.async_client is None:
-            raise RuntimeError(
+            raise APIClientError(
                 "Async client not initialized. Please set use_async=True when creating TextRecognizer."
             )
 

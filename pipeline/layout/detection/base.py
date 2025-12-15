@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
+from pipeline.exceptions import DetectionError
 from pipeline.types import BBox, Block
 
 if TYPE_CHECKING:
@@ -58,7 +59,7 @@ class BaseDetector(ABC):
             confidence_threshold: Minimum confidence for detections (0.0-1.0)
         """
         if not 0.0 <= confidence_threshold <= 1.0:
-            raise ValueError(f"confidence_threshold must be 0.0-1.0, got {confidence_threshold}")
+            raise DetectionError(f"confidence_threshold must be 0.0-1.0, got {confidence_threshold}")
 
         self.confidence_threshold = confidence_threshold
 
@@ -92,14 +93,14 @@ class BaseDetector(ABC):
         """
         # Validate input
         if image is None:
-            raise ValueError("Image cannot be None")
+            raise DetectionError("Image cannot be None")
 
         if len(image.shape) != 3:
-            raise ValueError(f"Image must have 3 dimensions (H, W, C), got {len(image.shape)}")
+            raise DetectionError(f"Image must have 3 dimensions (H, W, C), got {len(image.shape)}")
 
         h, w, c = image.shape
         if c not in (1, 3, 4):
-            raise ValueError(f"Image must have 1, 3, or 4 channels, got {c}")
+            raise DetectionError(f"Image must have 1, 3, or 4 channels, got {c}")
 
         if h == 0 or w == 0:
             logger.warning("Empty image (size=%dx%d), returning empty blocks", w, h)

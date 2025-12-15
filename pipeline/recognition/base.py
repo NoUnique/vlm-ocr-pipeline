@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
+from pipeline.exceptions import RecognitionError
 from pipeline.types import Block
 
 if TYPE_CHECKING:
@@ -95,10 +96,10 @@ class BaseRecognizer(ABC):
         """
         # Validate inputs
         if image is None:
-            raise ValueError("Image cannot be None")
+            raise RecognitionError("Image cannot be None")
 
         if blocks is None:
-            raise ValueError("Blocks cannot be None")
+            raise RecognitionError("Blocks cannot be None")
 
         if len(blocks) == 0:
             logger.debug("No blocks to process")
@@ -152,7 +153,7 @@ class BaseRecognizer(ABC):
             return text
 
         if text is None:
-            raise ValueError("Text cannot be None")
+            raise RecognitionError("Text cannot be None")
 
         if not text.strip():
             return text
@@ -183,7 +184,7 @@ class BaseRecognizer(ABC):
             List of block lists, one per image
         """
         if len(images) != len(blocks_list):
-            raise ValueError(
+            raise RecognitionError(
                 f"Mismatched lengths: {len(images)} images vs {len(blocks_list)} block lists"
             )
 
