@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from pipeline.exceptions import DetectionError
 from pipeline.layout.detection.base import BaseDetector
 from pipeline.types import BBox, Block
 
@@ -38,12 +39,12 @@ class TestBaseDetectorInit:
 
     def test_init_invalid_threshold_low(self):
         """Test invalid threshold below 0."""
-        with pytest.raises(ValueError, match="confidence_threshold must be"):
+        with pytest.raises((ValueError, DetectionError), match="confidence_threshold must be"):
             ConcreteDetector(confidence_threshold=-0.1)
 
     def test_init_invalid_threshold_high(self):
         """Test invalid threshold above 1."""
-        with pytest.raises(ValueError, match="confidence_threshold must be"):
+        with pytest.raises((ValueError, DetectionError), match="confidence_threshold must be"):
             ConcreteDetector(confidence_threshold=1.5)
 
 
@@ -74,14 +75,14 @@ class TestBaseDetectorDetect:
     def test_detect_none_image(self):
         """Test detection with None image."""
         detector = ConcreteDetector()
-        with pytest.raises(ValueError, match="Image cannot be None"):
+        with pytest.raises((ValueError, DetectionError), match="Image cannot be None"):
             detector.detect(None)  # type: ignore[arg-type]
 
     def test_detect_invalid_dimensions(self):
         """Test detection with wrong image dimensions."""
         detector = ConcreteDetector()
         image = np.zeros((100, 100), dtype=np.uint8)  # 2D instead of 3D
-        with pytest.raises(ValueError, match="3 dimensions"):
+        with pytest.raises((ValueError, DetectionError), match="3 dimensions"):
             detector.detect(image)
 
     def test_detect_empty_image(self):

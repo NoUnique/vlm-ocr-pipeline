@@ -8,6 +8,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
+from pipeline.exceptions import RecognitionError
 from pipeline.recognition.base import BaseRecognizer
 from pipeline.types import BBox, Block
 
@@ -83,13 +84,13 @@ class TestBaseRecognizerProcessBlocks:
     def test_process_blocks_none_image(self, sample_blocks):
         """Test processing with None image."""
         recognizer = ConcreteRecognizer()
-        with pytest.raises(ValueError, match="Image cannot be None"):
+        with pytest.raises((ValueError, RecognitionError), match="Image cannot be None"):
             recognizer.process_blocks(None, sample_blocks)  # type: ignore[arg-type]
 
     def test_process_blocks_none_blocks(self, sample_image):
         """Test processing with None blocks."""
         recognizer = ConcreteRecognizer()
-        with pytest.raises(ValueError, match="Blocks cannot be None"):
+        with pytest.raises((ValueError, RecognitionError), match="Blocks cannot be None"):
             recognizer.process_blocks(sample_image, None)  # type: ignore[arg-type]
 
 
@@ -117,7 +118,7 @@ class TestBaseRecognizerCorrectText:
     def test_correct_text_none(self):
         """Test correction with None."""
         recognizer = ConcreteRecognizer()
-        with pytest.raises(ValueError, match="Text cannot be None"):
+        with pytest.raises((ValueError, RecognitionError), match="Text cannot be None"):
             recognizer.correct_text(None)  # type: ignore[arg-type]
 
     def test_correct_text_dict_result(self):
@@ -171,7 +172,7 @@ class TestBaseRecognizerBatch:
         blocks_list = [[], []]  # 2 items vs 1 image
         
         recognizer = ConcreteRecognizer()
-        with pytest.raises(ValueError, match="Mismatched lengths"):
+        with pytest.raises((ValueError, RecognitionError), match="Mismatched lengths"):
             recognizer.process_blocks_batch(images, blocks_list)  # type: ignore[arg-type]
 
 

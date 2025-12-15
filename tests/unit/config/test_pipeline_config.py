@@ -16,6 +16,7 @@ from unittest.mock import Mock
 import pytest
 
 from pipeline.config import PipelineConfig
+from pipeline.exceptions import InvalidConfigError
 
 
 class TestPipelineConfigCreation:
@@ -108,7 +109,7 @@ class TestPipelineConfigValidation:
             renderer="html",  # Invalid
         )
 
-        with pytest.raises(ValueError, match="Invalid renderer"):
+        with pytest.raises((ValueError, InvalidConfigError), match="Invalid renderer"):
             config.validate()
 
     def test_dpi_resolution(self):
@@ -169,7 +170,7 @@ class TestDetectorSorterCombination:
             recognizer="paddleocr-vl",
         )
 
-        with pytest.raises(ValueError, match="requires detector"):
+        with pytest.raises((ValueError, InvalidConfigError), match="requires detector"):
             config.validate()
 
 
