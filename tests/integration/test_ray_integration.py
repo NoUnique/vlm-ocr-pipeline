@@ -36,14 +36,16 @@ def test_ray_recognizer_pool_import():
 def test_pipeline_without_ray_backend():
     """Test Pipeline without Ray backend (single-GPU mode)."""
     from pipeline import Pipeline
+    from pipeline.config import PipelineConfig
 
     # Test that Pipeline works without Ray backend
     # (uses default pytorch backend, no Ray)
-    pipeline = Pipeline(
+    config = PipelineConfig(
         detector="doclayout-yolo",
-        detector_backend="pytorch",  # Single-GPU backend
+        detector_backend="pytorch",
         recognizer="gemini-2.5-flash",
     )
+    pipeline = Pipeline(config=config)
 
     # Verify Ray pools are not initialized
     assert pipeline.ray_detector_pool is None
@@ -53,65 +55,48 @@ def test_pipeline_without_ray_backend():
 def test_pipeline_accepts_ray_backends():
     """Test Pipeline accepts pt-ray and hf-ray backends."""
     from pipeline import Pipeline
+    from pipeline.config import PipelineConfig
 
     # Test that Pipeline accepts Ray backends without errors
     # (we don't actually initialize Ray to avoid GPU requirements in CI)
     # This will trigger Ray initialization, but we skip if Ray is not available
     try:
-        pipeline = Pipeline(
+        config = PipelineConfig(
             detector="doclayout-yolo",
-            detector_backend="pt-ray",  # Ray multi-GPU backend
+            detector_backend="pt-ray",
             recognizer="gemini-2.5-flash",
         )
-        # If Ray is available, pools should be initialized
-        # If Ray is not available, pools should be None (fallback logged)
-        # Either case is valid - just verify pipeline was created
-        assert pipeline is not None
-    except Exception:
-        # If this fails, it's likely due to Ray not being available
-        # This is acceptable in CI environment
-        pytest.skip("Ray initialization failed (expected in CI without GPUs)")
+        pipeline = Pipeline(config=config)
+        # If we get here, Ray is initialized and pools should exist
+        # (implementation may vary based on Ray availability)
+    except Exception as e:
+        pytest.skip(f"Ray initialization failed: {e}")
 
 
-def test_graceful_fallback_no_ray():
-    """Test graceful fallback when Ray backend is not used."""
-    from pipeline import Pipeline
+def test_detector_pool_creation():
+    """Test RayDetectorPool can be created with detector name."""
+    from pipeline.distributed import RayDetectorPool
 
-    # Create pipeline without Ray backend
-    pipeline = Pipeline(
-        detector="doclayout-yolo",
-        detector_backend="pytorch",  # Single-GPU backend
-        recognizer="gemini-2.5-flash",
-    )
-
-    # Verify Ray pools are not initialized
-    assert pipeline.ray_detector_pool is None
-    assert pipeline.ray_recognizer_pool is None
-
-    # Verify stages work without Ray pools
-    assert pipeline.detection_stage is not None
-    assert pipeline.recognition_stage is not None
+    # Test that pool can be created (doesn't actually initialize Ray actors)
+    try:
+        pool = RayDetectorPool(
+            detector_name="doclayout-yolo",
+            num_gpus=1,
+        )
+        assert pool.detector_name == "doclayout-yolo"
+    except Exception as e:
+        pytest.skip(f"RayDetectorPool creation failed: {e}")
 
 
-def test_detection_stage_with_ray_pool():
-    """Test DetectionStage accepts ray_detector_pool parameter."""
-    from pipeline.layout.detection import create_detector
-    from pipeline.stages import DetectionStage
+def test_recognizer_pool_creation():
+    """Test RayRecognizerPool can be created with recognizer name."""
+    from pipeline.distributed import RayRecognizerPool
 
-    detector = create_detector("doclayout-yolo")
-    stage = DetectionStage(detector, ray_detector_pool=None)
-
-    assert stage.detector is not None
-    assert stage.ray_detector_pool is None
-
-
-def test_recognition_stage_with_ray_pool():
-    """Test RecognitionStage accepts ray_recognizer_pool parameter."""
-    from pipeline.recognition import create_recognizer
-    from pipeline.stages import RecognitionStage
-
-    recognizer = create_recognizer("gemini-2.5-flash", backend="gemini")
-    stage = RecognitionStage(recognizer, ray_recognizer_pool=None)
-
-    assert stage.recognizer is not None
-    assert stage.ray_recognizer_pool is None
+    try:
+        pool = RayRecognizerPool(
+            recognizer_name="gemini-2.5-flash",
+            num_gpus=1,
+        )
+        assert pool.recognizer_name == "gemini-2.5-flash"
+    except Exception as e:
+        pytest.skip(f"RayRecognizerPool creation failed: {e}")

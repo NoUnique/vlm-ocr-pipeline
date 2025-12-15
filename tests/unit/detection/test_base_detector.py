@@ -75,7 +75,7 @@ class TestBaseDetectorDetect:
         """Test detection with None image."""
         detector = ConcreteDetector()
         with pytest.raises(ValueError, match="Image cannot be None"):
-            detector.detect(None)
+            detector.detect(None)  # type: ignore[arg-type]
 
     def test_detect_invalid_dimensions(self):
         """Test detection with wrong image dimensions."""

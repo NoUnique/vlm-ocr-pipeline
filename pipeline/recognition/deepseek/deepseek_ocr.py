@@ -517,10 +517,10 @@ class DeepSeekOCRRecognizer(Recognizer):
         try:
             from deepseek_ocr import DeepseekOCRForCausalLM  # noqa: PLC0415  # type: ignore[import-not-found]
             from process.image_process import DeepseekOCRProcessor  # noqa: PLC0415  # type: ignore[import-not-found]
-            from process.ngram_norepeat import (  # noqa: PLC0415
+            from process.ngram_norepeat import (  # noqa: PLC0415  # type: ignore[import-not-found]
                 NoRepeatNGramLogitsProcessor,  # type: ignore[import-not-found]
             )
-            from vllm.model_executor.models.registry import (  # noqa: PLC0415
+            from vllm.model_executor.models.registry import (  # noqa: PLC0415  # type: ignore[import-not-found]
                 ModelRegistry,  # type: ignore[import-untyped]
             )
         except ImportError as e:

@@ -171,6 +171,7 @@ class TestAsyncGeminiClient:
             mock_response = MagicMock()
             mock_response.text = "Extracted text from Gemini"
 
+            assert client.client is not None
             with patch.object(client.client.aio.models, "generate_content", new_callable=AsyncMock) as mock_gen:
                 mock_gen.return_value = mock_response
 
@@ -198,6 +199,7 @@ class TestAsyncGeminiClient:
             mock_response2 = MagicMock()
             mock_response2.text = "Gemini text 2"
 
+            assert client.client is not None
             with patch.object(client.client.aio.models, "generate_content", new_callable=AsyncMock) as mock_gen:
                 mock_gen.side_effect = [mock_response1, mock_response2]
 
@@ -226,6 +228,8 @@ class TestAsyncGeminiClient:
             mock_response2 = MagicMock()
             mock_response2.text = '{"description": "Figure content"}'
 
+            assert client.client is not None
+            assert client.client is not None
             with patch.object(client.client.aio.models, "generate_content", new_callable=AsyncMock) as mock_gen:
                 mock_gen.side_effect = [mock_response1, mock_response2]
 
@@ -251,6 +255,7 @@ class TestAsyncGeminiClient:
             mock_response = MagicMock()
             mock_response.text = "Corrected by Gemini"
 
+            assert client.client is not None
             with patch.object(client.client.aio.models, "generate_content", new_callable=AsyncMock) as mock_gen:
                 mock_gen.return_value = mock_response
 

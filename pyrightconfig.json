@@ -17,7 +17,8 @@
     "typings",
     "node_modules",
     "**/__pycache__",
-    "**/.pytest_cache"
+    "**/.pytest_cache",
+    ".cache"
   ],
   "ignore": [
     "models/doclayout_yolo.py"

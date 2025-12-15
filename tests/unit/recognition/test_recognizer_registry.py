@@ -83,13 +83,17 @@ class TestRecognizerRegistryResolveName:
         assert name == "openai"
         assert kwargs == {"model": "gpt-4o"}
 
-    def test_resolve_alias(self):
-        """Test resolving alias."""
+    def test_resolve_model_pattern(self):
+        """Test resolving model name patterns."""
         registry = RecognizerRegistry()
         
-        name, kwargs = registry.resolve_name("vlm")
+        # gemini pattern
+        name, kwargs = registry.resolve_name("gemini-2.5-flash")
         assert name == "gemini"
-        assert kwargs == {}
+        
+        # gpt pattern -> openai
+        name, kwargs = registry.resolve_name("gpt-4o")
+        assert name == "openai"
 
 
 class TestRecognizerRegistryRegister:

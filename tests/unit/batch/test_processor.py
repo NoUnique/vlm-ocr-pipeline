@@ -114,7 +114,7 @@ class TestPageInfo:
         )
         
         assert info.image is not None
-        assert len(info.blocks) == 1
+        assert info.blocks is not None and len(info.blocks) == 1
         assert info.status == "completed"
 
 

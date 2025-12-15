@@ -19,6 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from pipeline import Pipeline
+from pipeline.config import PipelineConfig
 
 logging.basicConfig(
     level=logging.INFO,
@@ -87,12 +88,13 @@ class SimpleBenchmark:
         # Initialize pipeline
         logger.info("\n[1/3] Initializing pipeline...")
         init_start = time.perf_counter()
-        pipeline = Pipeline(
+        config = PipelineConfig(
             detector=detector,
             sorter=sorter,
-            backend=backend,
+            recognizer_backend=backend,
             use_cache=use_cache,
         )
+        pipeline = Pipeline(config=config)
         init_time = time.perf_counter() - init_start
         self.results["timings"]["initialization"] = init_time
         logger.info("✓ Pipeline initialized in %.3fs", init_time)

@@ -331,7 +331,7 @@ class TestImageLoadingIntegration:
         assert loaded1[50, 50, 0] < 10  # Should be mostly black
 
         # Modify image
-        test_image2 = np.ones((100, 100, 3), dtype=np.uint8) * 255
+        test_image2 = (np.ones((100, 100, 3)) * 255).astype(np.uint8)
         cv2.imwrite(str(image_path), test_image2)
 
         loaded2 = load_image(image_path)

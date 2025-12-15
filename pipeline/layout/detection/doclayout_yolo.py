@@ -37,6 +37,9 @@ class DocLayoutYOLODetector(Detector):
         - Manual batch size: batch_size=16
     """
 
+    name: str = "doclayout-yolo"
+    source: str = "doclayout-yolo"
+
     def __init__(
         self,
         model_path: str | Path | None = None,

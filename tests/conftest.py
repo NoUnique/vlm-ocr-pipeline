@@ -376,9 +376,9 @@ def mineru_doclayout_yolo_detector():
         MineruDocLayoutYOLODetector instance or None if unavailable
     """
     try:
-        from pipeline.layout.detection.doclayout_yolo import MineruDocLayoutYOLODetector
+        from pipeline.layout.detection.mineru.doclayout_yolo import MinerUDocLayoutYOLODetector
 
-        return MineruDocLayoutYOLODetector(confidence_threshold=0.5)
+        return MinerUDocLayoutYOLODetector(confidence_threshold=0.5)
     except Exception as e:
         pytest.skip(f"MineruDocLayoutYOLODetector not available: {e}")
         return None

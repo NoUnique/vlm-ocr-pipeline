@@ -286,7 +286,8 @@ class TestPipelineResultIntegration:
         assert len(result.document.pages[0].blocks) == 2
 
         # Check timings
-        assert result.get_slowest_stage().stage_name == "recognition"
+        slowest = result.get_slowest_stage()
+        assert slowest is not None and slowest.stage_name == "recognition"
         assert result.total_time_sec == 0.635
 
         # Check serialization

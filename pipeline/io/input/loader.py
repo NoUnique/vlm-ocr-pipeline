@@ -174,7 +174,7 @@ class InputLoader:
         """
         from dataclasses import replace
 
-        from .types import BBox
+        from pipeline.types import BBox
 
         scaled_blocks = []
         for block in blocks:

@@ -324,6 +324,8 @@ class MultiColumnSorter(Sorter):
     left column top-to-bottom, then right column top-to-bottom.
     """
 
+    name: str = "pymupdf"
+
     def __init__(self) -> None:
         """Initialize PyMuPDF sorter."""
         if fitz is None:

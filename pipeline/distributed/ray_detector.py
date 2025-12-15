@@ -33,13 +33,13 @@ def create_ray_detector_actor(
         Ray actor class wrapping the detector
 
     Example:
-        >>> import ray
+        >>> import ray  # type: ignore[import-not-found]
         >>> DetectorActor = create_ray_detector_actor("doclayout-yolo", num_gpus=1.0)
         >>> actor = DetectorActor.remote()
         >>> result = ray.get(actor.detect.remote(image))
     """
     try:
-        import ray
+        import ray  # type: ignore[import-not-found]
     except ImportError as e:
         raise ImportError("Ray is required for distributed processing. Install with: pip install ray") from e
 
@@ -131,7 +131,7 @@ class RayDetectorPool:
             **detector_kwargs: Additional arguments for detector initialization
         """
         try:
-            import ray
+            import ray  # type: ignore[import-not-found]
         except ImportError as e:
             raise ImportError("Ray is required for distributed processing. Install with: pip install ray") from e
 
@@ -179,7 +179,7 @@ class RayDetectorPool:
         Returns:
             List of detected blocks
         """
-        import ray
+        import ray  # type: ignore[import-not-found]
 
         # Round-robin actor selection
         actor = self.actors[self.actor_idx]
@@ -198,7 +198,7 @@ class RayDetectorPool:
         Returns:
             List of detection results (one per image)
         """
-        import ray
+        import ray  # type: ignore[import-not-found]
 
         # Distribute images across actors
         tasks = []
@@ -212,7 +212,7 @@ class RayDetectorPool:
 
     def shutdown(self) -> None:
         """Shutdown actor pool and free resources."""
-        import ray
+        import ray  # type: ignore[import-not-found]
 
         for actor in self.actors:
             ray.kill(actor)

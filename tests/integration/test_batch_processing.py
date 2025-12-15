@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from pipeline.batch import PageInfo, StagedBatchProcessor
+from pipeline.config import PipelineConfig
 from pipeline.batch.types import BatchProgress
 
 
@@ -100,7 +101,8 @@ def test_staged_batch_processor_initialization():
     """Test StagedBatchProcessor initialization."""
     from pipeline import Pipeline
 
-    pipeline = Pipeline(recognizer="gemini-2.5-flash")
+    config = PipelineConfig(recognizer="gemini-2.5-flash")
+    pipeline = Pipeline(config=config)
     processor = StagedBatchProcessor(pipeline)
 
     assert processor.pipeline == pipeline
@@ -111,7 +113,8 @@ def test_staged_batch_processor_directory_not_found():
     """Test StagedBatchProcessor with non-existent directory."""
     from pipeline import Pipeline
 
-    pipeline = Pipeline(recognizer="gemini-2.5-flash")
+    config = PipelineConfig(recognizer="gemini-2.5-flash")
+    pipeline = Pipeline(config=config)
     processor = StagedBatchProcessor(pipeline)
 
     result = processor.process_directory(
@@ -131,7 +134,8 @@ def test_pipeline_process_directory_uses_staged_processor(tmp_path):
     input_dir = tmp_path / "input"
     input_dir.mkdir()
 
-    pipeline = Pipeline(recognizer="gemini-2.5-flash")
+    config = PipelineConfig(recognizer="gemini-2.5-flash")
+    pipeline = Pipeline(config=config)
 
     result = pipeline.process_directory(
         input_dir,

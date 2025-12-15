@@ -16,6 +16,8 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from pipeline.config import PipelineConfig
+
 
 def measure_stage(name: str):
     """Context manager to measure stage execution time."""
@@ -55,11 +57,12 @@ def main():
 
     # Stage 3: Create Pipeline (detector + recognizer initialization)
     with measure_stage("Create Pipeline (doclayout-yolo + gemini-2.5-flash)"):
-        pipeline = Pipeline(
+        config = PipelineConfig(
             detector="doclayout-yolo",
             recognizer="gemini-2.5-flash",
             use_cache=False,
         )
+        pipeline = Pipeline(config=config)
 
     # Stage 4: Load sample image (if exists)
     test_image_path = Path("tests/fixtures/sample.png")
@@ -72,8 +75,11 @@ def main():
 
         # Stage 5: First detection (cold start)
         with measure_stage("First detection (cold start)"):
-            blocks = pipeline.detector.detect(image_array)
-            print(f"    → Detected {len(blocks)} blocks")
+            if pipeline.detection_stage:
+                blocks = pipeline.detection_stage.process(image_array)
+                print(f"    → Detected {len(blocks)} blocks")
+            else:
+                print("    → Detection stage not initialized")
     else:
         print(f"\n⚠️  Test image not found at {test_image_path}")
         print("   Skipping detection test")

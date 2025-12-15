@@ -71,7 +71,7 @@ def test_determine_pages_to_process_honors_priority_and_bounds():
 def test_check_for_rate_limit_errors(page_result, expected):
     pipeline = make_pipeline()
 
-    assert Pipeline._check_for_rate_limit_errors(pipeline, page_result) is expected
+    assert Pipeline._check_for_rate_limit_errors(pipeline, page_result) is expected  # type: ignore[attr-defined]
 
 
 @pytest.mark.parametrize(
@@ -100,4 +100,4 @@ def test_check_for_rate_limit_errors(page_result, expected):
 def test_check_for_any_errors(summary, expected):
     pipeline = make_pipeline()
 
-    assert Pipeline._check_for_any_errors(pipeline, summary) is expected
+    assert Pipeline._check_for_any_errors(pipeline, summary) is expected  # type: ignore[attr-defined]

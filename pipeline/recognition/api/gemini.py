@@ -22,6 +22,9 @@ from .base import BaseVLMClient
 from .image_utils import prepare_image_for_api
 from .ratelimit import rate_limiter
 from .types import (
+    ExtractionError,
+    ExtractionResult,
+    SpecialContentResult,
     create_extraction_error,
     create_special_content_error,
 )
@@ -117,7 +120,9 @@ class GeminiClient(BaseVLMClient):
         """Check if Gemini API client is available"""
         return self.client is not None
 
-    def extract_text(self, block_image: np.ndarray, block_info: dict[str, Any], prompt: str) -> dict[str, Any]:  # noqa: PLR0911
+    def extract_text(  # noqa: PLR0911
+        self, block_image: np.ndarray, block_info: dict[str, Any], prompt: str
+    ) -> ExtractionResult | ExtractionError:
         """
         Extract text from block using Gemini API
 
@@ -180,7 +185,7 @@ class GeminiClient(BaseVLMClient):
 
             text = (response.text or "").strip()
 
-            result = {
+            result: ExtractionResult = {
                 "type": block_info["type"],
                 "xywh": block_info["xywh"],
                 "text": text,
@@ -216,7 +221,7 @@ class GeminiClient(BaseVLMClient):
 
     def process_special_block(  # noqa: PLR0911
         self, block_image: np.ndarray, block_info: dict[str, Any], prompt: str
-    ) -> dict[str, Any]:
+    ) -> SpecialContentResult:
         """
         Process special blocks (tables, figures) with Gemini API
 
@@ -226,7 +231,7 @@ class GeminiClient(BaseVLMClient):
             prompt: Prompt for special content analysis
 
         Returns:
-            Dictionary containing processed content and metadata
+            SpecialContentResult containing processed content and metadata
         """
         if not self.is_available():
             logger.warning("Gemini API client not initialized")
@@ -440,12 +445,12 @@ class GeminiClient(BaseVLMClient):
             result["error_message"] = error_message
         return result
 
-    def _parse_gemini_response(self, response_text: str, block_info: dict[str, Any]) -> dict[str, Any]:
+    def _parse_gemini_response(self, response_text: str, block_info: dict[str, Any]) -> SpecialContentResult:
         """Parse Gemini response for special blocks"""
         try:
             parsed = json.loads(response_text)
 
-            result = {
+            result: SpecialContentResult = {
                 "type": block_info["type"],
                 "xywh": block_info["xywh"],
                 "confidence": block_info.get("confidence", 1.0),

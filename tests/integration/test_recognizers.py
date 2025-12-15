@@ -51,10 +51,10 @@ class TestOpenAIClient:
                 }
                 result = client.extract_text(block_image, block_info, "Extract text from this image")
 
-                assert result["type"] == "text"
-                assert result["xywh"] == [10, 20, 80, 50]
-                assert result["text"] == "Extracted text from block"
-                assert result["confidence"] == 0.95
+                assert result["type"] == "text"  # type: ignore[typeddict-item]
+                assert result["xywh"] == [10, 20, 80, 50]  # type: ignore[typeddict-item]
+                assert result["text"] == "Extracted text from block"  # type: ignore[typeddict-item]
+                assert result["confidence"] == 0.95  # type: ignore[typeddict-item]
 
     def test_extract_text_handles_rate_limit_error(self):
         """Test extract_text handles rate limit errors gracefully."""
@@ -76,7 +76,7 @@ class TestOpenAIClient:
                 block_info = {"type": "text", "xywh": [10, 20, 80, 50]}
                 result = client.extract_text(block_image, block_info, "Extract text")
 
-                assert result["text"] == "[RATE_LIMIT_EXCEEDED]"
+                assert result["text"] == "[RATE_LIMIT_EXCEEDED]"  # type: ignore[typeddict-item]
                 assert result["error"] == "openai_rate_limit"
 
     def test_correct_text_calculates_correction_ratio(self):
@@ -145,10 +145,10 @@ class TestGeminiClient:
 
                     result = client.extract_text(block_image, block_info, "Extract text from this image")
 
-                    assert result["type"] == "text"
-                    assert result["xywh"] == [10, 20, 80, 50]
-                    assert result["text"] == "Extracted text from block"
-                    assert result["confidence"] == 0.95
+                    assert result["type"] == "text"  # type: ignore[typeddict-item]
+                    assert result["xywh"] == [10, 20, 80, 50]  # type: ignore[typeddict-item]
+                    assert result["text"] == "Extracted text from block"  # type: ignore[typeddict-item]
+                    assert result["confidence"] == 0.95  # type: ignore[typeddict-item]
 
     def test_extract_text_handles_resource_exhausted(self):
         """Test extract_text handles resource exhausted errors."""
@@ -167,8 +167,8 @@ class TestGeminiClient:
 
                     result = client.extract_text(block_image, block_info, "Extract text")
 
-                    assert result["text"] == "[RATE_LIMIT_EXCEEDED]"
-                    assert result["error"] == "gemini_rate_limit"
+                    assert result["text"] == "[RATE_LIMIT_EXCEEDED]"  # type: ignore[typeddict-item]
+                    assert result["error"] == "gemini_rate_limit"  # type: ignore[typeddict-item]
 
     def test_correct_text_calculates_correction_ratio(self):
         """Test correct_text calculates correction ratio."""
@@ -208,8 +208,8 @@ class TestGeminiClient:
 
                 result = client.extract_text(block_image, block_info, "Extract text")
 
-                assert result["text"] == "[DAILY_LIMIT_EXCEEDED]"
-                assert result["error"] == "rate_limit_daily"
+                assert result["text"] == "[DAILY_LIMIT_EXCEEDED]"  # type: ignore[typeddict-item]
+                assert result["error"] == "rate_limit_daily"  # type: ignore[typeddict-item]
 
 
 class TestAPIClientExceptionHandling:
@@ -252,8 +252,8 @@ class TestAPIClientExceptionHandling:
 
                     result = client.extract_text(block_image, block_info, "Extract")
 
-                    assert "[GEMINI_RETRY_FAILED]" in result["text"]
-                    assert result["error"] == "gemini_retry_error"
+                    assert "[GEMINI_RETRY_FAILED]" in result["text"]  # type: ignore[typeddict-item]
+                    assert result["error"] == "gemini_retry_error"  # type: ignore[typeddict-item]
 
     def test_openai_handles_server_errors(self):
         """Test OpenAI client handles server errors."""

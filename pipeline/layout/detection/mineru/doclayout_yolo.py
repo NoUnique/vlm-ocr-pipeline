@@ -34,6 +34,9 @@ class MinerUDocLayoutYOLODetector(Detector):
     BBox Format: poly [x1,y1,x2,y2,x3,y3,x4,y4] → simplified to [xmin,ymin,xmax,ymax]
     """
 
+    name: str = "mineru-doclayout-yolo"
+    source: str = "mineru-doclayout-yolo"
+
     def __init__(
         self,
         model_path: str | Path | None = None,
@@ -83,6 +86,19 @@ class MinerUDocLayoutYOLODetector(Detector):
         logger.debug("Detected %d blocks with MinerU DocLayout-YOLO", len(raw_results))
 
         return [self._to_block(r) for r in raw_results]
+
+    def detect_batch(self, images: list[np.ndarray]) -> list[list[Block]]:
+        """Detect blocks in multiple images.
+
+        Default sequential implementation.
+
+        Args:
+            images: List of input images
+
+        Returns:
+            List of block lists, one per image
+        """
+        return [self.detect(img) for img in images]
 
     def _to_block(self, raw_data: dict[str, Any]) -> Block:
         """Convert MinerU DocLayout-YOLO result to unified Block format.

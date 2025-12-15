@@ -33,13 +33,13 @@ def create_ray_recognizer_actor(
         Ray actor class wrapping the recognizer
 
     Example:
-        >>> import ray
+        >>> import ray  # type: ignore[import-not-found]
         >>> RecognizerActor = create_ray_recognizer_actor("paddleocr-vl", num_gpus=1.0)
         >>> actor = RecognizerActor.remote()
         >>> result = ray.get(actor.recognize_blocks.remote(image, blocks))
     """
     try:
-        import ray
+        import ray  # type: ignore[import-not-found]
     except ImportError as e:
         raise ImportError("Ray is required for distributed processing. Install with: pip install ray") from e
 
@@ -140,7 +140,7 @@ class RayRecognizerPool:
             **recognizer_kwargs: Additional arguments for recognizer initialization
         """
         try:
-            import ray
+            import ray  # type: ignore[import-not-found]
         except ImportError as e:
             raise ImportError("Ray is required for distributed processing. Install with: pip install ray") from e
 
@@ -189,7 +189,7 @@ class RayRecognizerPool:
         Returns:
             List of blocks with extracted text
         """
-        import ray
+        import ray  # type: ignore[import-not-found]
 
         # Round-robin actor selection
         actor = self.actors[self.actor_idx]
@@ -213,7 +213,7 @@ class RayRecognizerPool:
         Returns:
             List of processed block lists (one per image)
         """
-        import ray
+        import ray  # type: ignore[import-not-found]
 
         # Distribute images across actors
         tasks = []
@@ -227,7 +227,7 @@ class RayRecognizerPool:
 
     def shutdown(self) -> None:
         """Shutdown actor pool and free resources."""
-        import ray
+        import ray  # type: ignore[import-not-found]
 
         for actor in self.actors:
             ray.kill(actor)

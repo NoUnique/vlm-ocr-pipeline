@@ -79,14 +79,14 @@ class DetectorRegistry:
         self._custom_detectors[name] = detector_class
         logger.debug("Registered detector: %s", name)
 
-    def get_class(self, name: str) -> type:
+    def get_class(self, name: str) -> type[Detector] | Callable[..., Detector]:
         """Get detector class by name (lazy loading).
 
         Args:
             name: Detector name
 
         Returns:
-            Detector class
+            Detector class or factory function
 
         Raises:
             ValueError: If detector not found

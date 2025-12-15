@@ -220,7 +220,7 @@ class StagedBatchProcessor:
         # Use Ray pool if available for batch detection
         if self.pipeline.ray_detector_pool:
             logger.info("Using Ray detector pool for batch detection")
-            images = [p.image for p in valid_pages]
+            images = [p.image for p in valid_pages if p.image is not None]
             all_blocks = self.pipeline.ray_detector_pool.detect_batch(images)
 
             for page_info, blocks in zip(valid_pages, all_blocks, strict=False):
@@ -262,11 +262,15 @@ class StagedBatchProcessor:
         # Filter pages with blocks
         valid_pages = [p for p in pages if p.blocks is not None and p.status != "failed"]
 
+        if not self.pipeline.ordering_stage:
+            logger.warning("Ordering stage not initialized, skipping")
+            return pages
+
         for page_info in valid_pages:
             try:
                 sorted_blocks = self.pipeline.ordering_stage.process(
-                    page_info.blocks,  # type: ignore
-                    image=page_info.image,  # type: ignore
+                    page_info.blocks,  # type: ignore[arg-type]
+                    image=page_info.image,
                 )
                 page_info.sorted_blocks = sorted_blocks
             except Exception as e:
@@ -302,28 +306,30 @@ class StagedBatchProcessor:
         # Use Ray pool if available for batch recognition
         if self.pipeline.ray_recognizer_pool:
             logger.info("Using Ray recognizer pool for batch recognition")
-            images = [p.image for p in valid_pages]
-            blocks_list = [p.sorted_blocks for p in valid_pages]
+            images = [p.image for p in valid_pages if p.image is not None]
+            blocks_list = [p.sorted_blocks for p in valid_pages if p.sorted_blocks is not None]
             all_recognized = self.pipeline.ray_recognizer_pool.recognize_blocks_batch(
                 images,
-                blocks_list,  # type: ignore
+                blocks_list,
             )
 
             for page_info, recognized_blocks in zip(valid_pages, all_recognized, strict=False):
                 page_info.recognized_blocks = recognized_blocks
 
-        else:
+        elif self.pipeline.recognition_stage:
             # Sequential recognition
             for page_info in valid_pages:
                 try:
                     recognized_blocks = self.pipeline.recognition_stage.process(
-                        page_info.sorted_blocks,  # type: ignore
-                        image=page_info.image,  # type: ignore
+                        page_info.sorted_blocks,  # type: ignore[arg-type]
+                        image=page_info.image,
                     )
                     page_info.recognized_blocks = recognized_blocks
                 except Exception as e:
                     logger.error("Failed to recognize %s: %s", page_info.page_id, e)
                     page_info.mark_failed(f"Recognition error: {e}")
+        else:
+            logger.warning("Recognition stage not initialized, skipping")
 
         completed = sum(1 for p in valid_pages if p.recognized_blocks is not None)
         failed = sum(1 for p in valid_pages if p.status == "failed")
@@ -397,12 +403,16 @@ class StagedBatchProcessor:
         from pipeline.types import Page
 
         # Render text
+        if not self.pipeline.rendering_stage:
+            raise RuntimeError("Rendering stage not initialized")
         text = self.pipeline.rendering_stage.process(
-            page_info.recognized_blocks,  # type: ignore
+            page_info.recognized_blocks,  # type: ignore[arg-type]
             auxiliary_info=page_info.auxiliary_info,
         )
 
         # Page correction
+        if not self.pipeline.page_correction_stage:
+            raise RuntimeError("Page correction stage not initialized")
         correction_result = self.pipeline.page_correction_stage.process(
             text,
             page_num=page_info.page_num,

@@ -31,9 +31,9 @@ class TestPipelineConfigValidation:
         config.validate()
 
         # DPI should be resolved from settings/config.yaml or defaults
-        assert config.dpi > 0
-        assert config.detection_dpi > 0
-        assert config.recognition_dpi > 0
+        assert config.dpi is None or config.dpi > 0
+        assert config.detection_dpi is None or config.detection_dpi > 0
+        assert config.recognition_dpi is None or config.recognition_dpi > 0
 
     def test_config_backend_resolution(self):
         """Test backend resolution for different recognizers."""

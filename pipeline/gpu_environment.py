@@ -329,9 +329,9 @@ def _check_backend_available(backend: str) -> bool:
     """
     try:
         if backend == "vllm":
-            import vllm  # noqa: F401
+            import vllm  # type: ignore[import-not-found]  # noqa: F401
         elif backend == "ray":
-            import ray  # noqa: F401
+            import ray  # type: ignore[import-not-found]  # noqa: F401
         else:
             return False
         return True

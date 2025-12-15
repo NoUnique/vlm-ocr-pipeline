@@ -50,9 +50,9 @@ class TestPipelineConfigCreation:
     def test_path_conversion(self):
         """Test that string paths are converted to Path objects."""
         config = PipelineConfig(
-            cache_dir="/tmp/cache",
-            output_dir="/tmp/output",
-            temp_dir="/tmp/temp",
+            cache_dir=Path("/tmp/cache"),
+            output_dir=Path("/tmp/output"),
+            temp_dir=Path("/tmp/temp"),
         )
 
         assert isinstance(config.cache_dir, Path)

@@ -40,7 +40,7 @@ def is_ray_available() -> bool:
         True if Ray is installed and can be imported
     """
     try:
-        import ray  # noqa: F401
+        import ray  # type: ignore[import-not-found]  # noqa: F401
 
         return True
     except ImportError:

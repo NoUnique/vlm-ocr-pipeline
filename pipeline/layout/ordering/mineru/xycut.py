@@ -28,6 +28,8 @@ class MinerUXYCutSorter(Sorter):
     It's fast and doesn't require model loading.
     """
 
+    name: str = "mineru-xycut"
+
     def __init__(self) -> None:
         """Initialize XY-Cut sorter.
 
