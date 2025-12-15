@@ -4,15 +4,14 @@ Sorters organized by framework:
 - pymupdf.py: PyMuPDF multi-column
 - mineru/: MinerU sorters (LayoutReader, XY-Cut, VLM)
 - olmocr/: olmOCR sorters (VLM)
+- paddleocr/: PaddleOCR sorters (PP-DocLayoutV2)
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from typing import Any
 
-from pipeline.exceptions import InvalidConfigError
 from pipeline.types import Sorter
 
 from .analyzer import ReadingOrderAnalyzer
@@ -20,10 +19,12 @@ from .mineru import MinerULayoutReaderSorter, MinerUVLMSorter, MinerUXYCutSorter
 from .olmocr import OlmOCRVLMSorter
 from .paddleocr import PPDocLayoutV2Sorter
 from .pymupdf import MultiColumnSorter
+from .registry import SorterRegistry, sorter_registry
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    # Classes
     "ReadingOrderAnalyzer",
     "MultiColumnSorter",
     "MinerULayoutReaderSorter",
@@ -31,29 +32,14 @@ __all__ = [
     "MinerUVLMSorter",
     "OlmOCRVLMSorter",
     "PPDocLayoutV2Sorter",
+    # Registry
+    "SorterRegistry",
+    "sorter_registry",
+    # Functions
     "create_sorter",
     "list_available_sorters",
     "validate_combination",
 ]
-
-_SORTER_REGISTRY: dict[str, Callable[..., Sorter]] = {
-    "pymupdf": MultiColumnSorter,
-}
-
-if MinerULayoutReaderSorter is not None:
-    _SORTER_REGISTRY["mineru-layoutreader"] = MinerULayoutReaderSorter
-
-if MinerUXYCutSorter is not None:
-    _SORTER_REGISTRY["mineru-xycut"] = MinerUXYCutSorter
-
-if MinerUVLMSorter is not None:
-    _SORTER_REGISTRY["mineru-vlm"] = MinerUVLMSorter
-
-if OlmOCRVLMSorter is not None:
-    _SORTER_REGISTRY["olmocr-vlm"] = OlmOCRVLMSorter
-
-if PPDocLayoutV2Sorter is not None:
-    _SORTER_REGISTRY["paddleocr-doclayout-v2"] = PPDocLayoutV2Sorter
 
 
 def create_sorter(name: str, **kwargs: Any) -> Sorter:
@@ -66,23 +52,20 @@ def create_sorter(name: str, **kwargs: Any) -> Sorter:
     Returns:
         Sorter instance
     """
-    if name not in _SORTER_REGISTRY:
-        available = ", ".join(_SORTER_REGISTRY.keys())
-        raise InvalidConfigError(f"Unknown sorter: {name}. Available: {available}")
-
-    return _SORTER_REGISTRY[name](**kwargs)
+    return sorter_registry.create(name, **kwargs)
 
 
 def list_available_sorters() -> list[str]:
     """List available sorter names."""
-    return list(_SORTER_REGISTRY.keys())
+    return sorter_registry.list_available()
 
 
+# Valid detector + sorter combinations
 VALID_COMBINATIONS = {
     "doclayout-yolo": ["pymupdf", "mineru-layoutreader", "mineru-xycut", "olmocr-vlm"],
     "mineru-doclayout-yolo": ["pymupdf", "mineru-layoutreader", "mineru-xycut", "olmocr-vlm"],
-    "mineru-vlm": ["mineru-vlm"],  # Only mineru-vlm sorter (tightly coupled)
-    "paddleocr-doclayout-v2": ["paddleocr-doclayout-v2"],  # Only paddleocr-doclayout-v2 sorter (tightly coupled)
+    "mineru-vlm": ["mineru-vlm"],  # Tightly coupled
+    "paddleocr-doclayout-v2": ["paddleocr-doclayout-v2"],  # Tightly coupled
 }
 
 RECOMMENDED_COMBINATIONS = {

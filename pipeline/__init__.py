@@ -866,51 +866,6 @@ class Pipeline:
         self.output_stage.save_page_output(page_output_dir, page_num, page_result)
         processed_pages.append(page_result)
 
-    def _extract_column_layout(self, blocks: list[Block]) -> ColumnLayout | None:
-        """Extract column layout information from sorted blocks.
-
-        Args:
-            blocks: Sorted blocks (may have column_index)
-
-        Returns:
-            Column layout dict or None
-        """
-        # Check if any blocks have column_index
-        has_columns = any(r.column_index is not None for r in blocks)
-
-        if not has_columns:
-            return None
-
-        # Extract unique columns
-        column_indices = {r.column_index for r in blocks if r.column_index is not None}
-
-        if not column_indices:
-            return None
-
-        # Build column layout info (filter out None values)
-        columns = []
-        for col_idx in sorted(column_indices):
-            col_blocks = [r for r in blocks if r.column_index == col_idx]
-            if col_blocks:
-                # Get bbox if available
-                first_block = col_blocks[0]
-                if first_block.bbox:
-                    bbox = first_block.bbox
-                    columns.append(
-                        {
-                            "index": col_idx,
-                            "x0": int(bbox.x0),
-                            "x1": int(bbox.x1),
-                            "center": bbox.center[0],
-                            "width": bbox.width,
-                        }
-                    )
-
-        if not columns:
-            return None
-
-        return {"columns": columns}
-
     def _save_results(self, result: dict[str, Any], output_path: Path) -> None:
         """Save processing results to JSON file.
         

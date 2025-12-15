@@ -242,7 +242,7 @@ This project integrates multiple frameworks (DocLayout-YOLO, MinerU, PyMuPDF, Py
 
 **Example Conversion:**
 ```python
-from pipeline.types import BBox, Region
+from pipeline.types import BBox, Block
 
 # Create bbox (accepts float, converts to int)
 bbox = BBox.from_xywh(100, 50, 200, 150)  # [x, y, w, h] → BBox(100, 50, 300, 200)
@@ -260,8 +260,8 @@ anchor = bbox.to_olmocr_anchor("image")  # "[Image 100x50 to 300x200]"
 # Direct image cropping
 cropped = bbox.crop(image, padding=5)
 
-# Region usage
-region = Region(type="text", bbox=bbox, confidence=0.95)
+# Block usage
+block = Block(type="text", bbox=bbox, detection_confidence=0.95)
 data = region.to_dict()  # {"type": "text", "bbox": [100, 50, 200, 150], ...}
 ```
 
@@ -765,9 +765,9 @@ PDF runs emit a summary file alongside the page outputs: `summary.json` (all pag
 
 Convert JSON output to Markdown format using two conversion strategies:
 
-#### 1. Region Type-Based (Default - `__init__.py`)
+#### 1. Block Type-Based (Default - `__init__.py`)
 
-Simple and fast conversion using pre-classified region types:
+Simple and fast conversion using pre-classified block types:
 
 ```python
 from pipeline.conversion.output.markdown import json_to_markdown
@@ -787,7 +787,7 @@ md = json_to_markdown(regions)
 
 **Features:**
 - ✅ Fast (no PDF processing required)
-- ✅ Region type → Markdown header mapping
+- ✅ Block type → Markdown header mapping
 - ✅ Automatic reading order sorting
 - ✅ Special type handling (tables, figures, equations)
 
@@ -824,7 +824,7 @@ md = to_markdown(page_result, auto_detect_headers=True)
 ```
 
 **Key Concepts:**
-- 🔄 **Separation of Concerns**: Regions (layout detection) vs Text Spans (PDF parser)
+- 🔄 **Separation of Concerns**: Blocks (layout detection) vs Text Spans (PDF parser)
 - 📊 **Auxiliary Info**: Font information stored separately in `auxiliary_info.text_spans`
 - 🔗 **Late Binding**: Matching happens at conversion time using IoU
 - 📖 **PyMuPDF Terminology**: Uses `size` and `font` (not `font_size`, `font_name`)
@@ -832,7 +832,7 @@ md = to_markdown(page_result, auto_detect_headers=True)
 **How It Works:**
 
 ```
-1. PDF → Detector → Regions (layout detection from image)
+1. PDF → Detector → Blocks (layout detection from image)
 2. PDF → PyMuPDF Parser → Text Spans (font info from digital document)
 3. Both saved separately in JSON (auxiliary_info)
 4. Markdown conversion → IoU matching → Font-based headers
@@ -840,12 +840,12 @@ md = to_markdown(page_result, auto_detect_headers=True)
 
 **Comparison:**
 
-| Feature | Region Type-Based | Font Size-Based |
+| Feature | Block Type-Based | Font Size-Based |
 |---------|-------------------|-----------------|
 | Speed | ⚡ Fast | 🐌 Slower (PDF parsing) |
 | Accuracy | Layout detection dependent | Font size dependent |
 | Dependencies | None | PyMuPDF (fitz) |
-| Data Source | Region classification | PDF text spans |
+| Data Source | Block classification | PDF text spans |
 | Use Case | Default, quick conversion | Precise header detection |
 
 ## Text Extraction
@@ -1111,13 +1111,13 @@ The pipeline follows a modular design:
 
 ### Extending the Pipeline
 
-#### Adding New Region Types
+#### Adding New Block Types
 
 ```python
 # In ocr_pipeline.py
 def _get_gemini_prompt_for_region_type(self, region_type: str) -> str:
     if region_type == 'new_type':
-        return "Custom prompt for new region type..."
+        return "Custom prompt for new block type..."
     # ... existing code
 ```
 
