@@ -66,7 +66,7 @@ def test_pipeline_accepts_ray_backends():
             detector_backend="pt-ray",
             recognizer="gemini-2.5-flash",
         )
-        pipeline = Pipeline(config=config)
+        _pipeline = Pipeline(config=config)  # noqa: F841
         # If we get here, Ray is initialized and pools should exist
         # (implementation may vary based on Ray availability)
     except Exception as e:

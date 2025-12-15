@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from pipeline.batch import PageInfo, StagedBatchProcessor
-from pipeline.config import PipelineConfig
 from pipeline.batch.types import BatchProgress
+from pipeline.config import PipelineConfig
 
 
 def test_page_info_creation():

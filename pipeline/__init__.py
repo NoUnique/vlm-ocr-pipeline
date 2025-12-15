@@ -32,7 +32,7 @@ from .factory import ComponentFactory
 from .io import InputLoader, OutputSaver
 from .misc import tz_now
 from .stages import DetectionStage
-from .types import Block, ColumnLayout, Detector, Document, Page, PyMuPDFPage, Recognizer, Sorter
+from .types import Block, Detector, Document, Page, PyMuPDFPage, Recognizer, Sorter
 
 logger = logging.getLogger(__name__)
 
