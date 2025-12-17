@@ -7,6 +7,7 @@ efficient parallel text extraction across multiple GPUs.
 from __future__ import annotations
 
 import logging
+from types import TracebackType
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -237,6 +238,11 @@ class RayRecognizerPool:
         """Context manager entry."""
         return self
 
-    def __exit__(self, *args: Any) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         """Context manager exit."""
         self.shutdown()

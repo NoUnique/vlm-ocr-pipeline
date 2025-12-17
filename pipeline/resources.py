@@ -11,6 +11,7 @@ import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from types import TracebackType
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -194,7 +195,12 @@ class ManagedResource:
         logger.debug("Acquired resource: %s", self.name)
         return self.resource
 
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         """Exit context and cleanup."""
         try:
             self.cleanup_fn(self.resource)
