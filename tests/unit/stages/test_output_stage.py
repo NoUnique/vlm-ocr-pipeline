@@ -159,3 +159,110 @@ class TestOutputStageSummary:
         assert status_counts["partial"] == 1
         assert status_counts["incomplete"] == 0
 
+
+class TestOutputStageSaveOutput:
+    """Tests for OutputStage output saving."""
+
+    def test_save_page_output(self, tmp_path: Path):
+        """Test saving page output."""
+        stage = OutputStage(temp_dir=tmp_path)
+
+        page = Page(
+            page_num=1,
+            blocks=[
+                Block(
+                    type="text",
+                    bbox=BBox(100, 100, 200, 200),
+                    order=0,
+                    text="Hello",
+                    corrected_text="Hello",
+                )
+            ],
+            auxiliary_info={"width": 612, "height": 792, "text": "# Hello\n\nWorld"},
+            status="completed",
+            processed_at="2024-01-01T00:00:00Z",
+        )
+
+        stage.save_page_output(
+            page_output_dir=tmp_path,
+            page_num=1,
+            page=page,
+        )
+
+        # Verify JSON file created
+        json_file = tmp_path / "json" / "page_1.json"
+        assert json_file.exists()
+
+        # Verify markdown file created
+        md_file = tmp_path / "page_1.md"
+        assert md_file.exists()
+
+    def test_save_page_output_with_corrected_text(self, tmp_path: Path):
+        """Test saving page output with corrected text."""
+        stage = OutputStage(temp_dir=tmp_path)
+
+        page = Page(
+            page_num=1,
+            blocks=[],
+            auxiliary_info={"text": "Original", "corrected_text": "Corrected"},
+            status="completed",
+            processed_at="2024-01-01T00:00:00Z",
+        )
+
+        stage.save_page_output(
+            page_output_dir=tmp_path,
+            page_num=1,
+            page=page,
+        )
+
+        # Verify markdown file uses corrected_text
+        md_file = tmp_path / "page_1.md"
+        assert md_file.exists()
+        assert md_file.read_text() == "Corrected"
+
+
+class TestOutputStageCreateSummary:
+    """Tests for OutputStage summary creation."""
+
+    def test_create_pdf_summary(self, tmp_path: Path):
+        """Test creating PDF summary."""
+        from pipeline.types import Document
+
+        stage = OutputStage(temp_dir=tmp_path)
+
+        processed_pages = [
+            Page(
+                page_num=1,
+                blocks=[],
+                auxiliary_info={},
+                status="completed",
+                processed_at="2024-01-01T00:00:00Z",
+            ),
+        ]
+
+        document = stage.create_pdf_summary(
+            pdf_path=tmp_path / "test.pdf",
+            total_pages=1,
+            processed_pages=processed_pages,
+            processing_stopped=False,
+            summary_output_dir=tmp_path,
+            detector_name="doclayout-yolo",
+            sorter_name="mineru-xycut",
+            backend="gemini",
+            model="gemini-2.5-flash",
+            renderer="markdown",
+        )
+
+        assert isinstance(document, Document)
+        assert document.pdf_name == "test"
+        assert document.num_pages == 1
+        assert document.processed_pages == 1
+        assert document.detected_by == "doclayout-yolo"
+        assert document.ordered_by == "mineru-xycut"
+        assert document.recognized_by == "gemini/gemini-2.5-flash"
+        assert document.rendered_by == "markdown"
+
+        # Verify summary file created
+        summary_file = tmp_path / "summary.json"
+        assert summary_file.exists()
+

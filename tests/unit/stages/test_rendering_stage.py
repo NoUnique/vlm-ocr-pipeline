@@ -93,3 +93,111 @@ class TestRenderingStageRender:
         # Verify - empty blocks should return empty string
         assert result == ""
 
+    def test_render_plaintext(self):
+        """Test rendering blocks to plaintext."""
+        blocks = [
+            Block(
+                type="title",
+                bbox=BBox(100, 100, 200, 200),
+                order=0,
+                text="Title",
+                corrected_text="Title",
+            ),
+            Block(
+                type="text",
+                bbox=BBox(100, 200, 200, 300),
+                order=1,
+                text="Body text",
+                corrected_text="Body text",
+            ),
+        ]
+
+        stage = RenderingStage(renderer="plaintext")
+        result = stage.process(blocks)
+
+        assert "Title" in result
+        assert "Body text" in result
+
+    def test_render_plaintext_empty_blocks(self):
+        """Test plaintext rendering with empty blocks."""
+        stage = RenderingStage(renderer="plaintext")
+        result = stage.process([])
+        assert result == ""
+
+
+class TestRenderingStageImageMode:
+    """Tests for RenderingStage image rendering modes."""
+
+    def test_image_render_mode_default(self):
+        """Test default image render mode."""
+        stage = RenderingStage(renderer="markdown")
+        assert stage.image_render_mode == "image_and_description"
+
+    def test_image_render_mode_image_only(self):
+        """Test image_only render mode."""
+        stage = RenderingStage(renderer="markdown", image_render_mode="image_only")
+        assert stage.image_render_mode == "image_only"
+
+    def test_image_render_mode_description_only(self):
+        """Test description_only render mode."""
+        stage = RenderingStage(renderer="markdown", image_render_mode="description_only")
+        assert stage.image_render_mode == "description_only"
+
+    def test_render_image_block_with_description(self):
+        """Test rendering image block with description."""
+        blocks = [
+            Block(
+                type="image",
+                bbox=BBox(100, 100, 400, 400),
+                order=0,
+                image_path="images/page_1_block_0_image.png",
+                description="A chart showing sales data",
+            ),
+        ]
+
+        stage = RenderingStage(renderer="markdown", image_render_mode="image_and_description")
+        result = stage.process(blocks)
+
+        assert "images/page_1_block_0_image.png" in result
+        assert "A chart showing sales data" in result
+
+    def test_render_image_block_image_only(self):
+        """Test rendering image block with image_only mode."""
+        blocks = [
+            Block(
+                type="image",
+                bbox=BBox(100, 100, 400, 400),
+                order=0,
+                image_path="images/page_1_block_0_image.png",
+                description="A chart showing sales data",
+            ),
+        ]
+
+        stage = RenderingStage(renderer="markdown", image_render_mode="image_only")
+        result = stage.process(blocks)
+
+        # Image path should be in output
+        assert "images/page_1_block_0_image.png" in result
+        # Description may be used as alt text in markdown, which is acceptable
+        # Just verify there's no separate description paragraph
+        assert result.count("A chart showing sales data") <= 1
+
+    def test_render_image_block_description_only(self):
+        """Test rendering image block with description_only mode."""
+        blocks = [
+            Block(
+                type="image",
+                bbox=BBox(100, 100, 400, 400),
+                order=0,
+                image_path="images/page_1_block_0_image.png",
+                description="A chart showing sales data",
+            ),
+        ]
+
+        stage = RenderingStage(renderer="markdown", image_render_mode="description_only")
+        result = stage.process(blocks)
+
+        # Image path should not be in output
+        assert "images/page_1_block_0_image.png" not in result
+        assert "A chart showing sales data" in result
+
