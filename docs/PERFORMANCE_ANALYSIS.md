@@ -262,6 +262,6 @@ def process_blocks(blocks):
 
 ## See Also
 
-- [pipeline/profiling.py](../pipeline/profiling.py) - Profiling utilities
-- [scripts/benchmark.py](../scripts/benchmark.py) - Simple benchmark tool
-- [scripts/profile_pipeline.py](../scripts/profile_pipeline.py) - Detailed profiler
+- [pipeline/profiling.py](https://github.com/NoUnique/vlm-ocr-pipeline/blob/main/pipeline/profiling.py) - Profiling utilities
+- [scripts/benchmark.py](https://github.com/NoUnique/vlm-ocr-pipeline/blob/main/scripts/benchmark.py) - Simple benchmark tool
+- [scripts/profile_pipeline.py](https://github.com/NoUnique/vlm-ocr-pipeline/blob/main/scripts/profile_pipeline.py) - Detailed profiler

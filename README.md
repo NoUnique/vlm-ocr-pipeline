@@ -265,7 +265,7 @@ block = Block(type="text", bbox=bbox, detection_confidence=0.95)
 data = region.to_dict()  # {"type": "text", "bbox": [100, 50, 200, 150], ...}
 ```
 
-For detailed format specifications and conversion examples, see [BBOX_FORMATS.md](BBOX_FORMATS.md).
+For detailed format specifications and conversion examples, see [BBox Format Reference](docs/guides/bbox-formats.md).
 
 ---
 

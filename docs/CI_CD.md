@@ -314,6 +314,6 @@ Configure in GitHub Settings → Notifications:
 
 ## See Also
 
-- [Pre-commit Script](../scripts/pre-commit-check.sh)
-- [CLAUDE.md](../CLAUDE.md) - Development guidelines
+- [Pre-commit Script](https://github.com/NoUnique/vlm-ocr-pipeline/blob/main/scripts/pre-commit-check.sh)
+- [CLAUDE.md](https://github.com/NoUnique/vlm-ocr-pipeline/blob/main/CLAUDE.md) - Development guidelines
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)

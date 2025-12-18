@@ -40,11 +40,15 @@ logger = logging.getLogger(__name__)
 class Pipeline:
     """Unified VLM OCR processing pipeline with integrated text correction.
 
-    This pipeline orchestrates four main stages:
-    1. Document Conversion: Convert PDFs/images to processable format
-    2. Layout Detection: Identify blocks (text, tables, figures, etc.)
-    3. Layout Analysis: Determine reading order of blocks
-    4. Recognition: Extract and correct text from blocks
+    This pipeline orchestrates eight main stages:
+    1. Input: Load documents and extract auxiliary information (text spans, font metadata)
+    2. Detection: Detect layout blocks using selected detector (DocLayout-YOLO, PaddleOCR, MinerU)
+    3. Ordering: Analyze reading order using selected sorter (PyMuPDF, LayoutReader, XY-Cut, VLM)
+    4. Recognition: Extract text from blocks using VLM (OpenAI, Gemini) or local model (PaddleOCR-VL)
+    5. Block Correction: Block-level text correction (optional, disabled by default)
+    6. Rendering: Convert processed blocks to Markdown or plaintext
+    7. Page Correction: Page-level VLM correction for improved quality (optional, disabled by default)
+    8. Output: Save results as JSON/Markdown and generate document summaries
 
     Example:
         >>> # New recommended way (using PipelineConfig)
