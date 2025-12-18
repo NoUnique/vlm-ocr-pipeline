@@ -40,5 +40,7 @@ class OrderingStage(BaseStage[list[Block], list[Block]]):
         if image is None:
             raise ValueError("OrderingStage requires 'image' in context")
 
-        sorted_blocks = self.sorter.sort(input_data, image, **context)
+        # Remove 'image' from context to avoid duplicate argument error
+        remaining_context = {k: v for k, v in context.items() if k != "image"}
+        sorted_blocks = self.sorter.sort(input_data, image, **remaining_context)
         return sorted_blocks
