@@ -417,7 +417,125 @@ def gemini_recognizer(gpu_config):
     return create_recognizer("gemini")
 
 
+# ==================== Environment Detection ====================
+
+
+def _has_cuda() -> bool:
+    """Check if CUDA is available."""
+    try:
+        import torch
+        return torch.cuda.is_available()
+    except ImportError:
+        return False
+
+
+def _has_ray() -> bool:
+    """Check if Ray is available and can be initialized."""
+    try:
+        import ray
+        return True
+    except ImportError:
+        return False
+
+
+def _has_gemini_api_key() -> bool:
+    """Check if Gemini API key is set."""
+    import os
+    return bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
+
+
+def _has_openai_api_key() -> bool:
+    """Check if OpenAI API key is set."""
+    import os
+    return bool(os.environ.get("OPENAI_API_KEY"))
+
+
+# Cache environment check results
+_ENV_CHECKS = {
+    "gpu": _has_cuda,
+    "ray": _has_ray,
+    "api_gemini": _has_gemini_api_key,
+    "api_openai": _has_openai_api_key,
+}
+
+
+@pytest.fixture(scope="session")
+def has_gpu() -> bool:
+    """Check if GPU is available."""
+    return _has_cuda()
+
+
+@pytest.fixture(scope="session")
+def has_ray() -> bool:
+    """Check if Ray is available."""
+    return _has_ray()
+
+
+@pytest.fixture(scope="session")
+def has_gemini_api() -> bool:
+    """Check if Gemini API key is available."""
+    return _has_gemini_api_key()
+
+
+@pytest.fixture(scope="session")
+def has_openai_api() -> bool:
+    """Check if OpenAI API key is available."""
+    return _has_openai_api_key()
+
+
+@pytest.fixture(scope="session")
+def gpu_count() -> int:
+    """Get number of available GPUs."""
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return torch.cuda.device_count()
+    except ImportError:
+        pass
+    return 0
+
+
 # ==================== Helper Functions ====================
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Add custom command-line options for environment-specific tests."""
+    parser.addoption(
+        "--run-gpu",
+        action="store_true",
+        default=False,
+        help="Run GPU tests (requires CUDA)",
+    )
+    parser.addoption(
+        "--run-ray",
+        action="store_true",
+        default=False,
+        help="Run Ray distributed tests",
+    )
+    parser.addoption(
+        "--run-api",
+        action="store_true",
+        default=False,
+        help="Run all API tests (Gemini + OpenAI)",
+    )
+    parser.addoption(
+        "--run-api-gemini",
+        action="store_true",
+        default=False,
+        help="Run Gemini API tests",
+    )
+    parser.addoption(
+        "--run-api-openai",
+        action="store_true",
+        default=False,
+        help="Run OpenAI API tests",
+    )
+    parser.addoption(
+        "--run-all-env",
+        action="store_true",
+        default=False,
+        help="Run all environment-specific tests",
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -426,4 +544,56 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line("markers", "integration: Integration tests (may require models)")
     config.addinivalue_line("markers", "e2e: End-to-end tests (require full setup)")
     config.addinivalue_line("markers", "slow: Slow tests (skip with -m 'not slow')")
-    config.addinivalue_line("markers", "gpu: Tests requiring GPU")
+    config.addinivalue_line("markers", "gpu: Tests requiring GPU (CUDA available)")
+    config.addinivalue_line("markers", "ray: Tests requiring Ray distributed framework")
+    config.addinivalue_line("markers", "api: Tests requiring external API calls")
+    config.addinivalue_line("markers", "api_gemini: Tests requiring Gemini API key")
+    config.addinivalue_line("markers", "api_openai: Tests requiring OpenAI API key")
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Auto-skip tests based on environment availability and CLI options."""
+    # Check CLI options
+    run_gpu = config.getoption("--run-gpu") or config.getoption("--run-all-env")
+    run_ray = config.getoption("--run-ray") or config.getoption("--run-all-env")
+    run_api = config.getoption("--run-api") or config.getoption("--run-all-env")
+    run_api_gemini = config.getoption("--run-api-gemini") or run_api
+    run_api_openai = config.getoption("--run-api-openai") or run_api
+
+    # Define skip conditions
+    skip_conditions = {
+        "gpu": (
+            not run_gpu,
+            pytest.mark.skip(reason="GPU tests disabled (use --run-gpu to enable)"),
+            _has_cuda,
+            pytest.mark.skip(reason="GPU not available (no CUDA)"),
+        ),
+        "ray": (
+            not run_ray,
+            pytest.mark.skip(reason="Ray tests disabled (use --run-ray to enable)"),
+            _has_ray,
+            pytest.mark.skip(reason="Ray not installed"),
+        ),
+        "api_gemini": (
+            not run_api_gemini,
+            pytest.mark.skip(reason="Gemini API tests disabled (use --run-api-gemini to enable)"),
+            _has_gemini_api_key,
+            pytest.mark.skip(reason="GEMINI_API_KEY not set"),
+        ),
+        "api_openai": (
+            not run_api_openai,
+            pytest.mark.skip(reason="OpenAI API tests disabled (use --run-api-openai to enable)"),
+            _has_openai_api_key,
+            pytest.mark.skip(reason="OPENAI_API_KEY not set"),
+        ),
+    }
+
+    for item in items:
+        for marker_name, (disabled, disabled_skip, check_fn, env_skip) in skip_conditions.items():
+            if marker_name in item.keywords:
+                # First check if test type is disabled via CLI
+                if disabled:
+                    item.add_marker(disabled_skip)
+                # Then check if environment is available
+                elif not check_fn():
+                    item.add_marker(env_skip)
