@@ -41,6 +41,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Block types that are considered image/figure blocks for description generation
+IMAGE_BLOCK_TYPES = frozenset({"image", "image_body", "figure", "chart", "graph"})
+
 
 class PaddleOCRVLRecognizer(Recognizer):
     """Text recognizer using PaddleOCR-VL-0.9B model.
@@ -58,6 +61,10 @@ class PaddleOCRVLRecognizer(Recognizer):
         >>> recognizer = PaddleOCRVLRecognizer()
         >>> blocks_with_text = recognizer.process_blocks(image, blocks)
     """
+
+    # Protocol attributes
+    name: str = "paddleocr-vl"
+    supports_correction: bool = False
 
     def __init__(
         self,
@@ -163,19 +170,28 @@ class PaddleOCRVLRecognizer(Recognizer):
         self,
         image: np.ndarray,
         blocks: Sequence[Block],
+        *,
+        enable_figure_description: bool = True,
         **kwargs,
     ) -> list[Block]:
         """Process blocks and extract text using PaddleOCR-VL.
 
         PaddleOCR-VL is an end-to-end pipeline. We crop each block and process individually.
 
+        For image/figure/chart blocks, when enable_figure_description is True,
+        the extracted content is stored in the `description` field instead of `text`.
+
         Args:
             image: Input image as numpy array (HWC format, RGB/BGR)
             blocks: List of Block objects with bounding boxes
+            enable_figure_description: Whether to generate descriptions for image/figure blocks.
+                When True, image blocks will have their `description` field populated
+                with the extracted content. Default: True.
             **kwargs: Additional arguments (not used, for compatibility)
 
         Returns:
             List of Block objects with extracted text in the `text` field
+            (and `description` for image blocks when enable_figure_description is True)
 
         Example:
             >>> blocks_with_text = recognizer.process_blocks(image, blocks)
@@ -183,7 +199,8 @@ class PaddleOCRVLRecognizer(Recognizer):
             ...     print(f"{block.type}: {block.text}")
         """
         logger.info("=== PaddleOCRVLRecognizer.process_blocks START ===")
-        logger.info("Number of blocks: %d", len(blocks) if blocks else 0)
+        logger.info("Number of blocks: %d, enable_figure_description: %s",
+                    len(blocks) if blocks else 0, enable_figure_description)
 
         if not blocks:
             logger.warning("No blocks provided for recognition")
@@ -224,6 +241,9 @@ class PaddleOCRVLRecognizer(Recognizer):
             cropped = image[y0:y1, x0:x1]
             logger.info("Cropped block %d to shape: %s", idx, cropped.shape)
 
+            # Check if this is an image/figure block
+            is_image_block = block.type.lower() in IMAGE_BLOCK_TYPES
+
             # Process cropped image with PaddleOCR-VL
             try:
                 logger.info("Calling PaddleOCR-VL predict() for block %d...", idx)
@@ -251,23 +271,43 @@ class PaddleOCRVLRecognizer(Recognizer):
                         else:
                             logger.debug("Block %d parsed_block has no content attribute", idx)
 
-                text = "\n".join(text_parts) if text_parts else ""
-                logger.debug("Block %d final text: %s", idx, repr(text))
+                extracted_content = "\n".join(text_parts) if text_parts else ""
+                logger.debug("Block %d final content: %s", idx, repr(extracted_content))
 
-                # Create updated block with text
-                output_blocks.append(
-                    Block(
-                        type=block.type,
-                        bbox=block.bbox,
-                        text=text,
-                        detection_confidence=block.detection_confidence,
-                        order=block.order,
-                        column_index=block.column_index,
-                        corrected_text=None,
-                        correction_ratio=None,
-                        source=block.source or "paddleocr-vl",
+                # Create updated block with text or description
+                # For image blocks with enable_figure_description, store in description field
+                if is_image_block and enable_figure_description:
+                    output_blocks.append(
+                        Block(
+                            type=block.type,
+                            bbox=block.bbox,
+                            text="",  # Empty text for image blocks
+                            description=extracted_content,  # Content goes to description
+                            detection_confidence=block.detection_confidence,
+                            order=block.order,
+                            column_index=block.column_index,
+                            corrected_text=None,
+                            correction_ratio=None,
+                            image_path=block.image_path,  # Preserve image_path if set
+                            source=block.source or "paddleocr-vl",
+                        )
                     )
-                )
+                    logger.debug("Block %d: stored content in description field (image block)", idx)
+                else:
+                    output_blocks.append(
+                        Block(
+                            type=block.type,
+                            bbox=block.bbox,
+                            text=extracted_content,
+                            detection_confidence=block.detection_confidence,
+                            order=block.order,
+                            column_index=block.column_index,
+                            corrected_text=None,
+                            correction_ratio=None,
+                            image_path=block.image_path,  # Preserve image_path if set
+                            source=block.source or "paddleocr-vl",
+                        )
+                    )
 
             except Exception as e:
                 logger.warning("Error processing block %d with PaddleOCR-VL: %s", idx, e, exc_info=True)

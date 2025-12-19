@@ -205,13 +205,15 @@ class Pipeline:
         from pipeline.stages import RecognitionStage
 
         logger.info(
-            "Loading recognition stage (%s/%s)...",
+            "Loading recognition stage (%s/%s, figure_description=%s)...",
             self.config.resolved_recognizer_backend,
             self.config.recognizer,
+            self.config.enable_figure_description,
         )
         return RecognitionStage(
             self.recognizer,
             ray_recognizer_pool=self.ray_recognizer_pool,
+            enable_figure_description=self.config.enable_figure_description,
         )
 
     def _create_block_correction_stage(self) -> BlockCorrectionStage:

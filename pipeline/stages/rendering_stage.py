@@ -123,11 +123,11 @@ class RenderingStage(BaseStage[list[Block], str]):
         # Description
         if self.image_render_mode in {"description_only", "image_and_description"}:
             if block.description:
-                parts.append(f"**Figure:** {block.description}")
+                parts.append(f"**Figure:**\n\n{block.description}")
             elif not block.image_path:
                 # No image path and no description, use text if available
                 if block.text:
-                    parts.append(f"**Figure:** {block.text}")
+                    parts.append(f"**Figure:**\n\n{block.text}")
 
         return "\n\n".join(parts)
 

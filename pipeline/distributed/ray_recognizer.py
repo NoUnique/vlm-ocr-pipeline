@@ -64,34 +64,48 @@ def create_ray_recognizer_actor(
             self.recognizer: Recognizer = create_recognizer(recognizer_name, **recognizer_kwargs)
             logger.info("RecognizerActor initialized with %s", recognizer_name)
 
-        def recognize_blocks(self, image: np.ndarray, blocks: list[Block]) -> list[Block]:
+        def recognize_blocks(
+            self,
+            image: np.ndarray,
+            blocks: list[Block],
+            *,
+            enable_figure_description: bool = True,
+        ) -> list[Block]:
             """Extract text from blocks in an image.
 
             Args:
                 image: Input image as numpy array
                 blocks: List of blocks to process
+                enable_figure_description: Whether to generate descriptions for image blocks
 
             Returns:
-                List of blocks with extracted text
+                List of blocks with extracted text (and description for image blocks)
             """
-            return self.recognizer.process_blocks(image, blocks)
+            return self.recognizer.process_blocks(
+                image, blocks, enable_figure_description=enable_figure_description
+            )
 
         def recognize_blocks_batch(
             self,
             images: list[np.ndarray],
             blocks_list: list[list[Block]],
+            *,
+            enable_figure_description: bool = True,
         ) -> list[list[Block]]:
             """Extract text from blocks in a batch of images.
 
             Args:
                 images: List of input images
                 blocks_list: List of block lists (one per image)
+                enable_figure_description: Whether to generate descriptions for image blocks
 
             Returns:
                 List of processed block lists (one per image)
             """
             return [
-                self.recognizer.process_blocks(image, blocks)
+                self.recognizer.process_blocks(
+                    image, blocks, enable_figure_description=enable_figure_description
+                )
                 for image, blocks in zip(images, blocks_list, strict=False)
             ]
 
@@ -180,15 +194,22 @@ class RayRecognizerPool:
         # Track which actor is currently processing
         self.actor_idx = 0
 
-    def recognize_blocks(self, image: np.ndarray, blocks: list[Block]) -> list[Block]:
+    def recognize_blocks(
+        self,
+        image: np.ndarray,
+        blocks: list[Block],
+        *,
+        enable_figure_description: bool = True,
+    ) -> list[Block]:
         """Extract text from blocks in a single image.
 
         Args:
             image: Input image as numpy array
             blocks: List of blocks to process
+            enable_figure_description: Whether to generate descriptions for image blocks
 
         Returns:
-            List of blocks with extracted text
+            List of blocks with extracted text (and description for image blocks)
         """
         import ray  # type: ignore[import-not-found]
 
@@ -197,19 +218,24 @@ class RayRecognizerPool:
         self.actor_idx = (self.actor_idx + 1) % len(self.actors)
 
         # Submit task and wait for result
-        result_ref = actor.recognize_blocks.remote(image, blocks)
+        result_ref = actor.recognize_blocks.remote(
+            image, blocks, enable_figure_description=enable_figure_description
+        )
         return ray.get(result_ref)
 
     def recognize_blocks_batch(
         self,
         images: list[np.ndarray],
         blocks_list: list[list[Block]],
+        *,
+        enable_figure_description: bool = True,
     ) -> list[list[Block]]:
         """Extract text from blocks in a batch of images (parallel).
 
         Args:
             images: List of input images
             blocks_list: List of block lists (one per image)
+            enable_figure_description: Whether to generate descriptions for image blocks
 
         Returns:
             List of processed block lists (one per image)
@@ -220,7 +246,9 @@ class RayRecognizerPool:
         tasks = []
         for i, (image, blocks) in enumerate(zip(images, blocks_list, strict=False)):
             actor = self.actors[i % len(self.actors)]
-            task = actor.recognize_blocks.remote(image, blocks)
+            task = actor.recognize_blocks.remote(
+                image, blocks, enable_figure_description=enable_figure_description
+            )
             tasks.append(task)
 
         # Wait for all results

@@ -153,25 +153,41 @@ class Recognizer(Protocol):
     name: str
     supports_correction: bool
 
-    def process_blocks(self, image: np.ndarray | None, blocks: Sequence[Block]) -> list[Block]:
+    def process_blocks(
+        self,
+        image: np.ndarray | None,
+        blocks: Sequence[Block],
+        *,
+        enable_figure_description: bool = True,
+    ) -> list[Block]:
         """Process blocks to extract text.
 
         This method processes each block in the input image to extract text content.
         The returned blocks should have their `text` field populated.
 
+        For image/figure/chart blocks, when enable_figure_description is True,
+        generates a description and stores it in the `description` field.
+
         Args:
             image: Full page image as numpy array (H, W, C) in RGB format.
                    Can be None for recognizers that don't need the image.
             blocks: Detected blocks with bbox field populated
+            enable_figure_description: Whether to generate descriptions for image blocks.
+                When True, image/figure/chart blocks will have their `description` field
+                populated with VLM-generated content. Default: True.
 
         Returns:
-            List of blocks with text field populated
+            List of blocks with text field populated (and description for image blocks)
 
         Example:
             >>> recognizer = GeminiClient(model="gemini-2.5-flash")
             >>> blocks_with_text = recognizer.process_blocks(image, blocks)
             >>> blocks_with_text[0].text
             'Sample text content'
+            >>> # For image blocks with description enabled
+            >>> image_block = blocks_with_text[1]  # type='image'
+            >>> image_block.description
+            'A bar chart showing quarterly sales...'
         """
         ...
 
@@ -208,6 +224,8 @@ class Recognizer(Protocol):
         self,
         images: Sequence[np.ndarray | None],
         blocks_list: Sequence[Sequence[Block]],
+        *,
+        enable_figure_description: bool = True,
     ) -> list[list[Block]]:
         """Process multiple sets of blocks in a batch.
 
@@ -217,6 +235,8 @@ class Recognizer(Protocol):
         Args:
             images: Sequence of input images
             blocks_list: Sequence of block lists, one per image
+            enable_figure_description: Whether to generate descriptions for image blocks.
+                Default: True.
 
         Returns:
             List of processed block lists

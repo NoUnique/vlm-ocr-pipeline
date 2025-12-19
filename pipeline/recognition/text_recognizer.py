@@ -126,20 +126,31 @@ class TextRecognizer(Recognizer):
         else:
             raise InvalidConfigError(f"Unknown backend: {backend}")
 
-    def process_blocks(self, image: np.ndarray, blocks: Sequence[Block]) -> list[Block]:
+    def process_blocks(
+        self,
+        image: np.ndarray,
+        blocks: Sequence[Block],
+        *,
+        enable_figure_description: bool = True,
+    ) -> list[Block]:
         """Process all blocks to extract text.
 
         Args:
             image: Full page image as numpy array (H, W, C)
             blocks: List of detected blocks with bounding boxes
+            enable_figure_description: Whether to generate descriptions for image/figure blocks.
+                When True, image blocks will have their `description` field populated.
+                Default: True.
 
         Returns:
-            List of blocks with text field populated
+            List of blocks with text field populated (and description for image blocks)
         """
         processed_blocks = []
 
         for block in blocks:
-            processed_block = self._process_single_block(image, block)
+            processed_block = self._process_single_block(
+                image, block, generate_figure_description=enable_figure_description
+            )
             processed_blocks.append(processed_block)
 
         return processed_blocks
@@ -306,6 +317,8 @@ class TextRecognizer(Recognizer):
         image: np.ndarray,
         blocks: Sequence[Block],
         max_concurrent: int = 5,
+        *,
+        enable_figure_description: bool = True,
     ) -> list[Block]:
         """Process all blocks to extract text concurrently (async).
 
@@ -316,9 +329,12 @@ class TextRecognizer(Recognizer):
             image: Full page image
             blocks: List of detected blocks
             max_concurrent: Maximum number of concurrent API calls
+            enable_figure_description: Whether to generate descriptions for image/figure blocks.
+                When True, image blocks will have their `description` field populated.
+                Default: True.
 
         Returns:
-            List of blocks with text extracted
+            List of blocks with text extracted (and description for image blocks)
 
         Raises:
             APIClientError: If async client is not initialized
@@ -328,8 +344,14 @@ class TextRecognizer(Recognizer):
                 "Async client not initialized. Please set use_async=True when creating TextRecognizer."
             )
 
+        # Define image block types
+        image_block_types = {"image", "image_body", "figure", "chart", "graph"}
+
         # Prepare batch data: (image, region_info, prompt) tuples
+        # Track which blocks are image blocks for later description assignment
         batch_data: list[tuple[np.ndarray, dict[str, Any], str]] = []
+        block_is_image: list[bool] = []
+
         for block in blocks:
             # Clear any pre-existing text from detector
             if block.text:
@@ -342,23 +364,41 @@ class TextRecognizer(Recognizer):
             # Extract block image
             try:
                 block_image = self._crop_block(image, block)
-                prompt = self._get_prompt_for_block_type(block.type)
+
+                # Determine if this is an image block
+                is_image_block = block.type.lower() in image_block_types
+
+                # Get appropriate prompt
+                if is_image_block and enable_figure_description:
+                    prompt = self._get_figure_description_prompt()
+                else:
+                    prompt = self._get_prompt_for_block_type(block.type)
+
                 batch_data.append((block_image, block.to_dict(), prompt))
+                block_is_image.append(is_image_block and enable_figure_description)
             except (IndexError, ValueError, TypeError) as e:
                 logger.error("Failed to crop block: %s", e)
+                block_is_image.append(False)
                 continue
 
         # Process all blocks concurrently
         results = await self.async_client.extract_text_batch(batch_data, max_concurrent=max_concurrent)
 
-        # Update blocks with extracted text
+        # Update blocks with extracted text or description
         processed_blocks = []
         result_idx = 0
-        for block in blocks:
+        for idx, block in enumerate(blocks):
             if block.text is None:  # Block was included in batch
                 if result_idx < len(results):
                     result = results[result_idx]
-                    block.text = result.get("text", "") if isinstance(result, dict) else str(result)
+                    extracted = result.get("text", "") if isinstance(result, dict) else str(result)
+
+                    # Store in description field for image blocks
+                    if idx < len(block_is_image) and block_is_image[idx]:
+                        block.description = extracted
+                        block.text = ""
+                    else:
+                        block.text = extracted
                     result_idx += 1
                 else:
                     block.text = ""  # Fallback
